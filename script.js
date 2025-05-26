@@ -598,31 +598,92 @@ function saveUserProfileToLocalStorage(profile) {
         messageInput.style.height = `${newHeight}px`;
     }
 
-    function sanitizeBotHtml(htmlString) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = htmlString;
-        const allowedTags = ['B', 'BR', 'STRONG'];
-        function cleanNode(node) {
-            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent);
-            if (node.nodeType === Node.ELEMENT_NODE) {
-                if (allowedTags.includes(node.tagName.toUpperCase())) {
-                    const newNode = document.createElement(node.tagName.toLowerCase());
-                    for (const childNode of Array.from(node.childNodes)) newNode.appendChild(cleanNode(childNode));
-                    return newNode;
-                } else {
-                    const fragment = document.createDocumentFragment();
-                    for (const childNode of Array.from(node.childNodes)) fragment.appendChild(cleanNode(childNode));
-                    return fragment;
-                }
-            }
-            return document.createDocumentFragment();
+function sanitizeBotHtml(htmlString) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlString; // 1. 먼저 HTML 문자열을 DOM으로 파싱
+    // console.log('[Sanitize] Input HTML string:', htmlString);
+    // console.log('[Sanitize] Parsed tempDiv innerHTML:', tempDiv.innerHTML);
+
+    // 허용할 태그와, 각 태그별 허용할 속성 정의
+    const allowedElements = {
+        'B': [],
+        'STRONG': [],
+        'BR': [],
+        'SPAN': ['style', 'class'], // 스타일과 클래스 허용 (필요시 style 내용은 추가 검증)
+        'DIV': ['style', 'class'],  // 스타일과 클래스 허용
+        'IMG': ['src', 'alt', 'title', 'class'] // IMG는 src, alt, title, class 허용
+    };
+
+    function cleanNodeRecursive(node) {
+        // 텍스트 노드는 그대로 반환
+        if (node.nodeType === Node.TEXT_NODE) {
+            return document.createTextNode(node.textContent);
         }
-        const fragment = document.createDocumentFragment();
-        Array.from(tempDiv.childNodes).forEach(child => fragment.appendChild(cleanNode(child)));
-        const resultDiv = document.createElement('div');
-        resultDiv.appendChild(fragment);
-        return resultDiv.innerHTML;
+
+        // 엘리먼트 노드 처리
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const tagName = node.tagName.toUpperCase();
+
+            // 허용된 태그인지 확인
+            if (allowedElements.hasOwnProperty(tagName)) {
+                const newNode = document.createElement(node.tagName.toLowerCase());
+                const allowedAttributes = allowedElements[tagName];
+
+                // 허용된 속성만 복사
+                for (const attr of Array.from(node.attributes)) {
+                    const attrNameLower = attr.name.toLowerCase();
+                    if (allowedAttributes.includes(attrNameLower)) {
+                        if (attrNameLower === 'src') { // src 속성 특별 처리 (URL 유효성 등)
+                            const srcValue = attr.value;
+                            if (srcValue && (srcValue.startsWith('http') || srcValue.startsWith('/') || srcValue.startsWith('img/') || srcValue.match(/^[a-zA-Z0-9_\-\/\.]+$/))) {
+                                newNode.setAttribute(attr.name, srcValue);
+                            } else {
+                                console.warn(`[Sanitize] 유효하지 않거나 허용되지 않는 ${tagName} src: ${srcValue}`);
+                            }
+                        } else if (attrNameLower === 'style') { // style 속성 (더 엄격한 필터링 필요할 수 있음)
+                            // 간단히는 허용하되, 복잡한 CSS injection 방지를 위해 정제 로직 추가 가능
+                            newNode.setAttribute(attr.name, attr.value);
+                        }
+                        else {
+                            newNode.setAttribute(attr.name, attr.value);
+                        }
+                    } else if (attrNameLower.startsWith('on')) {
+                        console.warn(`[Sanitize] on* 이벤트 핸들러 제거: ${attr.name} for ${tagName}`);
+                    } else {
+                         // console.log(`[Sanitize] Disallowed attribute: ${attr.name} for ${tagName}`);
+                    }
+                }
+
+                // 자식 노드들도 재귀적으로 처리
+                for (const childNode of Array.from(node.childNodes)) {
+                    newNode.appendChild(cleanNodeRecursive(childNode));
+                }
+                return newNode;
+            } else {
+                // 허용되지 않은 태그는 제거하고, 자식 노드들만 가져와서 이어붙임 (텍스트 등 보존)
+                // console.log(`[Sanitize] Disallowed tag: ${tagName}. Processing children.`);
+                const fragment = document.createDocumentFragment();
+                for (const childNode of Array.from(node.childNodes)) {
+                    fragment.appendChild(cleanNodeRecursive(childNode));
+                }
+                return fragment;
+            }
+        }
+        // 그 외 노드 타입 (주석 등)은 빈 DocumentFragment 반환하여 무시
+        return document.createDocumentFragment();
     }
+
+    const fragment = document.createDocumentFragment();
+    // tempDiv의 자식 노드들을 순회하며 정제
+    Array.from(tempDiv.childNodes).forEach(child => {
+        fragment.appendChild(cleanNodeRecursive(child));
+    });
+    
+    const resultDiv = document.createElement('div');
+    resultDiv.appendChild(fragment);
+    // console.log('[Sanitize] Sanitized HTML result:', resultDiv.innerHTML);
+    return resultDiv.innerHTML;
+}
 
     function clearChatMessages() {
         if (chatMessages) {
@@ -636,96 +697,134 @@ function saveUserProfileToLocalStorage(profile) {
         }
     }
 
-    async function addMessage(text, type) {
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message');
-        console.log(`[Message] '${type}' 메시지 추가 시작: "${String(text).substring(0, 30)}..."`);
+async function addMessage(text, type) {
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message');
+    console.log(`[Message] '${type}' 메시지 추가 시작: "${String(text).substring(0, 50)}..."`);
 
-        return new Promise(async (resolveAllMessagesAdded) => {
-            if (type === 'user') {
-                messageDiv.classList.add('user-message');
-                messageDiv.textContent = text;
-                chatMessages.appendChild(messageDiv);
-                requestAnimationFrame(() => {
-                    adjustChatMessagesPadding();
-                    scrollToBottom();
-                    console.log("[Message] 사용자 메시지 DOM 추가 완료.");
-                    resolveAllMessagesAdded();
-                });
-            } else if (type === 'bot') {
-                messageDiv.classList.add('bot-message');
-                chatMessages.appendChild(messageDiv);
-                requestAnimationFrame(() => {
-                    adjustChatMessagesPadding();
-                    scrollToBottom();
-                });
+    return new Promise(async (resolveAllMessagesAdded) => {
+        if (type === 'user') {
+            messageDiv.classList.add('user-message');
+            messageDiv.textContent = text;
+            if (chatMessages) chatMessages.appendChild(messageDiv);
+            requestAnimationFrame(() => {
+                adjustChatMessagesPadding();
+                scrollToBottom();
+                console.log("[Message] 사용자 메시지 DOM 추가 완료.");
+                resolveAllMessagesAdded();
+            });
+        } else if (type === 'bot') {
+            messageDiv.classList.add('bot-message');
+            if (chatMessages) chatMessages.appendChild(messageDiv);
+            
+            requestAnimationFrame(() => {
+                adjustChatMessagesPadding();
+                scrollToBottom();
+            });
 
-                const sanitizedHtml = sanitizeBotHtml(text);
-                const tempContainer = document.createElement('div');
-                tempContainer.innerHTML = sanitizedHtml;
+            const sanitizedHtml = sanitizeBotHtml(text);
+            // console.log('[Message] Bot message sanitized HTML for typing:', sanitizedHtml);
+            
+            const tempContainer = document.createElement('div');
+            tempContainer.innerHTML = sanitizedHtml;
 
-                const typingChunks = [];
-                function extractChunks(node) {
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        const words = node.textContent.match(/\S+\s*|\S/g) || [];
-                        words.forEach(word => typingChunks.push({ type: 'text', content: word }));
-                    } else if (node.nodeType === Node.ELEMENT_NODE) {
-                        const tagName = node.tagName.toLowerCase();
-                        if (tagName === 'b' || tagName === 'strong') {
-                            typingChunks.push({ type: 'open_tag', content: tagName });
-                            Array.from(node.childNodes).forEach(extractChunks);
-                            typingChunks.push({ type: 'close_tag', content: tagName });
-                        } else if (tagName === 'br') {
-                            typingChunks.push({ type: 'br' });
-                        } else {
-                            Array.from(node.childNodes).forEach(extractChunks);
-                        }
+            const typingChunks = [];
+            function extractChunksRecursive(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const textContent = node.textContent;
+                    if (textContent.trim() !== '') {
+                        // 텍스트를 단어 단위(공백 기준) 또는 의미 있는 단위로 분리
+                        // 여기서는 정규식을 사용하여 공백 포함 단어 또는 연속된 특수문자 등을 분리
+                        const words = textContent.match(/\S+\s*|\S/g) || []; // 이전 방식: 단어 + 뒤따르는 공백 or 단일 문자
+                        words.forEach(word => {
+                            if (word.trim() !== '') { // 실제 내용이 있는 단어만 청크로
+                                typingChunks.push({ type: 'text_word', content: word });
+                            } else if (word.length > 0) { // 공백만 있는 경우도 청크로 추가 (줄바꿈 등 유지 위함)
+                                typingChunks.push({ type: 'text_whitespace', content: word });
+                            }
+                        });
+                    } else if (textContent.length > 0) { // 전체가 공백인 텍스트 노드
+                        typingChunks.push({ type: 'text_whitespace', content: textContent });
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const tagName = node.tagName.toLowerCase();
+                    
+                    if (tagName === 'img') {
+                        typingChunks.push({ type: 'element_immediate', element: node.cloneNode(true) });
+                    } else if (tagName === 'br') {
+                        typingChunks.push({ type: 'br_tag' });
+                    } else { // b, strong, span, div 등
+                        typingChunks.push({ type: 'open_tag', tagName: tagName, attributes: Array.from(node.attributes) });
+                        Array.from(node.childNodes).forEach(extractChunksRecursive);
+                        typingChunks.push({ type: 'close_tag', tagName: tagName });
                     }
                 }
-                Array.from(tempContainer.childNodes).forEach(extractChunks);
+            }
 
-                let currentElementContext = messageDiv;
-                console.log(`[Message] 봇 메시지 타이핑 시작. 총 ${typingChunks.length} 청크.`);
-                for (let i = 0; i < typingChunks.length; i++) {
-                    const chunk = typingChunks[i];
+            Array.from(tempContainer.childNodes).forEach(extractChunksRecursive);
+            // console.log('[Message] Typing chunks:', typingChunks);
+
+            let currentContextElement = messageDiv;
+
+            for (let i = 0; i < typingChunks.length; i++) {
+                const chunk = typingChunks[i];
+
+                if (chunk.type === 'element_immediate') { // 이미지
+                    currentContextElement.appendChild(chunk.element);
+                } else {
+                    // 텍스트, br, 여는/닫는 태그는 타이핑 딜레이 적용
                     await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
 
-                    if (chunk.type === 'text') {
-                        const span = document.createElement('span');
-                        span.className = 'message-text-chunk-animated';
-                        span.textContent = chunk.content;
-                        currentElementContext.appendChild(span);
+                    if (chunk.type === 'text_word') {
+                        const wordSpan = document.createElement('span');
+                        wordSpan.className = 'message-text-chunk-animated'; // 페이드인 애니메이션 클래스
+                        wordSpan.textContent = chunk.content;
+                        currentContextElement.appendChild(wordSpan);
+                    } else if (chunk.type === 'text_whitespace') {
+                        // 공백은 span으로 감싸지 않고 텍스트 노드로 바로 추가
+                        currentContextElement.appendChild(document.createTextNode(chunk.content));
+                    } else if (chunk.type === 'br_tag') {
+                        currentContextElement.appendChild(document.createElement('br'));
                     } else if (chunk.type === 'open_tag') {
-                        const newTag = document.createElement(chunk.content);
-                        currentElementContext.appendChild(newTag);
-                        currentElementContext = newTag;
+                        const newElement = document.createElement(chunk.tagName);
+                        chunk.attributes.forEach(attr => newElement.setAttribute(attr.name, attr.value));
+                        currentContextElement.appendChild(newElement);
+                        currentContextElement = newElement;
                     } else if (chunk.type === 'close_tag') {
-                        if (currentElementContext.parentElement && currentElementContext.parentElement !== messageDiv.parentElement) {
-                            currentElementContext = currentElementContext.parentElement;
+                        if (currentContextElement.tagName.toLowerCase() === chunk.tagName && currentContextElement.parentElement && currentContextElement !== messageDiv) {
+                            currentContextElement = currentContextElement.parentElement;
                         }
-                    } else if (chunk.type === 'br') {
-                        currentElementContext.appendChild(document.createElement('br'));
-                    }
-
-                    if (i % 5 === 0 || i === typingChunks.length - 1) {
-                        scrollToBottom();
                     }
                 }
-                console.log("[Message] 봇 메시지 타이핑 완료.");
-                resolveAllMessagesAdded();
-            } else if (type === 'system') {
-                messageDiv.classList.add('system-message');
-                messageDiv.textContent = text;
-                chatMessages.appendChild(messageDiv);
-                requestAnimationFrame(() => {
-                    adjustChatMessagesPadding();
-                    scrollToBottom();
-                    console.log("[Message] 시스템 메시지 DOM 추가 완료.");
-                    resolveAllMessagesAdded();
-                });
+                
+                if (i % 3 === 0 || i === typingChunks.length - 1) {
+                     requestAnimationFrame(scrollToBottom);
+                }
             }
-        });
-    }
+            
+            requestAnimationFrame(() => {
+                adjustChatMessagesPadding();
+                scrollToBottom();
+            });
+            console.log("[Message] 봇 메시지 타이핑 완료 (단어 단위 페이드인, 이미지 포함).");
+            resolveAllMessagesAdded();
+
+        } else if (type === 'system') {
+            messageDiv.classList.add('system-message');
+            messageDiv.textContent = text;
+            if (chatMessages) chatMessages.appendChild(messageDiv);
+            requestAnimationFrame(() => {
+                adjustChatMessagesPadding();
+                scrollToBottom();
+                console.log("[Message] 시스템 메시지 DOM 추가 완료.");
+                resolveAllMessagesAdded();
+            });
+        } else {
+            console.warn(`[Message] 알 수 없는 메시지 타입: ${type}`);
+            resolveAllMessagesAdded();
+        }
+    });
+}
 
     function updateSampleAnswers(answers = []) {
         console.log("[SampleAnswers] 업데이트 시작. 답변 개수:", answers.length);
@@ -763,84 +862,120 @@ function saveUserProfileToLocalStorage(profile) {
         }
     }
 
-    const botKnowledgeBase = {
-        "오늘의 운세 보여줘": { response: "오늘 당신의 운세는... <b>매우 긍정적</b>입니다! 새로운 시작을 하기에 좋은 날이에요. <br>자신감을 가지세요!", sampleAnswers: ["다른 운세", "고마워"] },
-        "오늘 뭐 먹을지 추천해줘": { response: "오늘은 <b>따뜻한 국물 요리</b> 어떠세요? 예를 들어, <b>김치찌개</b>나 <b>순두부찌개</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "다른 추천"] },
-        "썸인지 아닌지 알려줘": { response: "상대방의 행동과 말투를 자세히 알려주시면, 제가 분석해볼게요! <br>예를 들어, '그 사람은 나에게 자주 웃어줘요.' 처럼요.", sampleAnswers: ["카톡 대화 분석해줘", "데이트 신청해도 될까?"] },
-        "그 사람의 마음을 알고 싶어": { response: "마음을 읽는 것은 어렵지만, 몇 가지 질문을 통해 추측해볼 수 있어요.<br>그 사람과 어떤 관계인가요?", sampleAnswers: ["친구 관계예요", "직장 동료예요"] },
-        "오늘의 운세가 궁금해요.": { response: "오늘의 운세입니다:<br><b>희망찬 하루!</b> 작은 노력들이 결실을 맺을 거예요.<br>자신감을 갖고 나아가세요.", sampleAnswers: ["다른 운세 보기", "오늘 날씨는?", "고마워"] },
-        "추천 메뉴 알려주세요.": { response: "오늘은 특별한 날인가요? <b>스테이크</b> 어떠세요?<br>아니면 가볍게 <b>샐러드 파스타</b>도 좋아요!", sampleAnswers: ["스테이크 맛집", "파스타 레시피", "다른 추천"] },
-        "날씨 알려줘.": { response: "현재 계신 지역의 날씨를 알려드릴까요?<br>아니면 특정 도시의 날씨가 궁금하신가요?", sampleAnswers: ["서울 날씨", "부산 날씨", "내 위치 날씨"] },
-        "도움말 보여주세요.": { response: "무엇을 도와드릴까요?<br>저는 <b>운세 보기</b>, <b>메뉴 추천</b>, <b>날씨 정보</b> 등을 제공할 수 있어요.<br>궁금한 것을 말씀해주세요!", sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘"] },
-        "오늘의 운세": { response: "오늘의 운세입니다:<br><b>대박!</b> 원하는 모든 것을 이룰 수 있는 하루예요!<br>긍정적인 마음으로 도전해보세요.", sampleAnswers: ["추천 메뉴", "오늘 날씨 어때?", "고마워"] },
-        "추천 메뉴": { response: "점심 메뉴로는 <b>얼큰한 김치찌개</b> 어떠세요? 아니면 저녁으로 <b>부드러운 크림 파스타</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "파스타 맛집 추천", "다른 거 없어?"] },
-        "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
-        "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
-    };
+const botKnowledgeBase = {
+    "오늘의 운세 보여줘": { response: "오늘 당신의 운세는... <b>매우 긍정적</b>입니다! 새로운 시작을 하기에 좋은 날이에요. <br>자신감을 가지세요!", sampleAnswers: ["다른 운세", "고마워"] },
+    "오늘 뭐 먹을지 추천해줘": { response: "오늘은 <b>따뜻한 국물 요리</b> 어떠세요? 예를 들어, <b>김치찌개</b>나 <b>순두부찌개</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "다른 추천"] },
+    "썸인지 아닌지 알려줘": { response: "상대방의 행동과 말투를 자세히 알려주시면, 제가 분석해볼게요! <br>예를 들어, '그 사람은 나에게 자주 웃어줘요.' 처럼요.", sampleAnswers: ["카톡 대화 분석해줘", "데이트 신청해도 될까?"] },
+    "그 사람의 마음을 알고 싶어": { response: "마음을 읽는 것은 어렵지만, 몇 가지 질문을 통해 추측해볼 수 있어요.<br>그 사람과 어떤 관계인가요?", sampleAnswers: ["친구 관계예요", "직장 동료예요"] },
+    "오늘의 운세가 궁금해요.": { response: "오늘의 운세입니다:<br><b>희망찬 하루!</b> 작은 노력들이 결실을 맺을 거예요.<br>자신감을 갖고 나아가세요.", sampleAnswers: ["다른 운세 보기", "오늘 날씨는?", "고마워"] },
+    "추천 메뉴 알려주세요.": { response: "오늘은 특별한 날인가요? <b>스테이크</b> 어떠세요?<br>아니면 가볍게 <b>샐러드 파스타</b>도 좋아요!", sampleAnswers: ["스테이크 맛집", "파스타 레시피", "다른 추천"] },
+    "날씨 알려줘.": { response: "현재 계신 지역의 날씨를 알려드릴까요?<br>아니면 특정 도시의 날씨가 궁금하신가요?", sampleAnswers: ["서울 날씨", "부산 날씨", "내 위치 날씨"] },
+    "도움말 보여주세요.": { response: "무엇을 도와드릴까요?<br>저는 <b>운세 보기</b>, <b>메뉴 추천</b>, <b>날씨 정보</b> 등을 제공할 수 있어요.<br>궁금한 것을 말씀해주세요!", sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘"] },
+    "오늘의 운세": { response: "오늘의 운세입니다:<br><b>대박!</b> 원하는 모든 것을 이룰 수 있는 하루예요!<br>긍정적인 마음으로 도전해보세요.", sampleAnswers: ["추천 메뉴", "오늘 날씨 어때?", "고마워"] },
+    "추천 메뉴": { response: "점심 메뉴로는 <b>얼큰한 김치찌개</b> 어떠세요? 아니면 저녁으로 <b>부드러운 크림 파스타</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "파스타 맛집 추천", "다른 거 없어?"] },
+    "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
+    "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
+};
+function simulateBotResponse(userMessageText) {
+    console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
+    return new Promise(resolve => {
+        setTimeout(() => {
+            let responseData = {};
+            const lowerUserMessage = userMessageText.toLowerCase();
 
-    function simulateBotResponse(userMessageText) {
-        console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
-        return new Promise(resolve => {
-            setTimeout(() => {
-                let responseData = {};
-                const lowerUserMessage = userMessageText.toLowerCase();
-
-                if (userMessageText === "카드뽑을래") {
-                    responseData = {
-                        action: "루비가 카드를 펼치며",
-                        assistantmsg: "좋아요! 어떤 카드가 당신을 기다리고 있을까요? ✨🔮✨<br>아래에서 <b>3장</b>의 카드를 선택해주세요.",
-                        tarocardview: true,
-                        cards_to_select: 3,
-                        sampleanswer: "선택 취소", // 사용자가 선택 중 취소할 경우의 버튼 (지금은 미구현)
-                        user_profile_update: {}
-                    };
-                } else if (userMessageText === "카드 선택 완료") {
-                    // 실제로는 userProfile.선택된타로카드들 (임시 ID)을 기반으로 서버에서 해석해야 함
-                    // 여기서는 선택된 카드 인덱스를 활용하여 간단한 메시지 생성
-                    const selectedCardDisplayNames = userProfile.선택된타로카드들.map((id, index) => {
-                        // ALL_TAROT_CARD_IDS에서 실제 카드 ID를 가져와 이름을 표시할 수 있지만,
-                        // 현재는 '사용자는 카드를 몰라야 함' 조건이므로, 단순 표시
-                        // 만약 실제 카드 ID가 저장되었다면 TAROT_CARD_DATA[id].name 등으로 표시 가능
-                        return `당신의 ${index + 1}번째 선택`;
-                    });
-
-                    responseData = {
-                        action: "루비가 선택된 카드를 보며",
-                        assistantmsg: `선택하신 카드들(${selectedCardDisplayNames.join(', ')})에 대한 해석을 준비 중입니다...<br>결과는 잠시 후 공개됩니다! 🌟`,
-                        tarocardview: false,
-                        cards_to_select: null,
-                        sampleanswer: "결과 기대돼요!|다른 질문할래요",
-                        user_profile_update: {
-                            // "선택된타로카드들": [] // 여기서 초기화하지 않고, 해석 후 또는 새 뽑기 시 초기화
-                        }
-                    };
-                } else {
-                    // 기존 로직: userMessageText를 키로 사용하거나, 키워드 기반으로 응답 찾기
-                    responseData = botKnowledgeBase[userMessageText];
-                    if (!responseData) {
-                        if (lowerUserMessage.includes("운세")) responseData = botKnowledgeBase["오늘의 운세 보여줘"] || botKnowledgeBase["오늘의 운세가 궁금해요."];
-                        else if (lowerUserMessage.includes("메뉴") || lowerUserMessage.includes("음식") || lowerUserMessage.includes("추천")) responseData = botKnowledgeBase["오늘 뭐 먹을지 추천해줘"] || botKnowledgeBase["추천 메뉴 알려주세요."];
-                        else if (lowerUserMessage.includes("날씨")) responseData = botKnowledgeBase["날씨 알려줘."];
-                        else if (lowerUserMessage.includes("도움") || lowerUserMessage.includes("help")) responseData = botKnowledgeBase["도움말 보여주세요."];
-                    }
-                    if (!responseData) responseData = botKnowledgeBase["기본"];
-
-                    // API 응답 형식에 맞게 기존 응답 포장
-                    responseData = {
-                        action: "루비가 고개를 갸웃하며", // 기본 액션
-                        assistantmsg: responseData.response,
-                        tarocardview: false,
-                        cards_to_select: null,
-                        sampleanswer: (responseData.sampleAnswers || []).join('|') || "네 알겠습니다.|다른 질문",
-                        user_profile_update: {}
-                    };
-                }
+            if (userMessageText === "카드뽑을래") {
+                responseData = {
+                    assistantmsg: "네, 알겠습니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.",
+                    tarocardview: true,
+                    cards_to_select: 3,
+                    sampleanswer: "선택 취소|운에 맡기기", // "운에 맡기기"도 초기 샘플 답변에 추가 가능
+                    user_profile_update: {}
+                };
+            } else if (userMessageText === "카드 선택 완료") {
+                let assistantMsgContent = `선택하신 카드들에 대한 분석을 진행하겠습니다.<br>결과는 잠시 후 말씀드리겠습니다.<br><br>`;
                 
-                console.log(`[BotResponse] 응답 데이터 준비 완료:`, responseData);
-                resolve(responseData); // API 전체 응답 객체 resolve
-            }, 200 + Math.random() * 300);
-        });
-    }
+                if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
+                    assistantMsgContent += "선택하신 카드는 다음과 같습니다:<br>";
+                    userProfile.선택된타로카드들.forEach((cardId, index) => {
+                        let cardDisplayName = cardId.replace(/_/g, ' '); // 기본 이름
+                        let imageNameForFile = cardId; // 파일명으로 사용할 ID
+                        let isReversed = cardId.endsWith('_reversed');
+
+                        if (typeof TAROT_CARD_DATA !== 'undefined' && TAROT_CARD_DATA[cardId]) {
+                            cardDisplayName = TAROT_CARD_DATA[cardId].name;
+                            // TAROT_CARD_DATA에 이미지 파일명 정보가 있다면 그것을 우선 사용할 수 있음
+                            // 예: if (TAROT_CARD_DATA[cardId].imageFile) imageNameForFile = TAROT_CARD_DATA[cardId].imageFile;
+                        } else {
+                            cardDisplayName = cardId.replace(/_/g, ' ')
+                                                  .replace(/\b\w/g, l => l.toUpperCase())
+                                                  .replace(' Reversed', ' (역방향)')
+                                                  .replace(' Upright', ' (정방향)');
+                        }
+                        
+                        // 이미지 파일명 규칙: 모든 앞면 이미지는 _upright.png 형태라고 가정
+                        // _reversed로 끝나는 ID는 _upright로 변경하여 파일명 생성
+                        if (isReversed) {
+                            imageNameForFile = cardId.substring(0, cardId.lastIndexOf('_reversed')) + '_upright';
+                        } else if (cardId.endsWith('_upright')) {
+                            // _upright로 끝나면 그대로 사용 (이미 파일명 규칙에 맞음)
+                            imageNameForFile = cardId;
+                        } else {
+                            // _upright나 _reversed가 없는 ID라면 (예: 커스텀 카드), ID 자체를 파일명으로 사용하거나
+                            // _upright를 붙여주는 규칙을 따를 수 있음. 여기서는 ID 그대로 사용.
+                            // 하지만 ALL_TAROT_CARD_IDS는 규칙을 따르므로 이 경우는 드묾.
+                            console.warn(`[BotResponse] 카드 ID (${cardId})가 표준 접미사(_upright/_reversed)를 따르지 않아 이미지 파일명 생성에 주의가 필요합니다.`);
+                        }
+
+                        const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
+                        
+                        // HTML 문자열 생성 시, sanitizeBotHtml 함수가 이를 올바르게 처리할 수 있도록 구성
+                        // class="chat-embedded-image"를 추가하여 CSS에서 스타일 제어
+                        assistantMsgContent += `<div>`; // 각 카드를 div로 묶어줌 (스타일 적용 용이)
+                        assistantMsgContent += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
+                        assistantMsgContent += `<span style="display: block; text-align: center; font-size: 0.85em; color: #333; margin-top: 4px;">${index + 1}. ${cardDisplayName}</span>`;
+                        assistantMsgContent += `</div>`;
+                        if (index < userProfile.선택된타로카드들.length - 1) {
+                             assistantMsgContent += `<br>`; // 카드 사이에 명시적 줄바꿈 추가 (선택 사항)
+                        }
+                    });
+                    assistantMsgContent += "<br><br>곧 자세한 내용을 전달드리겠습니다.";
+                } else {
+                    assistantMsgContent += "선택된 카드가 없습니다. 다시 시도해주십시오.";
+                }
+
+                responseData = {
+                    assistantmsg: assistantMsgContent,
+                    tarocardview: false,
+                    cards_to_select: null,
+                    sampleanswer: "결과를 기다리겠습니다|다른 질문이 있습니다",
+                    user_profile_update: {}
+                };
+            } else {
+                // 일반 메시지 처리 (기존 botKnowledgeBase 사용)
+                let baseResponse = botKnowledgeBase[userMessageText];
+                if (!baseResponse) {
+                    const lowerUserMessage = userMessageText.toLowerCase(); // 여기서 선언
+                    if (lowerUserMessage.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
+                    else if (lowerUserMessage.includes("메뉴") || lowerUserMessage.includes("음식") || lowerUserMessage.includes("추천")) baseResponse = botKnowledgeBase["오늘 뭐 먹을지 추천해줘"];
+                    else if (lowerUserMessage.includes("날씨")) baseResponse = botKnowledgeBase["날씨 알려줘."];
+                    else if (lowerUserMessage.includes("도움") || lowerUserMessage.includes("help")) baseResponse = botKnowledgeBase["도움말 보여주세요."];
+                }
+                if (!baseResponse) baseResponse = botKnowledgeBase["기본"];
+                
+                responseData = {
+                    assistantmsg: baseResponse.response, // botKnowledgeBase에 정의된 말투 사용
+                    tarocardview: false,
+                    cards_to_select: null,
+                    sampleanswer: (baseResponse.sampleAnswers || []).join('|') || "알겠습니다|다른 질문",
+                    user_profile_update: {}
+                };
+            }
+            
+            console.log(`[BotResponse] 생성된 assistantmsg 미리보기 (sanitize 전):`, responseData.assistantmsg);
+            resolve(responseData);
+        }, 200 + Math.random() * 300);
+    });
+}
     function setUIInteractions(isProcessing, shouldFocusInput = false) {
         console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}`);
         if (messageInput) messageInput.disabled = isProcessing;
@@ -891,8 +1026,7 @@ function saveUserProfileToLocalStorage(profile) {
         }
 
         isLoadingBotResponse = true;
-        sendBtn.classList.add('loading');
-        // 메시지 처리 시작 시에는 입력창 포커스를 주지 않음 (setUIInteractions의 shouldFocusInput = false)
+        if(sendBtn) sendBtn.classList.add('loading');
         setUIInteractions(true, false);
 
 
@@ -902,12 +1036,12 @@ function saveUserProfileToLocalStorage(profile) {
             moreOptionsBtn.classList.remove('active');
         }
 
-        if (source !== 'system_init_skip_user_message' && source !== 'system_internal') { // 시스템 내부 메시지일 경우 사용자 메시지 추가 안함
+        if (source !== 'system_init_skip_user_message' && source !== 'system_internal') {
              await addMessage(messageText, 'user');
         }
 
 
-        if (source === 'input') {
+        if (source === 'input' && messageInput) {
             messageInput.value = '';
             adjustTextareaHeight();
         }
@@ -929,15 +1063,14 @@ function saveUserProfileToLocalStorage(profile) {
                 console.log("[UserProfile] API 응답으로 프로필 업데이트:", botApiResponse.user_profile_update);
             }
 
-            const fullBotMessage = `${botApiResponse.action ? `<i>${botApiResponse.action}</i><br>` : ''}${botApiResponse.assistantmsg}`;
-            await addMessage(fullBotMessage, 'bot');
+            // assistantmsg만 사용하여 봇 메시지 추가 (action 필드 사용 안 함)
+            await addMessage(botApiResponse.assistantmsg, 'bot');
             
             const sampleAnswersArray = botApiResponse.sampleanswer ? botApiResponse.sampleanswer.split('|').map(s => s.trim()).filter(s => s) : [];
             updateSampleAnswers(sampleAnswersArray);
 
             if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
-                // 타로 UI 표시 전, 현재 활성화된 엘리먼트가 입력창이라면 blur 처리하여 키보드를 내린다.
-                if (document.activeElement === messageInput) {
+                if (messageInput && document.activeElement === messageInput) {
                     messageInput.blur();
                 }
                 let currentTarotBg = userProfile.tarotbg || 'default.png';
@@ -956,9 +1089,7 @@ function saveUserProfileToLocalStorage(profile) {
             updateSampleAnswers(initialBotMessage.sampleAnswers);
         } finally {
             isLoadingBotResponse = false;
-            sendBtn.classList.remove('loading');
-            // 메시지 소스에 따라 입력창 포커스 여부 결정
-            // 'input' (직접 입력 후 엔터/전송 버튼), 'sample_button_direct_input' (샘플답변이 입력창에 채워지고 전송되는 경우) 일 때만 포커스
+            if(sendBtn) sendBtn.classList.remove('loading');
             const shouldFocus = (source === 'input');
             setUIInteractions(false, shouldFocus);
             console.log("[ProcessExchange] 완료.");
@@ -1312,22 +1443,31 @@ function updateSyncTypeModal(tabId = 'overview') {
     async function handleTarotSelectionConfirm() {
         if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
 
-        console.log("[TarotSelection] 선택 완료. 선택된 카드 인덱스:", selectedTarotCardIndices);
-        // 중요: 현재 유저는 카드의 앞면을 모르므로, '인덱스'만 의미가 있음.
-        // 이 인덱스를 기반으로 userProfile.선택된타로카드들 에 임시 ID를 저장.
-        // 실제 애플리케이션에서는 이 인덱스들을 서버로 보내고, 서버가 실제 카드 ID를 뽑아 userProfile에 저장 후 클라이언트에 알려줘야 함.
-        // 요구사항: "선택된 타로카드는 유저프로필 선택된타로카드들 에 저장돼는거야"
-        // 이 단계에서는 서버가 없으므로, '선택된 인덱스' 자체를 저장하거나, 임의의 ID를 생성하여 저장.
-        // ALL_TAROT_CARD_IDS 배열에서 해당 인덱스의 ID를 가져와 저장 (이것은 유저가 카드를 안다는 가정이 되어버림)
-        // -> 요구사항 "유저는 뭔카든지 유저는 몰라야함"을 지키려면, 서버로 보내기 전까지는 인덱스만 관리해야 함.
-        // -> 이 함수에서는 선택된 "인덱스"를 기반으로 임시 ID를 `userProfile.선택된타로카드들`에 저장.
-        userProfile.선택된타로카드들 = selectedTarotCardIndices.map(index => `selected_card_at_index_${index}_${Date.now()}`);
+        console.log("[TarotSelection] 선택 완료. 사용자가 고른 '위치' 인덱스:", selectedTarotCardIndices);
+
+        // 실제 타로 카드 ID를 할당하는 로직
+        // ALL_TAROT_CARD_IDS 에서 중복되지 않게 cardsToSelectCount 만큼 랜덤으로 뽑아서
+        // selectedTarotCardIndices 에 있는 "순서"대로 매칭하여 저장.
+        // 또는, selectedTarotCardIndices 자체가 이미 UI 상에서 사용자가 "고른 카드"의 인덱스이므로,
+        // 이 인덱스를 ALL_TAROT_CARD_IDS에 직접 매핑할 수도 있으나, 이는 사용자가 특정 카드를 고른다는 의미가 되어버림.
+        // "유저는 뭔카든지 몰라야 함" -> 사용자가 UI에서 카드를 골랐을 때, 그 "위치"에 어떤 카드가 배정될지는 이 시점에서 랜덤 결정.
+        
+        const availableCardIds = [...ALL_TAROT_CARD_IDS]; // 전체 카드 ID 복사본
+        const chosenCardIds = [];
+
+        for (let i = 0; i < cardsToSelectCount; i++) {
+            if (availableCardIds.length === 0) break; // 뽑을 카드가 없으면 중단
+            const randomIndex = Math.floor(Math.random() * availableCardIds.length);
+            chosenCardIds.push(availableCardIds.splice(randomIndex, 1)[0]);
+        }
+        
+        userProfile.선택된타로카드들 = chosenCardIds; // 실제 선택된 카드 ID들 저장
         saveUserProfileToLocalStorage(userProfile);
+        console.log("[UserProfile] 실제 선택된 타로 카드 ID 저장:", userProfile.선택된타로카드들);
+
 
         hideTarotSelectionUI();
-
-        // 선택 완료 후 봇에게 알림 (사용자 메시지로 처리)
-        await processMessageExchange("카드 선택 완료", 'system_internal'); // 내부 시스템 메시지로 처리하여 사용자 입력 없이 진행
+        await processMessageExchange("카드 선택 완료", 'system_internal');
     }
     function handleClearTarotSelection() {
         if (isLoadingBotResponse || !tarotCardCarousel) return;
@@ -1347,43 +1487,30 @@ function updateSyncTypeModal(tabId = 'overview') {
         if (isLoadingBotResponse || !tarotCardCarousel || cardsToSelectCount <= 0) return;
         console.log(`[TarotSelection] 운에 맡기기. ${cardsToSelectCount}장 랜덤 선택.`);
 
-        handleClearTarotSelection(); // 기존 선택 모두 취소
+        handleClearTarotSelection(); // 기존 UI 선택 모두 취소
 
-        let availableIndices = Array.from({ length: TOTAL_CARDS_IN_DECK }, (_, i) => i);
-        
+        const availableCardIds = [...ALL_TAROT_CARD_IDS];
+        const randomlyChosenCardIds = [];
+
         for (let i = 0; i < cardsToSelectCount; i++) {
-            if (availableIndices.length === 0) break; // 더 이상 뽑을 카드가 없으면 중단
-
-            const randomIndexInAvailable = Math.floor(Math.random() * availableIndices.length);
-            const selectedCardRealIndex = availableIndices.splice(randomIndexInAvailable, 1)[0];
-            
-            selectedTarotCardIndices.push(selectedCardRealIndex);
-            
-            // 해당 인덱스의 카드 요소에 'selected' 클래스 추가
-            const cardElement = tarotCardCarousel.querySelector(`.tarot-card-item[data-index="${selectedCardRealIndex}"]`);
-            if (cardElement) {
-                cardElement.classList.add('selected');
-            }
+            if (availableCardIds.length === 0) break;
+            const randomIndex = Math.floor(Math.random() * availableCardIds.length);
+            randomlyChosenCardIds.push(availableCardIds.splice(randomIndex, 1)[0]);
         }
+
+        // UI 상에서 선택된 것처럼 표시하기 위해, 뽑힌 ID들의 "인덱스"를 찾아야 하지만,
+        // "운에 맡기기"는 UI 인터랙션 없이 바로 ID를 결정하므로, UI 피드백은 생략하거나
+        // 또는 이 ID들을 selectedTarotCardIndices에 (UI용 인덱스가 아닌 실제 ID로) 넣고
+        // handleTarotSelectionConfirm을 호출하는 방식으로 통일할 수도 있습니다.
+        // 여기서는 바로 handleTarotSelectionConfirm을 호출하여 ID 저장 및 다음 단계로 진행.
         
-        updateTarotSelectionInfo();
-        tarotSelectionConfirmBtn.disabled = selectedTarotCardIndices.length !== cardsToSelectCount;
+        userProfile.선택된타로카드들 = randomlyChosenCardIds; // 실제 선택된 카드 ID들 저장
+        saveUserProfileToLocalStorage(userProfile);
+        console.log("[UserProfile] '운에 맡기기'로 실제 선택된 타로 카드 ID 저장:", userProfile.선택된타로카드들);
 
-        // 랜덤 선택 후, 첫 번째 선택된 카드로 스크롤 (선택 사항)
-        if (selectedTarotCardIndices.length > 0 && tarotCardCarousel.firstElementChild) {
-            const firstSelectedCardIndex = selectedTarotCardIndices[0];
-            const cardToScrollTo = tarotCardCarousel.querySelector(`.tarot-card-item[data-index="${firstSelectedCardIndex}"]`);
-            if (cardToScrollTo) {
-                // 카드를 중앙으로 스크롤하는 로직 (populateTarotCarousel의 스크롤 로직과 유사하게 구현 가능)
-                const cardWidth = cardToScrollTo.offsetWidth;
-                const effectiveCardSpacing = cardWidth + parseInt(getComputedStyle(cardToScrollTo).marginLeft) + parseInt(getComputedStyle(cardToScrollTo).marginRight);
-                const targetScroll = (firstSelectedCardIndex * effectiveCardSpacing) - (tarotCardCarouselContainer.offsetWidth / 2) + (effectiveCardSpacing / 2);
-                tarotCardCarousel.scrollTo({ left: targetScroll, behavior: 'smooth' });
-                
-                // 스크롤 후 3D 효과 재적용
-                setTimeout(applyCarouselPerspective, 300); // 스크롤 애니메이션 시간 고려
-            }
-        }
+        // "선택 완료" 버튼을 누른 것과 동일한 로직으로 진행
+        hideTarotSelectionUI(); // UI 숨김
+        processMessageExchange("카드 선택 완료", 'system_internal'); // 다음 단계로
     }
     function applyCarouselPerspective() {
         if (!tarotCardCarousel || !tarotCardCarousel.children.length) return;
@@ -1741,23 +1868,22 @@ async function initializeChat() {
     }
 
     adjustTextareaHeight();
-    sendBtn.disabled = true;
-    messageInput.disabled = true;
-    moreOptionsBtn.disabled = true;
+    if(sendBtn) sendBtn.disabled = true;
+    if(messageInput) messageInput.disabled = true;
+    if(moreOptionsBtn) moreOptionsBtn.disabled = true;
     requestAnimationFrame(adjustChatMessagesPadding);
 
-    // 타로 선택 UI 버튼들 이벤트 리스너
     if (tarotSelectionConfirmBtn) {
         tarotSelectionConfirmBtn.addEventListener('click', handleTarotSelectionConfirm);
     } else {
         console.error("[App] tarotSelectionConfirmBtn 요소를 찾을 수 없습니다.");
     }
-    if (tarotClearSelectionBtn) { // 추가
+    if (tarotClearSelectionBtn) {
         tarotClearSelectionBtn.addEventListener('click', handleClearTarotSelection);
     } else {
         console.error("[App] tarotClearSelectionBtn 요소를 찾을 수 없습니다.");
     }
-    if (tarotRandomSelectBtn) { // 추가
+    if (tarotRandomSelectBtn) {
         tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection);
     } else {
         console.error("[App] tarotRandomSelectBtn 요소를 찾을 수 없습니다.");
@@ -1772,14 +1898,14 @@ async function initializeChat() {
         await addMessage("초기 메시지를 불러올 수 없습니다. 관리자에게 문의하세요.", 'system');
         isLoadingBotResponse = false;
         setUIInteractions(false, false);
-        messageInput.disabled = false;
-        moreOptionsBtn.disabled = false;
+        if(messageInput) messageInput.disabled = false;
+        if(moreOptionsBtn) moreOptionsBtn.disabled = false;
         return;
     }
 
     try {
-        const botMessageTextWithAction = `<i>루비가 반갑게 인사하며</i><br>${initialBotMessage.text}`;
-        await addMessage(botMessageTextWithAction, 'bot');
+        // action 필드 없이 initialBotMessage.text만 사용
+        await addMessage(initialBotMessage.text, 'bot');
         updateSampleAnswers(initialBotMessage.sampleAnswers);
     } catch (error) {
         console.error("[App] 초기 메시지 표시 중 오류:", error);
@@ -1788,9 +1914,12 @@ async function initializeChat() {
 
     isLoadingBotResponse = false;
     setUIInteractions(false, false);
-    messageInput.disabled = false;
-    moreOptionsBtn.disabled = false;
-    sendBtn.disabled = messageInput.value.trim() === '';
+    if(messageInput) {
+        messageInput.disabled = false;
+        sendBtn.disabled = messageInput.value.trim() === '';
+    }
+    if(moreOptionsBtn) moreOptionsBtn.disabled = false;
+
 
     console.log("[App] 초기화 완료.");
 }
