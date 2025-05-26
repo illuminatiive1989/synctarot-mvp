@@ -1483,35 +1483,63 @@ function updateSyncTypeModal(tabId = 'overview') {
         tarotSelectionConfirmBtn.disabled = true; // 선택 완료 버튼 비활성화
     }
 
-    function handleRandomTarotSelection() {
-        if (isLoadingBotResponse || !tarotCardCarousel || cardsToSelectCount <= 0) return;
-        console.log(`[TarotSelection] 운에 맡기기. ${cardsToSelectCount}장 랜덤 선택.`);
+function handleRandomTarotSelection() {
+    if (isLoadingBotResponse || !tarotCardCarousel || cardsToSelectCount <= 0) return;
+    console.log(`[TarotSelection] '운에 맡기기' 실행. ${cardsToSelectCount}장 랜덤으로 UI에 선택 표시.`);
 
-        handleClearTarotSelection(); // 기존 UI 선택 모두 취소
+    handleClearTarotSelection(); // 기존 UI 선택 모두 취소
 
-        const availableCardIds = [...ALL_TAROT_CARD_IDS];
-        const randomlyChosenCardIds = [];
+    const availableDeckIndices = Array.from({ length: TOTAL_CARDS_IN_DECK }, (_, i) => i);
+    const newlySelectedIndices = []; // 이번에 랜덤으로 선택된 카드들의 UI 인덱스
 
-        for (let i = 0; i < cardsToSelectCount; i++) {
-            if (availableCardIds.length === 0) break;
-            const randomIndex = Math.floor(Math.random() * availableCardIds.length);
-            randomlyChosenCardIds.push(availableCardIds.splice(randomIndex, 1)[0]);
-        }
+    for (let i = 0; i < cardsToSelectCount; i++) {
+        if (availableDeckIndices.length === 0) break; // 뽑을 인덱스가 없으면 중단
 
-        // UI 상에서 선택된 것처럼 표시하기 위해, 뽑힌 ID들의 "인덱스"를 찾아야 하지만,
-        // "운에 맡기기"는 UI 인터랙션 없이 바로 ID를 결정하므로, UI 피드백은 생략하거나
-        // 또는 이 ID들을 selectedTarotCardIndices에 (UI용 인덱스가 아닌 실제 ID로) 넣고
-        // handleTarotSelectionConfirm을 호출하는 방식으로 통일할 수도 있습니다.
-        // 여기서는 바로 handleTarotSelectionConfirm을 호출하여 ID 저장 및 다음 단계로 진행.
+        const randomIndexInAvailable = Math.floor(Math.random() * availableDeckIndices.length);
+        // availableDeckIndices에서 실제 카드 덱의 인덱스를 하나 뽑음
+        const selectedCardDeckIndex = availableDeckIndices.splice(randomIndexInAvailable, 1)[0];
         
-        userProfile.선택된타로카드들 = randomlyChosenCardIds; // 실제 선택된 카드 ID들 저장
-        saveUserProfileToLocalStorage(userProfile);
-        console.log("[UserProfile] '운에 맡기기'로 실제 선택된 타로 카드 ID 저장:", userProfile.선택된타로카드들);
-
-        // "선택 완료" 버튼을 누른 것과 동일한 로직으로 진행
-        hideTarotSelectionUI(); // UI 숨김
-        processMessageExchange("카드 선택 완료", 'system_internal'); // 다음 단계로
+        newlySelectedIndices.push(selectedCardDeckIndex); // UI상 선택된 인덱스 배열에 추가
+        
+        // 해당 인덱스의 카드 요소에 'selected' 클래스 추가
+        const cardElement = tarotCardCarousel.querySelector(`.tarot-card-item[data-index="${selectedCardDeckIndex}"]`);
+        if (cardElement) {
+            cardElement.classList.add('selected');
+        }
     }
+    
+    // 전역 selectedTarotCardIndices 업데이트 (UI와 동기화)
+    selectedTarotCardIndices = newlySelectedIndices;
+
+    updateTarotSelectionInfo(); // 상단 정보 텍스트 업데이트 ("N장 선택됨 / 총 M장 선택하세요")
+    
+    // "선택 완료" 버튼 활성화/비활성화 상태 업데이트
+    if (tarotSelectionConfirmBtn) {
+        tarotSelectionConfirmBtn.disabled = selectedTarotCardIndices.length !== cardsToSelectCount;
+    }
+
+    // 랜덤 선택 후, 첫 번째 선택된 카드로 스크롤 (선택 사항, 부드러운 사용자 경험을 위해)
+    if (selectedTarotCardIndices.length > 0 && tarotCardCarousel && tarotCardCarouselContainer) {
+        const firstSelectedCardIndex = selectedTarotCardIndices[0];
+        const cardToScrollTo = tarotCardCarousel.querySelector(`.tarot-card-item[data-index="${firstSelectedCardIndex}"]`);
+        if (cardToScrollTo) {
+            const cardWidth = cardToScrollTo.offsetWidth;
+            // margin 값을 고려한 유효 카드 간격 계산 (이전 populateTarotCarousel의 중앙 정렬 로직과 유사)
+            const cardStyle = getComputedStyle(cardToScrollTo);
+            const marginLeft = parseInt(cardStyle.marginLeft, 10) || 0;
+            const marginRight = parseInt(cardStyle.marginRight, 10) || 0;
+            const effectiveCardSpacing = cardWidth + marginLeft + marginRight;
+
+            const targetScroll = (firstSelectedCardIndex * effectiveCardSpacing) - (tarotCardCarouselContainer.offsetWidth / 2) + (effectiveCardSpacing / 2);
+            
+            tarotCardCarousel.scrollTo({ left: targetScroll, behavior: 'smooth' });
+            
+            // 스크롤 애니메이션 후 3D 효과 재적용
+            setTimeout(applyCarouselPerspective, 350); // scrollTo의 behavior: 'smooth' 시간을 고려하여 약간의 딜레이
+        }
+    }
+    console.log("[TarotSelection] '운에 맡기기' 완료. UI에 랜덤 카드 선택됨:", selectedTarotCardIndices);
+}
     function applyCarouselPerspective() {
         if (!tarotCardCarousel || !tarotCardCarousel.children.length) return;
 
