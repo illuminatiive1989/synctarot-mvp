@@ -23,7 +23,7 @@ html, body {
     height: 100%;
     font-family: 'Noto Sans KR', sans-serif;
     background-color: var(--body-bg-color);
-    overflow: hidden;
+    overflow: hidden; /* 기본적으로 숨김, 필요시 JS로 제어 */
 }
 
 .chat-app-container {
@@ -702,4 +702,130 @@ html, body {
     font-size: 0.9em;
     opacity: 0.9;
     line-height: 1.4;
+}
+
+/* Tarot Selection UI Styles */
+.tarot-selection-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85); /* 기본 어두운 배경 */
+    background-size: cover;
+    background-position: center;
+    display: none; /* 기본 숨김 */
+    align-items: center;
+    justify-content: center;
+    z-index: 2000; /* 다른 모달보다 위에 */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    flex-direction: column; /* 내부 요소들을 세로로 배치 */
+    padding: 20px;
+}
+.tarot-selection-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+.tarot-selection-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    max-width: 600px; /* 캐러셀 최대 너비 */
+    user-select: none; /* 텍스트 드래그 방지 */
+}
+.tarot-card-info {
+    color: var(--white-color);
+    font-size: 1.1rem;
+    margin-bottom: 25px;
+    padding: 8px 15px;
+    background-color: rgba(0,0,0,0.4);
+    border-radius: 20px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+.tarot-card-carousel-container {
+    width: 100%;
+    height: auto; /* 내용에 따라 높이 조절, 예: 350px 또는 카드의 높이 기준 */
+    min-height: 250px; /* 최소 높이 */
+    max-height: 40vh; /* 화면 높이의 일부만 사용 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1200px; /* 원근감 설정 */
+    margin-bottom: 30px;
+    overflow: hidden; /* 내부 캐러셀 스크롤바 숨김 */
+    position: relative;
+}
+.tarot-card-carousel {
+    display: flex;
+    align-items: center; /* 카드들을 수직 중앙 정렬 */
+    height: 100%; /* 컨테이너 높이 채움 */
+    padding: 20px 0; /* 상하 여백으로 카드 전체 보이게 */
+    transform-style: preserve-3d;
+    overflow-x: auto; /* 가로 스크롤 활성화 */
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch; /* 모바일 부드러운 스크롤 */
+    cursor: grab;
+    /* 스크롤바 숨기기 */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+}
+.tarot-card-carousel::-webkit-scrollbar { /* Chrome, Safari, Opera */
+    display: none;
+}
+.tarot-card-carousel.dragging {
+    cursor: grabbing;
+}
+.tarot-card-carousel .tarot-card-item { /* 캐러셀 내의 카드 아이템 */
+    width: 100px; /* 카드 너비, JS에서 비율로도 설정 가능 */
+    height: calc(100px * 1.7); /* 카드 높이 (일반적인 타로카드 비율 1:1.7 근사) */
+    margin: 0 -25px; /* 카드를 겹치게 함 (너비의 약 1/4 ~ 1/3) */
+    flex-shrink: 0;
+    position: relative; /* transform 기준 */
+    transition: transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.3s ease;
+    border-radius: 8px; /* 이미지 자체에 radius가 없다면 여기서 */
+    box-shadow: 0px 5px 15px rgba(0,0,0,0.3);
+    overflow: hidden; /* 이미지 넘침 방지 */
+    background-color: #555; /* 이미지 로드 전 배경 */
+}
+.tarot-card-carousel .tarot-card-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* 카드를 채우도록 */
+    display: block;
+    pointer-events: none; /* 이미지 자체 클릭 이벤트 방지 */
+    border-radius: inherit; /* 부모의 radius 상속 */
+}
+.tarot-card-carousel .tarot-card-item.selected {
+    transform: translateY(-20px) scale(1.08) !important; /* 선택 시 위로 살짝 이동 및 확대. !important로 다른 transform 덮어쓰기 주의 */
+    box-shadow: 0px 8px 25px rgba(var(--emphasis-color-rgb, 98, 129, 243), 0.5); /* 강조색 그림자 */
+    filter: brightness(1.1);
+}
+/* 선택되지 않은 카드 약간 어둡게/작게 (선택 사항) */
+.tarot-card-carousel .tarot-card-item:not(.selected):hover {
+   transform: scale(1.03) translateY(-5px); /* 호버 시 약간 확대 */
+}
+
+.tarot-selection-confirm-btn {
+    background-color: var(--emphasis-color);
+    color: var(--white-color);
+    border: none;
+    border-radius: 25px;
+    padding: 12px 30px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, opacity 0.2s;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.tarot-selection-confirm-btn:disabled {
+    background-color: #A0B3F7;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.tarot-selection-confirm-btn:hover:not(:disabled) {
+    background-color: #4E6AD8;
 }

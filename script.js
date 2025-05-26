@@ -19,6 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const tarotCardGridEl = document.getElementById('tarotCardGrid');
     const tarotCardScrollWrapper = document.getElementById('tarotCardScrollWrapper');
 
+
+    // 타로 카드 선택 UI 요소
+    const tarotSelectionOverlay = document.getElementById('tarotSelectionOverlay');
+    const tarotCardCarouselContainer = document.getElementById('tarotCardCarouselContainer');
+    const tarotCardCarousel = document.getElementById('tarotCardCarousel');
+    const tarotCardInfo = document.getElementById('tarotCardInfo');
+    const tarotSelectionConfirmBtn = document.getElementById('tarotSelectionConfirmBtn');
+
+
     // --- 전역 변수 및 상수 ---
     let userProfile;
     let isLoadingBotResponse = false;
@@ -27,9 +36,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let menuNavigationHistory = [];
     let hasUserSentMessage = false;
 
+
+    // 타로 카드 선택 관련 변수
+    let isTarotSelectionActive = false;
+    let cardsToSelectCount = 0;
+    let selectedTarotCardIndices = [];
+    const TOTAL_CARDS_IN_DECK = 78; // <-- ********** 이 라인이 반드시 있어야 합니다! **********
+    let carouselScrollState = {
+        isDragging: false,
+        startX: 0,
+        scrollLeftStart: 0
+    };
+
     const initialBotMessage = {
         text: "안녕하세요! 무엇을 도와드릴까요?<br>아래에서 선택하거나 직접 입력해주세요.<br><b>도움말</b>이라고 입력하면 사용 가능한 명령어를 볼 수 있습니다.",
-        sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘"]
+        sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘", "카드뽑을래"] // 여기에 "카드뽑을래"가 있어야 합니다.
     };
 
     // 참고용 카드 파일명 목록 (실제 사용은 데이터 파일의 cardName 필드를 우선)
@@ -112,22 +133,25 @@ function initializeUserProfile() {
         "맞춤싱크타입이름": "별을 기다리는 자",
         "overviewText": "당신은 복잡한 내면세계를 가진 존재입니다. 때로는 활기차고 외향적이다가도, 깊은 생각에 잠겨 혼자만의 시간을 즐기기도 합니다. 다양한 가능성을 탐색하는 것을 좋아하며, 정해진 틀에 얽매이는 것을 답답해할 수 있습니다. 당신의 강점은 뛰어난 직관력과 공감 능력이지만, 때로는 감정에 쉽게 휩쓸리거나 결정을 내리는 데 어려움을 겪을 수도 있습니다. 균형을 찾는 여정이 중요해 보입니다.", // 총평 텍스트 임시값
         "사용자의감정상태": "평온",
-        "선택된타로카드들": [],
+        "선택된타로카드들": [], // 사용자가 최종 선택한 실제 타로 카드 ID 목록
         "지금까지수집된타로카드": [],
         "시나리오": null,
         "메뉴단계": 1,
-        "싱크타입단계": "미결정"
+        "싱크타입단계": "미결정",
+        "tarotbg": "default.png" // 타로 선택 화면 배경 이미지 파일명
     };
 
     userProfile = { ...defaultProfile };
 
     if (loadedProfileData) {
+        // 기존 속성들 로드
         if (loadedProfileData.결정된싱크타입) userProfile.결정된싱크타입 = loadedProfileData.결정된싱크타입;
         if (loadedProfileData.사용자소속성운) userProfile.사용자소속성운 = loadedProfileData.사용자소속성운;
         if (loadedProfileData.사용자이름) userProfile.사용자이름 = loadedProfileData.사용자이름;
         if (loadedProfileData.사용자애칭) userProfile.사용자애칭 = loadedProfileData.사용자애칭;
         if (loadedProfileData.지금까지수집된타로카드) userProfile.지금까지수집된타로카드 = loadedProfileData.지금까지수집된타로카드;
-        if (loadedProfileData.overviewText) userProfile.overviewText = loadedProfileData.overviewText; // 로드된 총평 텍스트 사용
+        if (loadedProfileData.overviewText) userProfile.overviewText = loadedProfileData.overviewText;
+        if (loadedProfileData.tarotbg) userProfile.tarotbg = loadedProfileData.tarotbg; // tarotbg 로드
 
         if (userProfile.결정된싱크타입 && userProfile.사용자소속성운) {
             userProfile.싱크타입단계 = "결정됨";
@@ -135,10 +159,12 @@ function initializeUserProfile() {
         console.log("[UserProfile] 로컬 스토리지 데이터로 프로필 업데이트 완료.");
     } else {
         console.log("[UserProfile] 첫 방문 또는 로컬 데이터 없음. 기본값 사용 및 저장.");
+        // 기본값 중 일부 사용자 정의
         userProfile.사용자이름 = "임시방문객";
         userProfile.사용자애칭 = "별 탐험가";
-        userProfile.싱크타입단계 = "결정됨";
+        userProfile.싱크타입단계 = "결정됨"; // 초기 테스트를 위해 '결정됨'으로 설정
         // overviewText는 defaultProfile의 임시값을 사용
+        // tarotbg는 defaultProfile의 값을 사용
         saveUserProfileToLocalStorage(userProfile);
     }
 
@@ -463,8 +489,8 @@ function generateSyncTypeData() {
         "submenu_fortune_stage1": [
             {
                 items: [
-                    { text: "오늘의 운세 (보기)", actionType: "CHAT_MESSAGE", actionValue: "오늘의 운세 보여줘", iconName: "view", isTarotRelated: true },
-                    { text: "오늘 뭐먹지?", actionType: "CHAT_MESSAGE", actionValue: "오늘 뭐 먹을지 추천해줘", iconName: "food", isTarotRelated: true },
+                    { text: "오늘의 운세 (보기)", actionType: "CHAT_MESSAGE", actionValue: "오늘의 운세 보여줘", iconName: "view", isTarotRelated: true, tarotbg: "fortune_bg_celestial.png" }, // 예시 배경
+                    { text: "오늘 뭐먹지?", actionType: "CHAT_MESSAGE", actionValue: "오늘 뭐 먹을지 추천해줘", iconName: "food", isTarotRelated: true, tarotbg: "food_choice_bg_rustic.png" }, // 예시 배경
                     { text: "뒤로 가기", actionType: "BACK_MENU", iconName: "back" }
                 ]
             }
@@ -472,20 +498,20 @@ function generateSyncTypeData() {
         "submenu_love_counsel_stage1": [
             {
                 items: [
-                    { text: "썸타는걸까?", actionType: "CHAT_MESSAGE", actionValue: "썸인지 아닌지 알려줘", iconName: "heart", isTarotRelated: true },
-                    { text: "그 사람 마음이 궁금해", actionType: "CHAT_MESSAGE", actionValue: "그 사람의 마음을 알고 싶어", iconName: "mind", isTarotRelated: true },
+                    { text: "썸타는걸까?", actionType: "CHAT_MESSAGE", actionValue: "썸인지 아닌지 알려줘", iconName: "heart", isTarotRelated: true, tarotbg: "love_썸_bg.png" }, // 예시 배경
+                    { text: "그 사람 마음이 궁금해", actionType: "CHAT_MESSAGE", actionValue: "그 사람의 마음을 알고 싶어", iconName: "mind", isTarotRelated: true, tarotbg: "love_mind_bg.png" }, // 예시 배경
                     { text: "뒤로 가기", actionType: "BACK_MENU", iconName: "back" }
                 ]
             }
         ],
-        "main_menu_stage2": [
+        "main_menu_stage2": [ // 사용자가 메시지를 한 번이라도 보낸 후의 메뉴
             {
                 groupTitle: "상담 관리",
                 items: [
                     { text: "새상담 시작", actionType: "ALERT", actionValue: "새상담 시작 기능은 아직 준비 중입니다.", iconName: "new_chat" }
                 ]
             },
-            {
+            { // 특별한 요소, 시스템 요소 등은 stage1과 동일하게 유지하거나 다르게 구성 가능
                 groupTitle: "특별한 요소",
                 items: [
                     { text: "싱크타입", actionType: "MODAL", actionValue: "syncTypeModal", iconName: "sync" },
@@ -523,14 +549,16 @@ function saveUserProfileToLocalStorage(profile) {
         console.error("[LocalStorage] 저장할 프로필 데이터 없음.");
         return;
     }
-    // 저장할 특정 데이터만 선택 (예시: 싱크타입, 성운 정보 등 핵심 정보만)
     const dataToStore = {
         결정된싱크타입: profile.결정된싱크타입,
         사용자소속성운: profile.사용자소속성운,
         사용자애칭: profile.사용자애칭,
         사용자이름: profile.사용자이름,
+        지금까지수집된타로카드: profile.지금까지수집된타로카드, // 수집된 카드도 저장
+        overviewText: profile.overviewText, // 총평 텍스트 저장
+        tarotbg: profile.tarotbg, // 타로 배경 이미지 저장
+        선택된타로카드들: profile.선택된타로카드들 // 선택된 타로카드 ID도 저장
         // 필요에 따라 다른 userProfile 속성들도 추가
-        // 예: "지금까지수집된타로카드": profile.지금까지수집된타로카드
     };
     try {
         localStorage.setItem('userSyncData', JSON.stringify(dataToStore));
@@ -753,21 +781,65 @@ function saveUserProfileToLocalStorage(profile) {
         console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
         return new Promise(resolve => {
             setTimeout(() => {
-                let responseData = botKnowledgeBase[userMessageText];
-                if (!responseData) {
-                    const lowerUserMessage = userMessageText.toLowerCase();
-                    if (lowerUserMessage.includes("운세")) responseData = botKnowledgeBase["오늘의 운세 보여줘"] || botKnowledgeBase["오늘의 운세가 궁금해요."];
-                    else if (lowerUserMessage.includes("메뉴") || lowerUserMessage.includes("음식") || lowerUserMessage.includes("추천")) responseData = botKnowledgeBase["오늘 뭐 먹을지 추천해줘"] || botKnowledgeBase["추천 메뉴 알려주세요."];
-                    else if (lowerUserMessage.includes("날씨")) responseData = botKnowledgeBase["날씨 알려줘."];
-                    else if (lowerUserMessage.includes("도움") || lowerUserMessage.includes("help")) responseData = botKnowledgeBase["도움말 보여주세요."];
+                let responseData = {};
+                const lowerUserMessage = userMessageText.toLowerCase();
+
+                if (userMessageText === "카드뽑을래") {
+                    responseData = {
+                        action: "루비가 카드를 펼치며",
+                        assistantmsg: "좋아요! 어떤 카드가 당신을 기다리고 있을까요? ✨🔮✨<br>아래에서 <b>3장</b>의 카드를 선택해주세요.",
+                        tarocardview: true,
+                        cards_to_select: 3,
+                        sampleanswer: "선택 취소", // 사용자가 선택 중 취소할 경우의 버튼 (지금은 미구현)
+                        user_profile_update: {}
+                    };
+                } else if (userMessageText === "카드 선택 완료") {
+                    // 실제로는 userProfile.선택된타로카드들 (임시 ID)을 기반으로 서버에서 해석해야 함
+                    // 여기서는 선택된 카드 인덱스를 활용하여 간단한 메시지 생성
+                    const selectedCardDisplayNames = userProfile.선택된타로카드들.map((id, index) => {
+                        // ALL_TAROT_CARD_IDS에서 실제 카드 ID를 가져와 이름을 표시할 수 있지만,
+                        // 현재는 '사용자는 카드를 몰라야 함' 조건이므로, 단순 표시
+                        // 만약 실제 카드 ID가 저장되었다면 TAROT_CARD_DATA[id].name 등으로 표시 가능
+                        return `당신의 ${index + 1}번째 선택`;
+                    });
+
+                    responseData = {
+                        action: "루비가 선택된 카드를 보며",
+                        assistantmsg: `선택하신 카드들(${selectedCardDisplayNames.join(', ')})에 대한 해석을 준비 중입니다...<br>결과는 잠시 후 공개됩니다! 🌟`,
+                        tarocardview: false,
+                        cards_to_select: null,
+                        sampleanswer: "결과 기대돼요!|다른 질문할래요",
+                        user_profile_update: {
+                            // "선택된타로카드들": [] // 여기서 초기화하지 않고, 해석 후 또는 새 뽑기 시 초기화
+                        }
+                    };
+                } else {
+                    // 기존 로직: userMessageText를 키로 사용하거나, 키워드 기반으로 응답 찾기
+                    responseData = botKnowledgeBase[userMessageText];
+                    if (!responseData) {
+                        if (lowerUserMessage.includes("운세")) responseData = botKnowledgeBase["오늘의 운세 보여줘"] || botKnowledgeBase["오늘의 운세가 궁금해요."];
+                        else if (lowerUserMessage.includes("메뉴") || lowerUserMessage.includes("음식") || lowerUserMessage.includes("추천")) responseData = botKnowledgeBase["오늘 뭐 먹을지 추천해줘"] || botKnowledgeBase["추천 메뉴 알려주세요."];
+                        else if (lowerUserMessage.includes("날씨")) responseData = botKnowledgeBase["날씨 알려줘."];
+                        else if (lowerUserMessage.includes("도움") || lowerUserMessage.includes("help")) responseData = botKnowledgeBase["도움말 보여주세요."];
+                    }
+                    if (!responseData) responseData = botKnowledgeBase["기본"];
+
+                    // API 응답 형식에 맞게 기존 응답 포장
+                    responseData = {
+                        action: "루비가 고개를 갸웃하며", // 기본 액션
+                        assistantmsg: responseData.response,
+                        tarocardview: false,
+                        cards_to_select: null,
+                        sampleanswer: (responseData.sampleAnswers || []).join('|') || "네 알겠습니다.|다른 질문",
+                        user_profile_update: {}
+                    };
                 }
-                if (!responseData) responseData = botKnowledgeBase["기본"];
+                
                 console.log(`[BotResponse] 응답 데이터 준비 완료:`, responseData);
-                resolve({ text: responseData.response, sampleAnswers: responseData.sampleAnswers });
+                resolve(responseData); // API 전체 응답 객체 resolve
             }, 200 + Math.random() * 300);
         });
     }
-
     function setUIInteractions(isProcessing, shouldFocusInput = false) {
         console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}`);
         messageInput.disabled = isProcessing; // 로딩 중일 때 비활성화
@@ -788,7 +860,7 @@ function saveUserProfileToLocalStorage(profile) {
     }
 
     async function processMessageExchange(messageText, source = 'input', options = {}) {
-        const { clearBeforeSend = false } = options;
+        const { clearBeforeSend = false, menuItemData = null } = options;
 
         console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, options);
         if (messageText.trim() === '' || isLoadingBotResponse) {
@@ -797,11 +869,13 @@ function saveUserProfileToLocalStorage(profile) {
         }
 
         let shouldClearChat = clearBeforeSend;
-        if (!hasUserSentMessage) {
+        if (!hasUserSentMessage && source !== 'system_init') { // 초기 메시지 로드는 제외
             shouldClearChat = true;
             hasUserSentMessage = true;
-            console.log("[ProcessExchange] 사용자의 첫 메시지. 채팅창 비움 활성화.");
+            userProfile.메뉴단계 = 2; // 사용자가 첫 메시지를 보내면 메뉴 2단계로 변경
+            console.log("[ProcessExchange] 사용자의 첫 메시지. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
         }
+
 
         if (shouldClearChat) {
             clearChatMessages();
@@ -817,7 +891,10 @@ function saveUserProfileToLocalStorage(profile) {
             moreOptionsBtn.classList.remove('active');
         }
 
-        await addMessage(messageText, 'user');
+        if (source !== 'system_init_skip_user_message') { // 시스템 초기 메시지 로드 시 사용자 메시지 추가 건너뛰기
+             await addMessage(messageText, 'user');
+        }
+
 
         if (source === 'input') {
             messageInput.value = '';
@@ -825,17 +902,52 @@ function saveUserProfileToLocalStorage(profile) {
         }
 
         try {
-            const botResponse = await simulateBotResponse(messageText);
-            await addMessage(botResponse.text, 'bot');
-            updateSampleAnswers(botResponse.sampleAnswers);
+            const botApiResponse = await simulateBotResponse(messageText); // API 응답 전체를 받음
+            
+            // 사용자 프로필 업데이트 적용
+            if (botApiResponse.user_profile_update) {
+                for (const key in botApiResponse.user_profile_update) {
+                    if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
+                        if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
+                            // API에서 빈 배열로 초기화하라는 지시가 아니면, 기존 선택된 카드 유지 (예: 해석 단계)
+                            // 명시적으로 빈 배열을 보내면 초기화
+                        } else {
+                            userProfile[key] = botApiResponse.user_profile_update[key];
+                        }
+                    }
+                }
+                saveUserProfileToLocalStorage(userProfile); // 변경사항 저장
+                console.log("[UserProfile] API 응답으로 프로필 업데이트:", botApiResponse.user_profile_update);
+            }
+
+            // 챗봇 메시지 추가 (action + assistantmsg)
+            const fullBotMessage = `${botApiResponse.action ? `<i>${botApiResponse.action}</i><br>` : ''}${botApiResponse.assistantmsg}`;
+            await addMessage(fullBotMessage, 'bot');
+            
+            const sampleAnswersArray = botApiResponse.sampleanswer ? botApiResponse.sampleanswer.split('|').map(s => s.trim()).filter(s => s) : [];
+            updateSampleAnswers(sampleAnswersArray);
+
+            // 타로 카드 선택 UI 표시 로직
+            if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
+                let currentTarotBg = userProfile.tarotbg || 'default.png'; // 프로필 기본값 또는 'default.png'
+                if (menuItemData && menuItemData.tarotbg) { // 패널 메뉴에서 전달된 tarotbg가 있다면
+                    currentTarotBg = menuItemData.tarotbg;
+                    userProfile.tarotbg = currentTarotBg; // 사용자 프로필에 이 배경 저장
+                    saveUserProfileToLocalStorage(userProfile);
+                }
+                // "카드뽑을래"와 같이 일반 샘플 답변으로 tarotbg가 지정되지 않은 경우, userProfile.tarotbg 사용
+                console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
+                showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
+            }
+
         } catch (error) {
             console.error("[ProcessExchange] 오류 발생:", error);
             await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
-            updateSampleAnswers(initialBotMessage.sampleAnswers);
+            updateSampleAnswers(initialBotMessage.sampleAnswers); // 초기 샘플 답변으로 복구
         } finally {
             isLoadingBotResponse = false;
             sendBtn.classList.remove('loading');
-            setUIInteractions(false, source === 'input');
+            setUIInteractions(false, source === 'input' || source === 'sample_button'); // 입력창 또는 샘플버튼 클릭시에만 포커스
             console.log("[ProcessExchange] 완료.");
         }
     }
@@ -1063,7 +1175,222 @@ function updateSyncTypeModal(tabId = 'overview') {
         });
         console.log("[Modal] 타로 콜렉션 카드 목록 생성 완료.");
     }
+    function showTarotSelectionUI(cardsToPick, backgroundFileName) {
+        console.log(`[TarotSelection] UI 표시. 선택할 카드: ${cardsToPick}, 배경: ${backgroundFileName}`);
+        if (!tarotSelectionOverlay || !tarotCardCarousel || !tarotCardInfo || !tarotSelectionConfirmBtn) {
+            console.error("[TarotSelection] UI 요소를 찾을 수 없습니다.");
+            return;
+        }
 
+        tarotSelectionOverlay.style.backgroundImage = `url('img/tarot/bg/${backgroundFileName}')`;
+        cardsToSelectCount = cardsToPick;
+        selectedTarotCardIndices = []; // 선택된 카드 인덱스 초기화
+
+        populateTarotCarousel(); // 캐러셀 내용 생성 및 중앙 정렬
+        updateTarotSelectionInfo();
+
+        tarotSelectionConfirmBtn.disabled = true; // 처음엔 비활성화
+        tarotSelectionOverlay.classList.add('active');
+        isTarotSelectionActive = true;
+        document.body.style.overflow = 'hidden'; // 뒷 배경 스크롤 방지
+
+        // 캐러셀 드래그 스크롤 이벤트 리스너 등록
+        setupCarouselDragScroll();
+        // 스크롤 이벤트에 따른 3D 효과 적용 리스너 등록
+        tarotCardCarousel.addEventListener('scroll', applyCarouselPerspective);
+    }
+
+    function hideTarotSelectionUI() {
+        if (!tarotSelectionOverlay) return;
+        tarotSelectionOverlay.classList.remove('active');
+        isTarotSelectionActive = false;
+        document.body.style.overflow = ''; // 스크롤 복원
+
+        // 이벤트 리스너 제거 (메모리 누수 방지)
+        if (tarotCardCarousel) {
+            tarotCardCarousel.removeEventListener('mousedown', handleCarouselMouseDown);
+            tarotCardCarousel.removeEventListener('scroll', applyCarouselPerspective);
+            // mousemove, mouseup, mouseleave는 document에 등록되므로 주의해서 제거하거나, 플래그로 관리
+        }
+        document.removeEventListener('mousemove', handleCarouselMouseMove);
+        document.removeEventListener('mouseup', handleCarouselMouseUp);
+        document.removeEventListener('mouseleave', handleCarouselMouseLeave); // document에 등록된 경우
+
+        console.log("[TarotSelection] UI 숨김.");
+    }
+
+    function populateTarotCarousel() {
+        if (!tarotCardCarousel) return;
+        tarotCardCarousel.innerHTML = ''; // 기존 카드 제거
+
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < TOTAL_CARDS_IN_DECK; i++) {
+            const cardItem = document.createElement('div');
+            cardItem.className = 'tarot-card-item';
+            cardItem.dataset.index = i;
+
+            const img = document.createElement('img');
+            img.src = 'img/tarot/card_back.png';
+            img.alt = `타로 카드 ${i + 1}`;
+            cardItem.appendChild(img);
+
+            cardItem.addEventListener('click', (e) => handleTarotCardClick(e, i));
+            fragment.appendChild(cardItem);
+        }
+        tarotCardCarousel.appendChild(fragment);
+
+        // 캐러셀 초기 중앙 정렬 (첫 번째 카드가 그려진 후 정확한 너비 계산)
+        requestAnimationFrame(() => {
+            if (tarotCardCarousel.firstElementChild) {
+                const cardWidth = tarotCardCarousel.firstElementChild.offsetWidth;
+                // 카드가 겹쳐있으므로 실제 보이는 너비(스타일에서 margin: 0 -25px; 이므로 100 - 25 -25 = 50)
+                // 혹은 카드의 실제 너비에서 겹치는 부분을 뺀 값으로 계산해야함
+                // CSS에서 margin: 0 -25px; 이므로, 각 카드는 (100 - 25*2) = 50px의 공간만 차지하는 것처럼 보임.
+                // 그러나 transform 효과를 위해 각 카드의 offsetWidth는 100px임.
+                // 스크롤 시에는 겹침을 고려한 실제 카드 간격으로 계산.
+                // margin: 0 -Npx; 일 경우, 카드의 시각적 너비는 실제너비 - 2*N
+                // 여기서는 카드를 펼쳐놓고 중앙 카드가 화면 중앙에 오도록 함
+                const effectiveCardSpacing = cardWidth + parseInt(getComputedStyle(tarotCardCarousel.firstElementChild).marginLeft) + parseInt(getComputedStyle(tarotCardCarousel.firstElementChild).marginRight); // 대략 100 - 25 - 25 = 50
+
+                const middleCardIndex = Math.floor(TOTAL_CARDS_IN_DECK / 2);
+                // (중앙 카드 인덱스 * 카드 간격) 은 중앙 카드의 시작점.
+                // 여기서 (캐러셀 컨테이너 너비 / 2)를 빼고 (카드 간격 / 2)를 더하면 중앙 카드의 중심이 캐러셀 컨테이너 중심에 옴.
+                const initialScroll = (middleCardIndex * effectiveCardSpacing) - (tarotCardCarouselContainer.offsetWidth / 2) + (effectiveCardSpacing / 2);
+                
+                tarotCardCarousel.scrollLeft = initialScroll;
+                applyCarouselPerspective(); // 초기 3D 효과 적용
+            }
+        });
+    }
+
+    function handleTarotCardClick(event, cardIndex) {
+        if (isLoadingBotResponse) return; // 봇 응답 중에는 카드 선택 불가
+
+        const cardElement = event.currentTarget;
+        const indexInSelected = selectedTarotCardIndices.indexOf(cardIndex);
+
+        if (indexInSelected > -1) { // 이미 선택된 카드 -> 선택 해제
+            selectedTarotCardIndices.splice(indexInSelected, 1);
+            cardElement.classList.remove('selected');
+        } else if (selectedTarotCardIndices.length < cardsToSelectCount) { // 새로 선택 (최대 선택 가능 개수 미만일 때)
+            selectedTarotCardIndices.push(cardIndex);
+            cardElement.classList.add('selected');
+        } else {
+            // 최대 개수를 이미 선택했는데 다른 카드를 누른 경우 (무시 또는 알림)
+            console.log("[TarotSelection] 최대 선택 개수에 도달했습니다.");
+            // 간단한 시각적 피드백 (예: 캐러셀 살짝 흔들기)을 줄 수도 있음
+            // tarotCardCarouselContainer.classList.add('shake');
+            // setTimeout(() => tarotCardCarouselContainer.classList.remove('shake'), 300);
+            return;
+        }
+        updateTarotSelectionInfo();
+        tarotSelectionConfirmBtn.disabled = selectedTarotCardIndices.length !== cardsToSelectCount;
+    }
+
+    function updateTarotSelectionInfo() {
+        if (!tarotCardInfo) return;
+        tarotCardInfo.textContent = `${selectedTarotCardIndices.length}장 선택됨 / 총 ${cardsToSelectCount}장 선택하세요`;
+    }
+
+    async function handleTarotSelectionConfirm() {
+        if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
+
+        console.log("[TarotSelection] 선택 완료. 선택된 카드 인덱스:", selectedTarotCardIndices);
+        // 중요: 현재 유저는 카드의 앞면을 모르므로, '인덱스'만 의미가 있음.
+        // 이 인덱스를 기반으로 userProfile.선택된타로카드들 에 임시 ID를 저장.
+        // 실제 애플리케이션에서는 이 인덱스들을 서버로 보내고, 서버가 실제 카드 ID를 뽑아 userProfile에 저장 후 클라이언트에 알려줘야 함.
+        // 요구사항: "선택된 타로카드는 유저프로필 선택된타로카드들 에 저장돼는거야"
+        // 이 단계에서는 서버가 없으므로, '선택된 인덱스' 자체를 저장하거나, 임의의 ID를 생성하여 저장.
+        // ALL_TAROT_CARD_IDS 배열에서 해당 인덱스의 ID를 가져와 저장 (이것은 유저가 카드를 안다는 가정이 되어버림)
+        // -> 요구사항 "유저는 뭔카든지 유저는 몰라야함"을 지키려면, 서버로 보내기 전까지는 인덱스만 관리해야 함.
+        // -> 이 함수에서는 선택된 "인덱스"를 기반으로 임시 ID를 `userProfile.선택된타로카드들`에 저장.
+        userProfile.선택된타로카드들 = selectedTarotCardIndices.map(index => `selected_card_at_index_${index}_${Date.now()}`);
+        saveUserProfileToLocalStorage(userProfile);
+
+        hideTarotSelectionUI();
+
+        // 선택 완료 후 봇에게 알림 (사용자 메시지로 처리)
+        await processMessageExchange("카드 선택 완료", 'system_internal'); // 내부 시스템 메시지로 처리하여 사용자 입력 없이 진행
+    }
+
+
+    function applyCarouselPerspective() {
+        if (!tarotCardCarousel || !tarotCardCarousel.children.length) return;
+
+        const cards = Array.from(tarotCardCarousel.children);
+        const carouselRect = tarotCardCarousel.getBoundingClientRect();
+        const carouselCenterX = carouselRect.left + carouselRect.width / 2;
+        
+        // perspective 값은 컨테이너 너비에 비례하게 설정
+        const perspectiveValue = tarotCardCarouselContainer.offsetWidth * 2; 
+        // translateZ를 위한 깊이감 조절 (카드가 얼마나 뒤로/앞으로 갈지)
+        const zDepthFactor = cards[0].offsetWidth * 0.5; // 카드 너비의 절반 정도
+        // 회전 각도 조절 계수
+        const rotateFactor = 0.20; // 값이 클수록 더 많이 회전
+
+        cards.forEach(card => {
+            const cardRect = card.getBoundingClientRect();
+            const cardCenterX = cardRect.left + cardRect.width / 2;
+            
+            // 캐러셀 중심으로부터 카드 중심까지의 거리 (픽셀 단위)
+            const distanceFromCenter = cardCenterX - carouselCenterX;
+            
+            // 거리에 따른 회전각 (중앙에서 멀수록 더 많이 회전)
+            // 화면 너비의 절반을 기준으로 비율 계산하여 각도 결정
+            const rotateY = (distanceFromCenter / (carouselRect.width / 2)) * (cards[0].offsetWidth * rotateFactor) ;
+            
+            // 거리에 따른 z축 이동 (중앙에서 멀수록 뒤로 약간 이동시켜 입체감 부여)
+            // Math.abs(distanceFromCenter)가 클수록 더 뒤로
+            const translateZ = - (Math.abs(distanceFromCenter) / (carouselRect.width / 2)) * zDepthFactor;
+
+            card.style.transform = `perspective(${perspectiveValue}px) translateX(0px) rotateY(${rotateY}deg) translateZ(${translateZ}px)`;
+        });
+    }
+
+    // --- 캐러셀 드래그 스크롤 함수들 ---
+    function handleCarouselMouseDown(e) {
+        if (!tarotCardCarousel) return;
+        carouselScrollState.isDragging = true;
+        // e.pageX는 뷰포트 기준, carousel.offsetLeft은 부모 기준이므로, offsetX를 사용하거나 pageX와 getBoundingClientRect().left 조합
+        carouselScrollState.startX = e.pageX - tarotCardCarousel.getBoundingClientRect().left;
+        carouselScrollState.scrollLeftStart = tarotCardCarousel.scrollLeft;
+        tarotCardCarousel.classList.add('dragging');
+        // document에 mousemove와 mouseup을 등록해야 캐러셀 밖으로 마우스가 나가도 드래그 유지
+        document.addEventListener('mousemove', handleCarouselMouseMove);
+        document.addEventListener('mouseup', handleCarouselMouseUp);
+        document.addEventListener('mouseleave', handleCarouselMouseLeave); // 창밖으로 나갈 경우 대비
+    }
+
+    function handleCarouselMouseMove(e) {
+        if (!carouselScrollState.isDragging || !tarotCardCarousel) return;
+        e.preventDefault(); // 드래그 중 텍스트 선택 등 방지
+        const x = e.pageX - tarotCardCarousel.getBoundingClientRect().left;
+        const walk = (x - carouselScrollState.startX) * 2; // 드래그 감도 조절 (값을 키우면 더 민감)
+        tarotCardCarousel.scrollLeft = carouselScrollState.scrollLeftStart - walk;
+    }
+
+    function handleCarouselMouseUp() {
+        if (!tarotCardCarousel) return;
+        carouselScrollState.isDragging = false;
+        tarotCardCarousel.classList.remove('dragging');
+        document.removeEventListener('mousemove', handleCarouselMouseMove);
+        document.removeEventListener('mouseup', handleCarouselMouseUp);
+        document.removeEventListener('mouseleave', handleCarouselMouseLeave);
+    }
+    function handleCarouselMouseLeave(e) { // 마우스가 document를 벗어났을 때
+         if (carouselScrollState.isDragging) { // 드래그 중이었다면
+            handleCarouselMouseUp(); // 드래그 종료 처리
+        }
+    }
+
+    function setupCarouselDragScroll() {
+        if (!tarotCardCarousel) return;
+        // 기존 리스너 제거 (중복 방지)
+        tarotCardCarousel.removeEventListener('mousedown', handleCarouselMouseDown);
+        
+        tarotCardCarousel.addEventListener('mousedown', handleCarouselMouseDown);
+        // 터치 이벤트도 추가하면 좋음 (나중에)
+    }
     function openModal(modalId) {
         console.log(`[Modal] 열기 시도: ${modalId}`);
         const modal = document.getElementById(modalId);
@@ -1152,7 +1479,9 @@ function updateSyncTypeModal(tabId = 'overview') {
 
                     optionButton.dataset.actionType = item.actionType;
                     if (item.actionValue !== undefined) optionButton.dataset.actionValue = item.actionValue;
-                    if (item.isTarotRelated !== undefined) optionButton.dataset.isTarotRelated = item.isTarotRelated;
+                    if (item.isTarotRelated !== undefined) optionButton.dataset.isTarotRelated = String(item.isTarotRelated);
+                    if (item.tarotbg !== undefined) optionButton.dataset.tarotbg = item.tarotbg; // tarotbg 데이터 속성 추가
+                    
                     optionButton.disabled = isLoadingBotResponse;
                     moreOptionsPanel.appendChild(optionButton);
                 });
@@ -1200,8 +1529,9 @@ function updateSyncTypeModal(tabId = 'overview') {
             const actionType = targetOption.dataset.actionType;
             const actionValue = targetOption.dataset.actionValue;
             const isTarotRelatedMenu = targetOption.dataset.isTarotRelated === 'true';
+            const tarotBgFromMenu = targetOption.dataset.tarotbg; // tarotbg 값 가져오기
 
-            console.log(`[Panel] 옵션 클릭: Text="${targetOption.textContent.trim()}", Type="${actionType}", Value="${actionValue}", isTarotRelated=${isTarotRelatedMenu}`);
+            console.log(`[Panel] 옵션 클릭: Text="${targetOption.textContent.trim()}", Type="${actionType}", Value="${actionValue}", isTarotRelated=${isTarotRelatedMenu}, tarotBg=${tarotBgFromMenu}`);
 
             switch (actionType) {
                 case 'SUB_MENU':
@@ -1213,17 +1543,23 @@ function updateSyncTypeModal(tabId = 'overview') {
                 case 'CHAT_MESSAGE':
                     moreOptionsPanel.classList.remove('active');
                     moreOptionsBtn.classList.remove('active');
+                    
+                    const messageOptions = {};
+                    if (tarotBgFromMenu) {
+                        messageOptions.menuItemData = { tarotbg: tarotBgFromMenu };
+                    }
+
                     if (hasUserSentMessage && isTarotRelatedMenu) {
                         const userConfirmation = confirm("현재 상담 주제가 변경됩니다. 새로운 주제로 진행할까요?");
                         if (userConfirmation) {
                             console.log("[Panel] 사용자가 새 주제 진행 확인.");
-                            await processMessageExchange(actionValue, 'panel_option_topic_reset', { clearBeforeSend: true });
+                            await processMessageExchange(actionValue, 'panel_option_topic_reset', { ...messageOptions, clearBeforeSend: true });
                         } else {
                             console.log("[Panel] 사용자가 새 주제 진행 취소.");
                             return;
                         }
                     } else {
-                        await processMessageExchange(actionValue, 'panel_option');
+                        await processMessageExchange(actionValue, 'panel_option', messageOptions);
                     }
                     break;
                 case 'ALERT':
@@ -1317,21 +1653,18 @@ function updateSyncTypeModal(tabId = 'overview') {
 
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
-    initializeUserProfile(); // userProfile 기본값 및 로컬스토리지 값 로드
+    initializeUserProfile();
 
-    // 필수 외부 데이터 로드 확인
     if (typeof ALL_SYNC_TYPES === 'undefined' || typeof ALL_NEBULAS === 'undefined' || typeof TAROT_CARD_DATA === 'undefined') {
         const missingData = [
             typeof ALL_SYNC_TYPES === 'undefined' ? 'ALL_SYNC_TYPES (syncTypes.js)' : null,
             typeof ALL_NEBULAS === 'undefined' ? 'ALL_NEBULAS (nebulas.js)' : null,
             typeof TAROT_CARD_DATA === 'undefined' ? 'TAROT_CARD_DATA (tarotData.js)' : null,
         ].filter(Boolean).join(', ');
-        
+
         console.error(`[App] 필수 데이터(${missingData})가 로드되지 않았습니다. HTML에서 해당 스크립트 파일들을 확인해주세요.`);
         await addMessage(`시스템 설정 오류로 일부 기능을 사용할 수 없습니다. (${missingData} 누락)`, 'system');
-        // 여기서 generateSyncTypeData를 호출하면 안됨. 데이터가 없기 때문.
     } else {
-        // 모든 필수 외부 데이터가 로드된 후에 generateSyncTypeData 호출
         generateSyncTypeData();
         console.log("[App] 외부 데이터 로드 확인 후 SyncTypeData 생성 완료.");
     }
@@ -1342,19 +1675,37 @@ async function initializeChat() {
     moreOptionsBtn.disabled = true;
     requestAnimationFrame(adjustChatMessagesPadding);
 
+    if (tarotSelectionConfirmBtn) {
+        tarotSelectionConfirmBtn.addEventListener('click', handleTarotSelectionConfirm);
+    } else {
+        console.error("[App] tarotSelectionConfirmBtn 요소를 찾을 수 없습니다.");
+    }
+
     isLoadingBotResponse = true;
     setUIInteractions(true, false);
 
-    if (typeof initialBotMessage === 'undefined') {
-        console.error("[App] initialBotMessage 정의되지 않음. 초기화 중단.");
+    if (typeof initialBotMessage === 'undefined' || !initialBotMessage.text || !initialBotMessage.sampleAnswers) {
+        console.error("[App] initialBotMessage가 올바르게 정의되지 않았습니다. 초기화 중단.");
+        await addMessage("초기 메시지를 불러올 수 없습니다. 관리자에게 문의하세요.", 'system');
         isLoadingBotResponse = false;
         setUIInteractions(false, false);
         messageInput.disabled = false;
         moreOptionsBtn.disabled = false;
         return;
     }
-    await addMessage(initialBotMessage.text, 'bot');
-    updateSampleAnswers(initialBotMessage.sampleAnswers);
+
+    // 초기 봇 메시지 직접 추가
+    // API 응답 형식을 따르지 않고, 기존 방식대로 텍스트와 샘플 답변을 직접 사용합니다.
+    try {
+        // action 부분을 가상으로 추가하거나, initialBotMessage에 포함시킬 수 있습니다.
+        // 여기서는 간단하게 initialBotMessage.text만 사용합니다.
+        const botMessageTextWithAction = `<i>루비가 반갑게 인사하며</i><br>${initialBotMessage.text}`; // 간단한 액션 추가
+        await addMessage(botMessageTextWithAction, 'bot');
+        updateSampleAnswers(initialBotMessage.sampleAnswers); // 여기서 "카드뽑을래"가 포함된 배열이 전달되어야 함
+    } catch (error) {
+        console.error("[App] 초기 메시지 표시 중 오류:", error);
+        await addMessage("초기 메시지를 표시하는 중 오류가 발생했습니다.", "system");
+    }
 
     isLoadingBotResponse = false;
     setUIInteractions(false, false);
