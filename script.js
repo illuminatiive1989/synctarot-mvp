@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const moreOptionsBtn = document.getElementById('moreOptionsBtn');
     const moreOptionsPanel = document.getElementById('moreOptionsPanel');
     const chatInputArea = document.querySelector('.chat-input-area');
+        const cardRevealContainer = document.getElementById('cardRevealContainer'); // 추가
+
 
     // 모달 내부 요소들
     const syncTypeMainImage = document.getElementById('syncTypeMainImage');
@@ -36,6 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPanelMenuKey = 'main';
     let menuNavigationHistory = [];
     let hasUserSentMessage = false;
+        let isCardRevealAnimationPlaying = false; // 카드 공개 애니메이션 진행 중 플래그
+
 
 
     // 타로 카드 선택 관련 변수
@@ -886,25 +890,37 @@ function simulateBotResponse(userMessageText) {
             if (userMessageText === "카드뽑을래") {
                 responseData = {
                     assistantmsg: "네, 알겠습니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.",
-                    tarocardview: true,
+                    tarocardview: true, // 카드 선택 UI 표시
                     cards_to_select: 3,
-                    sampleanswer: "선택 취소|운에 맡기기", // "운에 맡기기"도 초기 샘플 답변에 추가 가능
+                    sampleanswer: "선택 취소|운에 맡기기",
                     user_profile_update: {}
                 };
             } else if (userMessageText === "카드 선택 완료") {
-                let assistantMsgContent = `선택하신 카드들에 대한 분석을 진행하겠습니다.<br>결과는 잠시 후 말씀드리겠습니다.<br><br>`;
+                // userProfile.선택된타로카드들 에는 실제 카드 ID들이 저장되어 있어야 함
+                const actualSelectedCardIds = userProfile.선택된타로카드들 || [];
                 
-                if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
-                    assistantMsgContent += "선택하신 카드는 다음과 같습니다:<br>";
-                    userProfile.선택된타로카드들.forEach((cardId, index) => {
-                        let cardDisplayName = cardId.replace(/_/g, ' '); // 기본 이름
-                        let imageNameForFile = cardId; // 파일명으로 사용할 ID
+                responseData = {
+                    assistantmsg: "선택하신 카드를 확인하겠습니다. 잠시만 기다려 주십시오.",
+                    tarotcardview: false, // 카드 선택 UI는 닫힘
+                    cards_to_select: null,
+                    show_card_reveal_animation: true, // 카드 공개 애니메이션 실행 플래그
+                    revealed_cards: actualSelectedCardIds, // 공개할 실제 카드 ID 목록
+                    sampleanswer: "카드 공개 보기", // 애니메이션 후 사용자가 누를 버튼 (또는 자동 진행)
+                    user_profile_update: {}
+                };
+            } else if (userMessageText === "카드 공개 보기" || userMessageText.startsWith("revealed_cards_processed_")) { 
+                // "카드 공개 보기"를 누르거나, 애니메이션 후 내부적으로 이 메시지를 생성하여 다음 단계로 진행
+                let assistantMsgContent = "선택된 카드에 대한 자세한 내용은 다음과 같습니다.<br><br>";
+                const cardsToShow = userProfile.선택된타로카드들 || [];
+
+                if (cardsToShow.length > 0) {
+                    cardsToShow.forEach((cardId, index) => {
+                        let cardDisplayName = cardId.replace(/_/g, ' ');
+                        let imageNameForFile = cardId;
                         let isReversed = cardId.endsWith('_reversed');
 
                         if (typeof TAROT_CARD_DATA !== 'undefined' && TAROT_CARD_DATA[cardId]) {
                             cardDisplayName = TAROT_CARD_DATA[cardId].name;
-                            // TAROT_CARD_DATA에 이미지 파일명 정보가 있다면 그것을 우선 사용할 수 있음
-                            // 예: if (TAROT_CARD_DATA[cardId].imageFile) imageNameForFile = TAROT_CARD_DATA[cardId].imageFile;
                         } else {
                             cardDisplayName = cardId.replace(/_/g, ' ')
                                                   .replace(/\b\w/g, l => l.toUpperCase())
@@ -912,49 +928,39 @@ function simulateBotResponse(userMessageText) {
                                                   .replace(' Upright', ' (정방향)');
                         }
                         
-                        // 이미지 파일명 규칙: 모든 앞면 이미지는 _upright.png 형태라고 가정
-                        // _reversed로 끝나는 ID는 _upright로 변경하여 파일명 생성
                         if (isReversed) {
                             imageNameForFile = cardId.substring(0, cardId.lastIndexOf('_reversed')) + '_upright';
                         } else if (cardId.endsWith('_upright')) {
-                            // _upright로 끝나면 그대로 사용 (이미 파일명 규칙에 맞음)
                             imageNameForFile = cardId;
-                        } else {
-                            // _upright나 _reversed가 없는 ID라면 (예: 커스텀 카드), ID 자체를 파일명으로 사용하거나
-                            // _upright를 붙여주는 규칙을 따를 수 있음. 여기서는 ID 그대로 사용.
-                            // 하지만 ALL_TAROT_CARD_IDS는 규칙을 따르므로 이 경우는 드묾.
-                            console.warn(`[BotResponse] 카드 ID (${cardId})가 표준 접미사(_upright/_reversed)를 따르지 않아 이미지 파일명 생성에 주의가 필요합니다.`);
                         }
 
                         const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
                         
-                        // HTML 문자열 생성 시, sanitizeBotHtml 함수가 이를 올바르게 처리할 수 있도록 구성
-                        // class="chat-embedded-image"를 추가하여 CSS에서 스타일 제어
-                        assistantMsgContent += `<div>`; // 각 카드를 div로 묶어줌 (스타일 적용 용이)
+                        assistantMsgContent += `<div>`;
                         assistantMsgContent += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
                         assistantMsgContent += `<span style="display: block; text-align: center; font-size: 0.85em; color: #333; margin-top: 4px;">${index + 1}. ${cardDisplayName}</span>`;
                         assistantMsgContent += `</div>`;
-                        if (index < userProfile.선택된타로카드들.length - 1) {
-                             assistantMsgContent += `<br>`; // 카드 사이에 명시적 줄바꿈 추가 (선택 사항)
+                        if (index < cardsToShow.length - 1) {
+                             assistantMsgContent += `<br>`;
                         }
                     });
-                    assistantMsgContent += "<br><br>곧 자세한 내용을 전달드리겠습니다.";
                 } else {
-                    assistantMsgContent += "선택된 카드가 없습니다. 다시 시도해주십시오.";
+                    assistantMsgContent = "공개할 카드가 없습니다. 다시 선택해주십시오.";
                 }
-
+                
                 responseData = {
                     assistantmsg: assistantMsgContent,
-                    tarocardview: false,
+                    tarotcardview: false,
                     cards_to_select: null,
-                    sampleanswer: "결과를 기다리겠습니다|다른 질문이 있습니다",
+                    show_card_reveal_animation: false, // 이미 공개했으므로 false
+                    sampleanswer: "해석 감사합니다|다른 질문",
                     user_profile_update: {}
                 };
+
             } else {
-                // 일반 메시지 처리 (기존 botKnowledgeBase 사용)
+                // 일반 메시지 처리
                 let baseResponse = botKnowledgeBase[userMessageText];
                 if (!baseResponse) {
-                    const lowerUserMessage = userMessageText.toLowerCase(); // 여기서 선언
                     if (lowerUserMessage.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
                     else if (lowerUserMessage.includes("메뉴") || lowerUserMessage.includes("음식") || lowerUserMessage.includes("추천")) baseResponse = botKnowledgeBase["오늘 뭐 먹을지 추천해줘"];
                     else if (lowerUserMessage.includes("날씨")) baseResponse = botKnowledgeBase["날씨 알려줘."];
@@ -963,15 +969,16 @@ function simulateBotResponse(userMessageText) {
                 if (!baseResponse) baseResponse = botKnowledgeBase["기본"];
                 
                 responseData = {
-                    assistantmsg: baseResponse.response, // botKnowledgeBase에 정의된 말투 사용
-                    tarocardview: false,
+                    assistantmsg: baseResponse.response,
+                    tarotcardview: false,
                     cards_to_select: null,
+                    show_card_reveal_animation: false,
                     sampleanswer: (baseResponse.sampleAnswers || []).join('|') || "알겠습니다|다른 질문",
                     user_profile_update: {}
                 };
             }
             
-            console.log(`[BotResponse] 생성된 assistantmsg 미리보기 (sanitize 전):`, responseData.assistantmsg);
+            console.log(`[BotResponse] 생성된 응답 미리보기:`, responseData);
             resolve(responseData);
         }, 200 + Math.random() * 300);
     });
@@ -1002,9 +1009,99 @@ function simulateBotResponse(userMessageText) {
             console.log("[UI] 타로 UI 활성화로 입력창 포커스 해제.");
         }
     }
+async function playCardRevealAnimation(cardIds) {
+    if (!cardRevealContainer || !cardIds || cardIds.length === 0) {
+        console.warn("[CardReveal] 애니메이션 컨테이너 또는 카드 ID 목록 없음.");
+        return;
+    }
 
+    console.log(`[CardReveal] 애니메이션 시작. 카드 수: ${cardIds.length}`);
+    cardRevealContainer.innerHTML = ''; // 이전 카드 제거
+    cardRevealContainer.classList.add('active');
+
+    // 애니메이션 중 다른 상호작용 일시 중지 (선택적: 채팅 입력 등)
+    // messageInput.disabled = true;
+    // sendBtn.disabled = true;
+
+    const cardDisplayDuration = 1500; // 각 카드가 화면에 머무는 시간 (ms)
+    const cardTransitionDuration = 600; // CSS transition 시간과 유사하게
+
+    for (let i = 0; i < cardIds.length; i++) {
+        const cardId = cardIds[i];
+        const cardItem = document.createElement('div');
+        cardItem.className = 'card-reveal-item';
+
+        let imageNameForFile = cardId;
+        let cardDisplayName = cardId;
+        const isReversed = cardId.endsWith('_reversed');
+
+        if (typeof TAROT_CARD_DATA !== 'undefined' && TAROT_CARD_DATA[cardId]) {
+            cardDisplayName = TAROT_CARD_DATA[cardId].name;
+        } else {
+            cardDisplayName = cardId.replace(/_/g, ' ')
+                                  .replace(/\b\w/g, l => l.toUpperCase())
+                                  .replace(' Reversed', ' (역방향)')
+                                  .replace(' Upright', ' (정방향)');
+        }
+
+        if (isReversed) {
+            imageNameForFile = cardId.substring(0, cardId.lastIndexOf('_reversed')) + '_upright';
+        } else if (cardId.endsWith('_upright')) {
+            imageNameForFile = cardId;
+        }
+        
+        cardItem.style.backgroundImage = `url('img/tarot/${imageNameForFile}.png')`;
+        if (isReversed) { // 역방향 카드 이미지 회전 (CSS 클래스로도 가능)
+             cardItem.style.transform = 'scale(0.7) rotateY(30deg) translateY(50px) rotateZ(180deg)'; // 초기 상태에 회전 추가
+        }
+
+
+        // 카드 이름 표시 (선택 사항)
+        const nameElement = document.createElement('div');
+        nameElement.className = 'card-name';
+        nameElement.textContent = `${i + 1}. ${cardDisplayName}`;
+        cardItem.appendChild(nameElement);
+
+        cardRevealContainer.appendChild(cardItem);
+
+        // 카드 나타나는 애니메이션 (CSS transition 활용)
+        await new Promise(resolve => setTimeout(resolve, 50)); // DOM 업데이트 시간 확보
+        cardItem.classList.add('visible');
+        if (isReversed) { // 역방향 최종 상태
+            cardItem.style.transform = 'scale(1) rotateY(0deg) translateY(0px) rotateZ(180deg)';
+        } else { // 정방향 최종 상태
+            cardItem.style.transform = 'scale(1) rotateY(0deg) translateY(0px)';
+        }
+
+
+        // 다음 카드를 위해 현재 카드 숨기기 전 대기
+        await new Promise(resolve => setTimeout(resolve, cardDisplayDuration));
+
+        // 카드 사라지는 애니메이션 (opacity, transform 초기화)
+        cardItem.classList.remove('visible'); // opacity 0, 초기 transform으로 복귀 (transition 적용됨)
+        
+        // CSS transition이 완료될 시간 대기 후 DOM에서 제거
+        await new Promise(resolve => setTimeout(resolve, cardTransitionDuration));
+        if (cardItem.parentNode === cardRevealContainer) { // 안전하게 부모 확인 후 제거
+            cardRevealContainer.removeChild(cardItem);
+        }
+    }
+
+    cardRevealContainer.classList.remove('active'); // 모든 카드 공개 후 컨테이너 숨김
+    console.log("[CardReveal] 애니메이션 종료.");
+
+    // 애니메이션 후 상호작용 복원
+    // messageInput.disabled = false;
+    // sendBtn.disabled = messageInput.value.trim() === '';
+}
     async function processMessageExchange(messageText, source = 'input', options = {}) {
         const { clearBeforeSend = false, menuItemData = null } = options;
+
+        if (isCardRevealAnimationPlaying && source !== 'internal_after_reveal') { // 애니메이션 중에는 새 메시지 처리 방지 (내부 호출 제외)
+            console.log("[ProcessExchange] 카드 공개 애니메이션 중, 새 메시지 처리 지연.");
+            // 필요하다면 메시지를 큐에 넣거나, 사용자에게 잠시 기다려달라는 안내를 할 수 있음
+            return;
+        }
 
         console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, options);
         if (messageText.trim() === '' || isLoadingBotResponse) {
@@ -1020,7 +1117,6 @@ function simulateBotResponse(userMessageText) {
             console.log("[ProcessExchange] 사용자의 첫 메시지. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
         }
 
-
         if (shouldClearChat) {
             clearChatMessages();
         }
@@ -1029,17 +1125,14 @@ function simulateBotResponse(userMessageText) {
         if(sendBtn) sendBtn.classList.add('loading');
         setUIInteractions(true, false);
 
-
         if (moreOptionsPanel.classList.contains('active')) {
-            console.log("[ProcessExchange] 더보기 패널 닫기.");
             moreOptionsPanel.classList.remove('active');
             moreOptionsBtn.classList.remove('active');
         }
 
-        if (source !== 'system_init_skip_user_message' && source !== 'system_internal') {
+        if (source !== 'system_init_skip_user_message' && source !== 'system_internal' && source !== 'internal_after_reveal') {
              await addMessage(messageText, 'user');
         }
-
 
         if (source === 'input' && messageInput) {
             messageInput.value = '';
@@ -1047,23 +1140,18 @@ function simulateBotResponse(userMessageText) {
         }
 
         try {
-            const botApiResponse = await simulateBotResponse(messageText);
+            const botApiResponse = await simulateBotResponse(messageText); // API 응답 전체를 받음
             
             if (botApiResponse.user_profile_update) {
                 for (const key in botApiResponse.user_profile_update) {
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
-                        if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
-                            //
-                        } else {
-                            userProfile[key] = botApiResponse.user_profile_update[key];
-                        }
+                        userProfile[key] = botApiResponse.user_profile_update[key];
                     }
                 }
                 saveUserProfileToLocalStorage(userProfile);
                 console.log("[UserProfile] API 응답으로 프로필 업데이트:", botApiResponse.user_profile_update);
             }
 
-            // assistantmsg만 사용하여 봇 메시지 추가 (action 필드 사용 안 함)
             await addMessage(botApiResponse.assistantmsg, 'bot');
             
             const sampleAnswersArray = botApiResponse.sampleanswer ? botApiResponse.sampleanswer.split('|').map(s => s.trim()).filter(s => s) : [];
@@ -1079,8 +1167,18 @@ function simulateBotResponse(userMessageText) {
                     userProfile.tarotbg = currentTarotBg;
                     saveUserProfileToLocalStorage(userProfile);
                 }
-                console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
                 showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
+            } else if (botApiResponse.show_card_reveal_animation && botApiResponse.revealed_cards && botApiResponse.revealed_cards.length > 0) {
+                // 카드 공개 애니메이션 실행
+                isCardRevealAnimationPlaying = true; // 애니메이션 시작 플래그
+                setUIInteractions(true, false); // 애니메이션 중 UI 비활성화 (선택 사항)
+                
+                await playCardRevealAnimation(botApiResponse.revealed_cards);
+                
+                isCardRevealAnimationPlaying = false; // 애니메이션 종료 플래그
+                // 애니메이션 후, 사용자가 "카드 공개 보기" 샘플 답변을 누르거나, 자동으로 다음 메시지 요청
+                // 여기서는 샘플 답변을 통해 사용자가 다음 단계를 진행하도록 유도
+                // 또는, processMessageExchange("revealed_cards_processed_" + Date.now(), 'internal_after_reveal'); 와 같이 내부 호출 가능
             }
 
         } catch (error) {
@@ -1088,10 +1186,13 @@ function simulateBotResponse(userMessageText) {
             await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
             updateSampleAnswers(initialBotMessage.sampleAnswers);
         } finally {
-            isLoadingBotResponse = false;
-            if(sendBtn) sendBtn.classList.remove('loading');
-            const shouldFocus = (source === 'input');
-            setUIInteractions(false, shouldFocus);
+            // 카드 공개 애니메이션이 방금 끝났다면, isLoadingBotResponse는 false로 두되, UI 상호작용은 애니메이션 후 로직에 따름
+            if (!isCardRevealAnimationPlaying) {
+                isLoadingBotResponse = false;
+                if(sendBtn) sendBtn.classList.remove('loading');
+                const shouldFocus = (source === 'input');
+                setUIInteractions(false, shouldFocus);
+            }
             console.log("[ProcessExchange] 완료.");
         }
     }
