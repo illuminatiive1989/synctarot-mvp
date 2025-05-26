@@ -1,4 +1,3 @@
-/* :root ~ .tarot-card-item.not-collected img 까지 이전과 동일 */
 :root {
     --emphasis-color: #6281F3;
     --pale-text-color: #797C83;
@@ -13,150 +12,694 @@
     --sample-answers-height: 50px;
     --header-height: 50px;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; font-family: 'Noto Sans KR', sans-serif; background-color: var(--body-bg-color); overflow: hidden; }
-.chat-app-container { display: flex; flex-direction: column; height: 100%; max-width: 480px; margin: 0 auto; background-color: var(--white-color); position: relative; }
-.chat-header { background-color: var(--white-color); padding: 0 15px; height: var(--header-height); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--input-border-color); flex-shrink: 0; }
-.chat-header h1 { font-size: 1.1rem; font-weight: 500; color: var(--normal-text-color); }
-.chat-messages { flex-grow: 1; overflow-y: auto; padding: 20px 15px; display: flex; flex-direction: column; scroll-behavior: smooth;
-    &::-webkit-scrollbar { width: 8px; }
-    &::-webkit-scrollbar-track { background: var(--scrollbar-track-actual-color); border-radius: 4px; }
-    &::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb-actual-color); border-radius: 4px; border: 2px solid var(--scrollbar-track-actual-color); }
-    &::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--scrollbar-thumb-actual-color) 85%, black); }
-    scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb-actual-color) var(--scrollbar-track-actual-color);
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
-.message { padding: 10px 15px; border-radius: 18px; line-height: 1.6; word-break: break-word; min-height: 1em; white-space: pre-wrap; opacity: 0; animation: messageAppearFull 0.3s cubic-bezier(0.25, 0.1, 0.25, 1) forwards; margin-bottom: 12px; flex-shrink: 0; }
-.message:last-child { margin-bottom: 0; }
-@keyframes messageAppearFull { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-.bot-message { background-color: transparent; color: var(--normal-text-color); align-self: flex-start; border: none; border-radius: 0; padding: 8px 0px; width: 100%; line-height: calc(1.6 * 1.2); opacity: 1; transform: translateY(0); animation: none; }
-.bot-message b, .bot-message strong { color: var(--emphasis-color); font-weight: 600; }
-.user-message { background-color: var(--emphasis-color); color: var(--white-color); align-self: flex-end; max-width: 75%; }
-.system-message { align-self: center; color: var(--pale-text-color); font-size: 0.85em; padding: 5px 0; background-color: transparent; border-radius: 0; text-align: center; }
-@keyframes fadeInChunkFromLeft { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: translateX(0); } }
-.message-text-chunk-animated { opacity: 0; display: inline; animation-name: fadeInChunkFromLeft; animation-duration: 0.15s; animation-fill-mode: forwards; animation-timing-function: ease-out; }
-.user-message .message-text-chunk-animated { opacity: 1; transform: translateX(0); animation: none; }
-.sample-answers { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; padding: 0px 10px; background-color: var(--white-color); border-top: 1px solid transparent; flex-shrink: 0; overflow-x: auto; overflow-y: hidden; height: var(--sample-answers-height); min-height: var(--sample-answers-height); position: relative; z-index: 5; transition: padding 0.25s ease-out, border-color 0.25s ease-out; }
-.sample-answers.has-buttons { padding-top: 0px; padding-bottom: 0px; border-top-color: var(--input-border-color); }
-.sample-answer-btn { background-color: var(--white-color); border: 1px solid var(--input-border-color); color: var(--emphasis-color); padding: 7px 14px; border-radius: 20px; margin: 4px; font-size: 0.9em; cursor: pointer; opacity: 0; transform: translateY(10px); animation: fadeInSampleAnswerBtn 0.25s ease-out forwards; transition: opacity 0.2s ease-out, transform 0.2s ease-out, background-color 0.15s ease-out; white-space: nowrap; }
-.sample-answer-btn:disabled { opacity: 0.4 !important; cursor: not-allowed; background-color: #f8f9fa; border-color: #e9ecef; color: #adb5bd; transform: translateY(0) scale(1) !important; }
-@keyframes fadeInSampleAnswerBtn { to { opacity: 1; transform: translateY(0); } }
-.sample-answer-btn.fade-out { opacity: 0 !important; transform: scale(0.9) translateY(5px) !important; pointer-events: none; }
-.sample-answer-btn:hover:not(:disabled):not(.fade-out) { background-color: #f0f0f0; }
-.chat-input-area { display: flex; align-items: center; padding: 10px 12px; background-color: var(--input-bg-color); border-top: 1px solid var(--input-border-color); flex-shrink: 0; position: relative; z-index: 10; }
-.more-options-btn { background: none; border: none; padding: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-right: 8px; flex-shrink: 0; transition: transform 0.3s ease-in-out; }
-.more-options-btn.active { transform: rotate(45deg); }
-.more-options-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: rotate(0deg); }
-.more-options-btn svg { width: 22px; height: 22px; fill: var(--emphasis-color); }
-#messageInput { flex-grow: 1; border: 1px solid var(--input-border-color); padding: 10px 15px; border-radius: 20px; background-color: var(--white-color); resize: none; overflow-y: hidden; font-size: 1rem; line-height: 1.4; min-height: calc(1rem * 1.4 + 20px); max-height: calc(1rem * 1.4 * 4 + 20px); font-family: 'Noto Sans KR', sans-serif; }
-.send-btn { background-color: var(--emphasis-color); color: var(--white-color); border: none; border-radius: 20px; padding: 0; margin-left: 8px; cursor: pointer; font-size: 1rem; font-weight: 500; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; min-height: calc(1rem * 1.4 + 20px); min-width: 80px; position: relative; overflow: hidden; flex-shrink: 0; }
-.send-btn-text, .send-btn .loading-indicator { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; position: absolute; top: 0; left: 0; transition: opacity 0.2s ease-in-out; }
-.send-btn .loading-indicator { opacity: 0; pointer-events: none; }
-.send-btn.loading .send-btn-text { opacity: 0; pointer-events: none; }
-.send-btn.loading .loading-indicator { opacity: 1; }
-.send-btn:hover:not(:disabled) { background-color: #4E6AD8; }
-.send-btn:disabled { background-color: #A0B3F7; cursor: not-allowed; }
-.send-btn .loading-indicator .dot { width: 6px; height: 6px; margin: 0 2px; background-color: var(--white-color); border-radius: 50%; display: inline-block; animation: dotPulse 1.4s infinite ease-in-out both; }
+
+html, body {
+    height: 100%;
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: var(--body-bg-color);
+    overflow: hidden;
+}
+
+.chat-app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    background-color: var(--white-color);
+    position: relative;
+}
+
+.chat-header {
+    background-color: var(--white-color);
+    padding: 0 15px;
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--input-border-color);
+    flex-shrink: 0;
+}
+
+.chat-header h1 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--normal-text-color);
+}
+
+.chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px 15px;
+    display: flex;
+    flex-direction: column;
+    scroll-behavior: smooth;
+}
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+.chat-messages::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-actual-color);
+    border-radius: 4px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-actual-color);
+    border-radius: 4px;
+    border: 2px solid var(--scrollbar-track-actual-color);
+}
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--scrollbar-thumb-actual-color) 85%, black);
+}
+.chat-messages {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-actual-color) var(--scrollbar-track-actual-color);
+}
+
+
+.message {
+    padding: 10px 15px;
+    border-radius: 18px;
+    line-height: 1.6;
+    word-break: break-word;
+    min-height: 1em;
+    white-space: pre-wrap;
+    opacity: 0;
+    animation: messageAppearFull 0.3s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.message:last-child {
+    margin-bottom: 0;
+}
+
+@keyframes messageAppearFull {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.bot-message {
+    background-color: transparent;
+    color: var(--normal-text-color);
+    align-self: flex-start;
+    border: none;
+    border-radius: 0;
+    padding: 8px 0px;
+    width: 100%;
+    line-height: calc(1.6 * 1.2);
+    opacity: 1;
+    transform: translateY(0);
+    animation: none;
+}
+
+.bot-message b,
+.bot-message strong {
+    color: var(--emphasis-color);
+    font-weight: 600;
+}
+
+.user-message {
+    background-color: var(--emphasis-color);
+    color: var(--white-color);
+    align-self: flex-end;
+    max-width: 75%;
+}
+
+.system-message {
+    align-self: center;
+    color: var(--pale-text-color);
+    font-size: 0.85em;
+    padding: 5px 0;
+    background-color: transparent;
+    border-radius: 0;
+    text-align: center;
+}
+
+@keyframes fadeInChunkFromLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.message-text-chunk-animated {
+    opacity: 0;
+    display: inline;
+    animation-name: fadeInChunkFromLeft;
+    animation-duration: 0.15s;
+    animation-fill-mode: forwards;
+    animation-timing-function: ease-out;
+}
+.user-message .message-text-chunk-animated {
+    opacity: 1;
+    transform: translateX(0);
+    animation: none;
+}
+
+
+.sample-answers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0px 10px;
+    background-color: var(--white-color);
+    border-top: 1px solid transparent;
+    flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: var(--sample-answers-height);
+    min-height: var(--sample-answers-height);
+    position: relative;
+    z-index: 5;
+    transition: padding 0.25s ease-out, border-color 0.25s ease-out;
+}
+.sample-answers.has-buttons {
+    padding-top: 0px;
+    padding-bottom: 0px;
+    border-top-color: var(--input-border-color);
+}
+.sample-answer-btn {
+    background-color: var(--white-color);
+    border: 1px solid var(--input-border-color);
+    color: var(--emphasis-color);
+    padding: 7px 14px;
+    border-radius: 20px;
+    margin: 4px;
+    font-size: 0.9em;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeInSampleAnswerBtn 0.25s ease-out forwards;
+    transition: opacity 0.2s ease-out, transform 0.2s ease-out, background-color 0.15s ease-out;
+    white-space: nowrap;
+}
+.sample-answer-btn:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+    border-color: #e9ecef;
+    color: #adb5bd;
+    transform: translateY(0) scale(1) !important;
+}
+
+@keyframes fadeInSampleAnswerBtn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.sample-answer-btn.fade-out {
+    opacity: 0 !important;
+    transform: scale(0.9) translateY(5px) !important;
+    pointer-events: none;
+}
+.sample-answer-btn:hover:not(:disabled):not(.fade-out) {
+    background-color: #f0f0f0;
+}
+
+
+.chat-input-area {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background-color: var(--input-bg-color);
+    border-top: 1px solid var(--input-border-color);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+}
+
+.more-options-btn {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    flex-shrink: 0;
+    transition: transform 0.3s ease-in-out;
+}
+.more-options-btn.active {
+    transform: rotate(45deg);
+}
+.more-options-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: rotate(0deg);
+}
+.more-options-btn svg {
+    width: 22px;
+    height: 22px;
+    fill: var(--emphasis-color);
+}
+
+#messageInput {
+    flex-grow: 1;
+    border: 1px solid var(--input-border-color);
+    padding: 10px 15px;
+    border-radius: 20px;
+    background-color: var(--white-color);
+    resize: none;
+    overflow-y: hidden;
+    font-size: 1rem;
+    line-height: 1.4;
+    min-height: calc(1rem * 1.4 + 20px);
+    max-height: calc(1rem * 1.4 * 4 + 20px);
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+.send-btn {
+    background-color: var(--emphasis-color);
+    color: var(--white-color);
+    border: none;
+    border-radius: 20px;
+    padding: 0;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(1rem * 1.4 + 20px);
+    min-width: 80px;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.send-btn-text,
+.send-btn .loading-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+.send-btn .loading-indicator {
+    opacity: 0;
+    pointer-events: none;
+}
+.send-btn.loading .send-btn-text {
+    opacity: 0;
+    pointer-events: none;
+}
+.send-btn.loading .loading-indicator {
+    opacity: 1;
+}
+.send-btn:hover:not(:disabled) {
+    background-color: #4E6AD8;
+}
+.send-btn:disabled {
+    background-color: #A0B3F7;
+    cursor: not-allowed;
+}
+.send-btn .loading-indicator .dot {
+    width: 6px;
+    height: 6px;
+    margin: 0 2px;
+    background-color: var(--white-color);
+    border-radius: 50%;
+    display: inline-block;
+    animation: dotPulse 1.4s infinite ease-in-out both;
+}
 .send-btn .loading-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
 .send-btn .loading-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
-@keyframes dotPulse { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
-.more-options-panel { position: absolute; left: 12px; background-color: var(--white-color); border: 1px solid var(--input-border-color); border-radius: 10px; box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.08); z-index: 20; display: none; flex-direction: column; width: auto; min-width: 200px; max-height: 60vh; overflow-y: auto; padding: 8px 0; }
-.more-options-panel.active { display: flex; }
-.panel-menu-group { margin-bottom: 8px; }
-.panel-menu-group:last-child { margin-bottom: 0; }
-.panel-menu-group-title { font-size: 0.75em; color: var(--pale-text-color); padding: 6px 15px 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.panel-menu-group-divider { height: 1px; background-color: var(--input-border-color); margin: 8px 15px; }
-.panel-option { padding: 10px 15px; text-align: left; background: none; border: none; width: 100%; cursor: pointer; font-size: 0.95rem; color: var(--normal-text-color); transition: background-color 0.15s ease-out; display: flex; align-items: center; }
-.panel-option:hover:not(:disabled) { background-color: #f5f5f5; }
-.panel-option:disabled { opacity: 0.5; cursor: not-allowed; background-color: transparent; color: var(--pale-text-color); }
-.panel-option .menu-icon-img { width: 18px; height: 18px; margin-right: 10px; object-fit: contain; vertical-align: middle; }
-.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
-.modal-content { background-color: var(--white-color); padding: 0; border: none; width: 80%; height: 80vh; max-width: 480px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid var(--input-border-color); flex-shrink: 0; }
-.modal-header h2 { margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--normal-text-color); }
-.modal-header .close-modal-btn { background: none; border: none; font-size: 1.5rem; font-weight: 300; color: var(--pale-text-color); cursor: pointer; padding: 0 5px; line-height: 1; }
-.modal-header .close-modal-btn:hover { color: var(--normal-text-color); }
-.modal-body { overflow-y: hidden; flex-grow: 1; display: flex; flex-direction: column; }
-.modal-body.sync-type-body { padding: 15px; }
-.sync-type-image-container { width: 100%; aspect-ratio: 16 / 9; margin-bottom: 15px; display: flex; justify-content: center; align-items: center; background-color: #f0f0f0; border-radius: 8px; overflow: hidden; }
-.sync-type-image-container img { width: 100%; height: 100%; object-fit: cover; }
-.sync-type-tabs { display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px solid var(--input-border-color); }
-.sync-tab-btn { background: none; border: none; padding: 10px 5px; cursor: pointer; font-size: 0.95rem; color: var(--pale-text-color); border-bottom: 2px solid transparent; transition: color 0.2s, border-bottom-color 0.2s; flex-grow: 1; text-align: center; }
-.sync-tab-btn.active { color: var(--emphasis-color); border-bottom-color: var(--emphasis-color); font-weight: 500; }
-.sync-type-description { font-size: 0.9rem; line-height: 1.6; color: var(--normal-text-color); min-height: 60px; }
-.sync-type-description p { margin: 0; }
-.modal-body.tarot-collection-body { padding: 0; display: flex; flex-direction: column; }
-.tarot-gauge-container { padding: 15px 15px 10px; text-align: center; font-size: 0.9rem; color: var(--normal-text-color); border-bottom: 1px solid var(--input-border-color); flex-shrink: 0; }
-.tarot-gauge-container p { margin-bottom: 5px; }
-.gauge-bar { width: 100%; height: 12px; background-color: var(--input-border-color); border-radius: 6px; overflow: hidden; }
-.gauge-fill { height: 100%; width: 0%; background-color: var(--emphasis-color); border-radius: 6px; transition: width 0.5s ease-out; }
-.tarot-card-grid-scroll-wrapper { flex-grow: 1; overflow-y: auto; padding: 15px; }
-.tarot-card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
+@keyframes dotPulse {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1.0); }
+}
+
+
+.more-options-panel {
+    position: absolute;
+    left: 12px;
+    background-color: var(--white-color);
+    border: 1px solid var(--input-border-color);
+    border-radius: 10px;
+    box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.08);
+    z-index: 20;
+    display: none;
+    flex-direction: column;
+    width: auto;
+    min-width: 200px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+.more-options-panel.active {
+    display: flex;
+}
+.panel-menu-group {
+    margin-bottom: 8px;
+}
+.panel-menu-group:last-child {
+    margin-bottom: 0;
+}
+.panel-menu-group-title {
+    font-size: 0.75em;
+    color: var(--pale-text-color);
+    padding: 6px 15px 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.panel-menu-group-divider {
+    height: 1px;
+    background-color: var(--input-border-color);
+    margin: 8px 15px;
+}
+.panel-option {
+    padding: 10px 15px;
+    text-align: left;
+    background: none;
+    border: none;
+    width: 100%;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--normal-text-color);
+    transition: background-color 0.15s ease-out;
+    display: flex;
+    align-items: center;
+}
+.panel-option:hover:not(:disabled) {
+    background-color: #f5f5f5;
+}
+.panel-option:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent;
+    color: var(--pale-text-color);
+}
+.panel-option .menu-icon-img {
+    width: 18px;
+    height: 18px;
+    margin-right: 10px;
+    object-fit: contain;
+}
+
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background-color: var(--white-color);
+    padding: 0;
+    border: none;
+    width: 80%;
+    height: 80vh;
+    max-width: 480px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--input-border-color);
+    flex-shrink: 0;
+}
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--normal-text-color);
+}
+.modal-header .close-modal-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    font-weight: 300;
+    color: var(--pale-text-color);
+    cursor: pointer;
+    padding: 0 5px;
+    line-height: 1;
+}
+.modal-header .close-modal-btn:hover {
+    color: var(--normal-text-color);
+}
+.modal-body {
+    overflow-y: auto;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Sync Type Modal Specific Styles */
+.modal-body.sync-type-body {
+    padding: 15px;
+}
+
+/* 이미지 컨테이너 (성운, 싱크타입 탭) */
+.sync-type-image-container {
+    width: 100%;
+    height: 220px; /* 높이를 조금 더 확보하거나 aspect-ratio 사용 */
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.sync-type-image-container img {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+/* 총평 탭 - 차트와 커스텀 범례 영역 */
+.sync-type-overview-content {
+    display: flex; /* 내부 .overview-chart-area와 .overview-custom-legend-area를 가로 배치 */
+    width: 100%;
+    margin-bottom: 15px;
+    gap: 15px; /* 차트 영역과 범례 영역 사이 간격 */
+    align-items: flex-start; /* 상단 정렬 */
+    height: 220px; /* .sync-type-image-container와 유사한 높이 */
+}
+.overview-chart-area {
+    flex: 0 0 70%; /* 차트 영역이 약 70% 너비 차지, 늘어나거나 줄어들지 않음 */
+    height: 100%; /* 부모 높이에 맞춤 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f9f9f9; /* 선택적 배경 */
+    border-radius: 8px;
+    padding: 5px; /* 차트와 테두리 간 여백 */
+}
+.overview-chart-area canvas {
+    max-width: 100%;
+    max-height: 100%;
+}
+.overview-custom-legend-area {
+    flex-grow: 1; /* 남은 공간 차지 (약 30%) */
+    height: 100%; /* 부모 높이에 맞춤 */
+    display: flex;
+    flex-direction: column; /* 범례 항목들을 세로로 배치 */
+    justify-content: center; /* 세로 중앙 정렬 (또는 flex-start) */
+    padding-left: 10px; /* 차트 영역과의 시각적 구분 */
+    font-size: 0.85em;
+}
+.custom-legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.custom-legend-color-box {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    margin-right: 8px;
+    border: 1px solid rgba(0,0,0,0.1); /* 색상이 너무 밝을 경우 대비 */
+}
+.custom-legend-text {
+    color: var(--normal-text-color);
+}
+
+
+.sync-type-tabs {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--input-border-color);
+    flex-shrink: 0;
+}
+.sync-tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 5px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--pale-text-color);
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-bottom-color 0.2s;
+    flex-grow: 1;
+    text-align: center;
+}
+.sync-tab-btn.active {
+    color: var(--emphasis-color);
+    border-bottom-color: var(--emphasis-color);
+    font-weight: 500;
+}
+.sync-type-description {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--normal-text-color);
+    min-height: 60px;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+.sync-type-description p {
+    margin: 0;
+}
+
+
+/* Tarot Collection Modal Specific Styles */
+.modal-body.tarot-collection-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+.tarot-gauge-container {
+    padding: 15px 15px 10px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--normal-text-color);
+    border-bottom: 1px solid var(--input-border-color);
+    flex-shrink: 0;
+}
+.tarot-gauge-container p {
+    margin-bottom: 5px;
+}
+.gauge-bar {
+    width: 100%;
+    height: 12px;
+    background-color: var(--input-border-color);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.gauge-fill {
+    height: 100%;
+    width: 0%;
+    background-color: var(--emphasis-color);
+    border-radius: 6px;
+    transition: width 0.5s ease-out;
+}
+.tarot-card-grid-scroll-wrapper {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 15px;
+}
+.tarot-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
 .tarot-card-item {
     width: 100%;
-    position: relative; /* 툴팁의 기준점 */
+    position: relative;
     background-color: transparent;
     border-radius: 8px;
-    /* overflow: visible; 삭제 - 툴팁은 카드 아이템의 자식이지만, 카드 아이템 자체는 그리드 셀이므로 hidden 권장 */
-    overflow: hidden; /* 내부 img가 radius를 따르도록 */
+    overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     cursor: pointer;
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 .tarot-card-item img {
     display: block;
-    width: 100%; 
-    height: auto; 
-    max-height: 100%; 
-    object-fit: contain; 
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    object-fit: contain;
     transition: transform 0.4s ease-in-out, filter 0.3s ease;
-    border-radius: 6px; /* 이미지 자체에도 둥근 모서리 (선택적) */
+    border-radius: 6px;
 }
-.tarot-card-item.reversed-card img { transform: rotate(180deg); }
-.tarot-card-item.not-collected img { opacity: 0.5; filter: grayscale(100%); }
+.tarot-card-item.reversed-card img {
+    transform: rotate(180deg);
+}
+.tarot-card-item.not-collected img {
+    opacity: 0.5;
+    filter: grayscale(100%);
+}
 
-/* 공용 툴팁 스타일 */
+
+/* Tooltip Styles */
 .tooltip {
-    position: absolute; /* 부모(.tarot-card-item) 기준 */
-    background-color: rgba(30, 30, 30, 0.92); /* 배경 약간 더 불투명하게 */
+    position: absolute;
+    background-color: rgba(30, 30, 30, 0.92);
     color: var(--white-color);
-    padding: 10px 14px; /* 패딩 늘림 */
-    border-radius: 8px; /* 둥근 모서리 늘림 */
-    font-size: 0.9em; 
-    z-index: 10; 
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    z-index: 10;
     opacity: 0;
-    /* 기본적으로 숨겨진 상태에서 나타날 때 애니메이션 */
-    visibility: hidden; /* opacity와 함께 사용하여 접근성 향상 */
+    visibility: hidden;
     transition: opacity 0.2s ease-out, visibility 0s linear 0.2s, transform 0.2s ease-out;
     pointer-events: none;
     white-space: normal;
     text-align: center;
-    
-    /* 위치: 부모(.tarot-card-item)의 정중앙 */
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.9); /* 초기 스케일 작게 */
-    
-    width: auto; 
-    /* max-width는 JS에서 카드 너비의 90% 정도로 설정 */
+    transform: translate(-50%, -50%) scale(0.9);
+    width: auto;
     box-shadow: 0 3px 8px rgba(0,0,0,0.25);
 }
 .tooltip.visible {
     opacity: 1;
     visibility: visible;
-    transform: translate(-50%, -50%) scale(1); /* 원래 크기로 */
-    transition-delay: 0s, 0s, 0s; /* visibility 즉시, 나머지는 애니메이션 */
+    transform: translate(-50%, -50%) scale(1);
+    transition-delay: 0s, 0s, 0s;
 }
 .tooltip .tooltip-name {
-    font-weight: 600; 
-    display: block; 
-    margin-bottom: 5px; /* 간격 약간 늘림 */
-    font-size: 1.05em; /* 이름 약간 크게 */
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 1.05em;
 }
 .tooltip .tooltip-description {
-    font-size: 0.9em; 
-    opacity: 0.9; 
-    line-height: 1.4; /* 줄간격 */
+    font-size: 0.9em;
+    opacity: 0.9;
+    line-height: 1.4;
 }

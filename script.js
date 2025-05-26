@@ -91,9 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeUserProfile() {
     console.log("[UserProfile] 초기화 시작.");
 
-    let loadedProfileData = loadUserProfileFromLocalStorage(); // 로컬 스토리지에서 먼저 로드 시도
+    let loadedProfileData = loadUserProfileFromLocalStorage();
 
-    // 기본 프로필 구조 정의
     let defaultProfile = {
         "사용자이름": "방문객",
         "사용자애칭": "방문객",
@@ -107,10 +106,11 @@ function initializeUserProfile() {
         "주관식질문5": null, "주관식답변5": null,
         "객관식질문과답변": [],
         "DISC_D_점수": 0, "DISC_I_점수": 0, "DISC_S_점수": 0, "DISC_C_점수": 0,
-        "결정된싱크타입": "스텔라 터틀", // 첫 방문 또는 로드 실패 시 임시 기본값
-        "사용자소속성운": "루미네시아",   // 첫 방문 또는 로드 실패 시 임시 기본값
-        "사용자가성운에속한이유": "아직 알 수 없어요.", // generateSyncTypeData에서 업데이트될 수 있음
-        "맞춤싱크타입이름": "별을 기다리는 자", // generateSyncTypeData에서 업데이트될 수 있음
+        "결정된싱크타입": "스텔라터틀",
+        "사용자소속성운": "루미네시아",
+        "사용자가성운에속한이유": "아직 알 수 없어요.",
+        "맞춤싱크타입이름": "별을 기다리는 자",
+        "overviewText": "당신은 복잡한 내면세계를 가진 존재입니다. 때로는 활기차고 외향적이다가도, 깊은 생각에 잠겨 혼자만의 시간을 즐기기도 합니다. 다양한 가능성을 탐색하는 것을 좋아하며, 정해진 틀에 얽매이는 것을 답답해할 수 있습니다. 당신의 강점은 뛰어난 직관력과 공감 능력이지만, 때로는 감정에 쉽게 휩쓸리거나 결정을 내리는 데 어려움을 겪을 수도 있습니다. 균형을 찾는 여정이 중요해 보입니다.", // 총평 텍스트 임시값
         "사용자의감정상태": "평온",
         "선택된타로카드들": [],
         "지금까지수집된타로카드": [],
@@ -119,46 +119,127 @@ function initializeUserProfile() {
         "싱크타입단계": "미결정"
     };
 
-    // userProfile 객체를 기본 프로필로 초기화
     userProfile = { ...defaultProfile };
 
     if (loadedProfileData) {
-        // 로드된 데이터로 userProfile의 해당 속성들을 업데이트
         if (loadedProfileData.결정된싱크타입) userProfile.결정된싱크타입 = loadedProfileData.결정된싱크타입;
         if (loadedProfileData.사용자소속성운) userProfile.사용자소속성운 = loadedProfileData.사용자소속성운;
         if (loadedProfileData.사용자이름) userProfile.사용자이름 = loadedProfileData.사용자이름;
         if (loadedProfileData.사용자애칭) userProfile.사용자애칭 = loadedProfileData.사용자애칭;
         if (loadedProfileData.지금까지수집된타로카드) userProfile.지금까지수집된타로카드 = loadedProfileData.지금까지수집된타로카드;
-        // 맞춤 이름, 이유는 generateSyncTypeData에서 처리하도록 함
+        if (loadedProfileData.overviewText) userProfile.overviewText = loadedProfileData.overviewText; // 로드된 총평 텍스트 사용
 
-        // 싱크타입과 성운이 결정되었다면 단계도 '결정됨'으로 설정
         if (userProfile.결정된싱크타입 && userProfile.사용자소속성운) {
             userProfile.싱크타입단계 = "결정됨";
         }
         console.log("[UserProfile] 로컬 스토리지 데이터로 프로필 업데이트 완료.");
     } else {
-        // 로컬 스토리지에 데이터가 없는 첫 방문의 경우 (또는 로드 실패 시)
-        // 이미 defaultProfile에 스텔라 터틀, 루미네시아가 설정되어 있음.
-        // 사용자 이름과 애칭만 첫 방문용으로 설정하고 저장.
         console.log("[UserProfile] 첫 방문 또는 로컬 데이터 없음. 기본값 사용 및 저장.");
-        userProfile.사용자이름 = "임시방문객"; // 첫 방문 시 특별 이름
-        userProfile.사용자애칭 = "별 탐험가";   // 첫 방문 시 특별 애칭
-        userProfile.싱크타입단계 = "결정됨"; // 임시로 '스텔라 터틀', '루미네시아'가 기본이므로 '결정됨'
-
-        saveUserProfileToLocalStorage(userProfile); // 설정된 프로필을 로컬 스토리지에 저장
+        userProfile.사용자이름 = "임시방문객";
+        userProfile.사용자애칭 = "별 탐험가";
+        userProfile.싱크타입단계 = "결정됨";
+        // overviewText는 defaultProfile의 임시값을 사용
+        saveUserProfileToLocalStorage(userProfile);
     }
 
     console.log("[UserProfile] 최종 초기화 완료 (파생 데이터 설정 전):", JSON.parse(JSON.stringify(userProfile)));
-    // generateSyncTypeData는 initializeChat에서 ALL_XXX 데이터 로드 확인 후 호출되도록 이동 고려
-    // generateSyncTypeData(); // 여기서 호출하지 않음
 }
+function drawRadarChart(canvasId, labels, datasets) { // datasets는 배열 형태 [{label, data, backgroundColor, borderColor}, ...]
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        console.error(`[Chart] Canvas ID '${canvasId}'를 찾을 수 없습니다.`);
+        return null;
+    }
 
+    let existingChart = Chart.getChart(ctx);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+
+    // 모든 데이터셋의 모든 값을 종합하여 최대값 계산
+    let allDataValues = [];
+    datasets.forEach(ds => {
+        ds.data.forEach(val => {
+            allDataValues.push((typeof val === 'string' ? parseFloat(val) : val) || 0);
+        });
+    });
+    const maxVal = Math.max(...allDataValues, 0);
+    const suggestedMax = Math.max(10, Math.ceil(maxVal / 5) * 5); // 최소 10, 5단위 올림 (예: 최대 20점 척도)
+
+
+    return new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: labels, // 모든 데이터셋이 공유하는 x축 레이블 (예: D, I, S, C, 신경성...)
+            datasets: datasets.map(ds => ({
+                label: ds.label,
+                data: ds.data.map(val => (typeof val === 'string' ? parseFloat(val) : val) || 0),
+                backgroundColor: ds.backgroundColor || 'rgba(0, 0, 0, 0.2)', // 기본값
+                borderColor: ds.borderColor || 'rgba(0, 0, 0, 1)',       // 기본값
+                borderWidth: ds.borderWidth || 1.5,
+                pointBackgroundColor: ds.borderColor || 'rgba(0, 0, 0, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: ds.borderColor || 'rgba(0, 0, 0, 1)',
+                fill: true // 영역 채우기
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, // false로 설정하여 부모 컨테이너에 더 잘 맞도록 함
+            scales: {
+                r: {
+                    angleLines: { display: true, color: 'rgba(0, 0, 0, 0.1)' },
+                    grid: { color: 'rgba(0, 0, 0, 0.1)' }, // 방사형 그리드 라인 색상
+                    suggestedMin: 0,
+                    suggestedMax: suggestedMax, // 모든 데이터셋의 최대값을 고려하여 설정
+                    ticks: {
+                        display: true,
+                        stepSize: suggestedMax / 4, // 눈금 간격 (4등분 또는 5등분)
+                        backdropColor: 'transparent', // 눈금 배경 투명
+                        color: '#666' // 눈금 숫자 색상
+                    },
+                    pointLabels: {
+                        font: {
+                            size: 10 // 항목 레이블 폰트 크기 (예: '주도형(D)')
+                        },
+                        color: '#333' // 항목 레이블 색상
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false // Chart.js 자체 범례 숨기기 (커스텀 범례 사용)
+                },
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.r !== null) {
+                                label += context.parsed.r.toFixed(1); // 소수점 한 자리까지
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
 function generateSyncTypeData() {
     console.log("[SyncTypeData] 생성 시작. UserProfile:", userProfile);
     if (!userProfile || typeof ALL_SYNC_TYPES === 'undefined' || typeof ALL_NEBULAS === 'undefined') {
         console.error("[SyncTypeData] 생성 실패: userProfile, ALL_SYNC_TYPES, 또는 ALL_NEBULAS가 정의되지 않았습니다.");
         syncTypeDataStore = {
-            overview: { image: "img/sync_type/overview_default.png", text: "싱크타입 정보를 불러오는 중 오류가 발생했습니다." },
+            overview: {
+                text: userProfile.overviewText || "총평 정보를 불러올 수 없습니다.",
+                chartData: { labels: [], datasets: [] },
+                customLegend: []
+            },
             nebula: { image: "img/sync_type/nebula_default.png", text: "성운 정보를 불러오는 중 오류가 발생했습니다." },
             syncTypeDetail: { image: "img/sync_type/type_default.png", text: "세부 싱크타입 정보를 불러오는 중 오류가 발생했습니다." }
         };
@@ -167,20 +248,14 @@ function generateSyncTypeData() {
         return;
     }
 
-    // Helper function to find data with flexible key matching
     function findDataFlexible(dataObject, primaryKey, secondaryKeyField, secondaryKeyTransform = (k) => k.toLowerCase().replace(/\s+/g, '')) {
         if (!primaryKey && !secondaryKeyField) return null;
-
         let foundData = null;
-
-        // 1. Try primary key (exact match)
         if (primaryKey && dataObject[primaryKey]) {
             foundData = dataObject[primaryKey];
             console.log(`[findDataFlexible] Found by primary key (exact): '${primaryKey}'`);
             return foundData;
         }
-
-        // 2. Try primary key (whitespace removed)
         if (primaryKey) {
             const normalizedPrimaryKey = primaryKey.replace(/\s+/g, '');
             if (dataObject[normalizedPrimaryKey]) {
@@ -188,7 +263,6 @@ function generateSyncTypeData() {
                 console.log(`[findDataFlexible] Found by primary key (whitespace removed): '${normalizedPrimaryKey}' (original: '${primaryKey}')`);
                 return foundData;
             }
-            // Also check keys in dataObject with whitespace removed
             for (const key in dataObject) {
                 if (key.replace(/\s+/g, '') === normalizedPrimaryKey) {
                     foundData = dataObject[key];
@@ -197,11 +271,8 @@ function generateSyncTypeData() {
                 }
             }
         }
-
-
-        // 3. Try by secondary key field (e.g., nameEng)
-        if (secondaryKeyField && primaryKey) { // primaryKey는 여기서 nameEng 값으로 사용될 수 있음 (또는 별도 전달)
-            const transformedTargetValue = secondaryKeyTransform(primaryKey); // 여기서 primaryKey는 찾고자 하는 값 (예: userProfile의 값)
+        if (secondaryKeyField && primaryKey) {
+            const transformedTargetValue = secondaryKeyTransform(primaryKey);
             for (const key in dataObject) {
                 if (dataObject[key][secondaryKeyField]) {
                     const transformedSourceValue = secondaryKeyTransform(dataObject[key][secondaryKeyField]);
@@ -213,28 +284,90 @@ function generateSyncTypeData() {
                 }
             }
         }
-        
         if (!foundData) {
             console.warn(`[findDataFlexible] Data not found for primaryKey: '${primaryKey}' or via secondary key.`);
         }
         return null;
     }
 
-    // 1. 총평 (Overview) 데이터
-    const overviewText = `안녕하세요, ${userProfile.사용자애칭 || userProfile.사용자이름}님! 당신의 싱크타입 분석 결과에 대한 전반적인 내용입니다. 당신은 다면적인 성향을 가지고 있으며, 상황에 따라 유연하게 대처하는 능력이 돋보입니다. 때로는 내면의 목소리에 더 귀 기울일 필요가 있습니다.`;
+    const userNebulaKey = userProfile.사용자소속성운;
+    const nebulaInfo = findDataFlexible(ALL_NEBULAS, userNebulaKey, 'nameEng');
+
+    const userSyncTypeKey = userProfile.결정된싱크타입;
+    const syncTypeInfo = findDataFlexible(ALL_SYNC_TYPES, userSyncTypeKey, 'nameEng');
+
+    // 1. 총평 (Overview) 데이터 - 통합 차트 및 커스텀 범례 데이터 준비
+    const bigFiveChartLabels = ["신경성", "외향성", "개방성", "우호성", "성실성"];
+    // const discChartLabels = ["주도형(D)", "사교형(I)", "안정형(S)", "신중형(C)"]; // DISC 레이블은 차트 데이터셋 레이블로 사용
+
+    const commonRadarLabels = bigFiveChartLabels; // BigFive 레이블을 공통 축으로 사용
+
+    let bigFiveScores = [0, 0, 0, 0, 0];
+    if (nebulaInfo) {
+        bigFiveScores = [
+            parseFloat(nebulaInfo.Neuroticism) || 0,
+            parseFloat(nebulaInfo.Extraversion) || 0,
+            parseFloat(nebulaInfo.Openness) || 0,
+            parseFloat(nebulaInfo.Agreeableness) || 0,
+            parseFloat(nebulaInfo.Conscientiousness) || 0
+        ];
+    }
+
+    let discScores = [0, 0, 0, 0];
+    if (syncTypeInfo) {
+        discScores = [
+            syncTypeInfo.D || 0,
+            syncTypeInfo.I || 0,
+            syncTypeInfo.S || 0,
+            syncTypeInfo.C || 0
+        ];
+    }
+    const discDataPadded = [...discScores, null]; // 5개 항목으로 패딩된 DISC 점수 (마지막 null은 Big5의 5번째 항목과 축을 맞추기 위함)
+
+    const dataset1Color = 'rgba(255, 159, 64, 1)';
+    const dataset1BgColor = 'rgba(255, 159, 64, 0.3)';
+    const dataset2Color = 'rgba(75, 192, 192, 1)';
+    const dataset2BgColor = 'rgba(75, 192, 192, 0.3)';
+
+
     syncTypeDataStore.overview = {
-        image: "img/sync_type/overview_default.png",
-        text: overviewText
+        text: userProfile.overviewText || "당신의 성향에 대한 종합적인 분석입니다.",
+        chartData: {
+            labels: commonRadarLabels,
+            datasets: [
+                {
+                    label: '성격 5요인', // 차트 툴팁 등에 사용될 레이블
+                    data: bigFiveScores,
+                    borderColor: dataset1Color,
+                    backgroundColor: dataset1BgColor,
+                    pointBackgroundColor: dataset1Color,
+                    borderWidth: 1.5
+                },
+                {
+                    label: '행동 유형', // 차트 툴팁 등에 사용될 레이블
+                    data: discDataPadded,
+                    borderColor: dataset2Color,
+                    backgroundColor: dataset2BgColor,
+                    pointBackgroundColor: dataset2Color,
+                    borderWidth: 1.5
+                }
+            ]
+        },
+        customLegend: [ // 커스텀 범례를 위한 정보 (텍스트 수정)
+            { text: '성격 5요인', color: dataset1Color },
+            { text: '행동 유형', color: dataset2Color }
+        ]
     };
+
 
     // 2. 성운 (Nebula) 데이터 및 userProfile 업데이트
     let nebulaImage = "img/sync_type/nebula_default.png";
     let nebulaText = "당신의 소속 성운 정보를 불러올 수 없거나 아직 결정되지 않았습니다.";
-    const userNebulaKey = userProfile.사용자소속성운;
-    const nebulaInfo = findDataFlexible(ALL_NEBULAS, userNebulaKey, 'nameEng');
 
     if (nebulaInfo) {
-        nebulaImage = `img/sync_type/${nebulaInfo.cardName || 'nebula_default'}.png`;
+        const rawNebulaCardName = nebulaInfo.cardName || userNebulaKey.toLowerCase().replace(/\s+/g, '_');
+        nebulaImage = `img/sync_type/constellation_${rawNebulaCardName}_card.png`;
+
         let big5ScoresText = "";
         if (nebulaInfo.Neuroticism !== undefined) big5ScoresText += `신경성(N): ${nebulaInfo.Neuroticism}, `;
         if (nebulaInfo.Extraversion !== undefined) big5ScoresText += `외향성(E): ${nebulaInfo.Extraversion}, `;
@@ -242,6 +375,7 @@ function generateSyncTypeData() {
         if (nebulaInfo.Agreeableness !== undefined) big5ScoresText += `우호성(A): ${nebulaInfo.Agreeableness}, `;
         if (nebulaInfo.Conscientiousness !== undefined) big5ScoresText += `성실성(C): ${nebulaInfo.Conscientiousness}`;
         big5ScoresText = big5ScoresText.trim().replace(/,$/, '');
+
 
         userProfile.사용자가성운에속한이유 = `당신은 ${nebulaInfo.nameKor}의 ${nebulaInfo.tendency} 특성과 깊은 연결고리를 가지고 있는 것 같아요.`;
 
@@ -266,11 +400,11 @@ function generateSyncTypeData() {
     // 3. 싱크타입 (SyncTypeDetail) 데이터 및 userProfile 업데이트
     let syncTypeImage = "img/sync_type/type_default.png";
     let syncTypeText = "당신의 싱크타입 정보를 불러올 수 없거나 아직 결정되지 않았습니다.";
-    const userSyncTypeKey = userProfile.결정된싱크타입;
-    const syncTypeInfo = findDataFlexible(ALL_SYNC_TYPES, userSyncTypeKey, 'nameEng');
 
     if (syncTypeInfo) {
-        syncTypeImage = `img/sync_type/${syncTypeInfo.cardName || 'type_default'}.png`;
+        const rawSyncTypeCardName = syncTypeInfo.cardName || userSyncTypeKey.toLowerCase().replace(/\s+/g, '_');
+        syncTypeImage = `img/sync_type/${rawSyncTypeCardName}_character_card.png`;
+
         let discScoresText = "";
         if (syncTypeInfo.D !== undefined) discScoresText += `D: ${syncTypeInfo.D}, `;
         if (syncTypeInfo.I !== undefined) discScoresText += `I: ${syncTypeInfo.I}, `;
@@ -772,31 +906,99 @@ function saveUserProfileToLocalStorage(profile) {
         }
     }
 
-    function updateSyncTypeModal(tabId = 'overview') {
-        console.log(`[Modal] 싱크타입 모달 업데이트. 탭: ${tabId}`);
-        if (!userProfile || !syncTypeMainImage || !syncTypeDescription || !syncTypeTabsContainer || Object.keys(syncTypeDataStore).length === 0) {
-            console.error("[Modal] 싱크타입 모달 필수 요소 또는 데이터 없음. UserProfile:", userProfile, "SyncDataStore:", syncTypeDataStore);
-            syncTypeDescription.innerHTML = `<p>싱크타입 정보를 표시할 수 없습니다. 데이터를 확인해주세요.</p>`;
-            syncTypeMainImage.src = "img/sync_type/default.png";
-            return;
-        }
+function updateSyncTypeModal(tabId = 'overview') {
+    console.log(`[Modal] 싱크타입 모달 업데이트. 탭: ${tabId}`);
 
-        const dataForTab = syncTypeDataStore[tabId];
-        if (!dataForTab) {
-            console.error(`[Modal] 싱크타입 데이터 없음: ${tabId}`);
-            syncTypeDescription.innerHTML = `<p>선택된 탭(${tabId})에 대한 정보를 불러올 수 없습니다.</p>`;
-            syncTypeMainImage.src = "img/sync_type/default.png"; // 기본 이미지
-            return;
-        }
+    const overviewContent = document.querySelector('.sync-type-overview-content');
+    const imageContainer = document.querySelector('.sync-type-image-container');
+    const customLegendArea = document.querySelector('.overview-custom-legend-area');
 
-        syncTypeMainImage.src = dataForTab.image;
-        syncTypeMainImage.alt = `${tabId} 관련 이미지`; // alt 텍스트도 동적으로
-        syncTypeDescription.innerHTML = `<p>${dataForTab.text.replace(/\n/g, "<br>")}</p>`;
 
-        syncTypeTabsContainer.querySelectorAll('.sync-tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === tabId);
-        });
+    if (!userProfile || !syncTypeDescription || !syncTypeTabsContainer || Object.keys(syncTypeDataStore).length === 0 || !overviewContent || !imageContainer || !customLegendArea) {
+        console.error("[Modal] 싱크타입 모달 필수 요소 또는 데이터 없음.");
+        if(syncTypeDescription) syncTypeDescription.innerHTML = `<p>싱크타입 정보를 표시할 수 없습니다. 데이터를 확인해주세요.</p>`;
+        if(syncTypeMainImage) syncTypeMainImage.src = "img/sync_type/default.png";
+        if(overviewContent) overviewContent.style.display = 'none';
+        if(imageContainer) imageContainer.style.display = 'block';
+        if(customLegendArea) customLegendArea.innerHTML = ''; // 범례 영역 비우기
+        return;
     }
+
+    const dataForTab = syncTypeDataStore[tabId];
+
+    if (!dataForTab) {
+        console.error(`[Modal] 싱크타입 데이터 없음: ${tabId}`);
+        syncTypeDescription.innerHTML = `<p>선택된 탭(${tabId})에 대한 정보를 불러올 수 없습니다.</p>`;
+        customLegendArea.innerHTML = ''; // 범례 영역 비우기
+        if (tabId === 'overview') {
+            overviewContent.style.display = 'flex'; // overviewContent는 flex 컨테이너
+            imageContainer.style.display = 'none';
+            // 차트 데이터가 없으므로 빈 차트 또는 안내 메시지
+            drawRadarChart('combinedRadarChart', [], []); // 빈 데이터셋으로 호출 시 기본 차트
+        } else {
+            overviewContent.style.display = 'none';
+            imageContainer.style.display = 'block';
+            if(syncTypeMainImage) {
+                syncTypeMainImage.src = "img/sync_type/default.png";
+                syncTypeMainImage.alt = "기본 이미지";
+            }
+        }
+        return;
+    }
+
+    syncTypeDescription.innerHTML = `<p>${dataForTab.text ? dataForTab.text.replace(/\n/g, "<br>") : "설명 정보가 없습니다."}</p>`;
+    customLegendArea.innerHTML = ''; // 이전 범례 내용 초기화
+
+    if (tabId === 'overview') {
+        overviewContent.style.display = 'flex'; // overviewContent는 flex 컨테이너
+        imageContainer.style.display = 'none';
+
+        if (dataForTab.chartData && dataForTab.chartData.datasets && dataForTab.chartData.datasets.length > 0) {
+            drawRadarChart('combinedRadarChart', dataForTab.chartData.labels, dataForTab.chartData.datasets);
+        } else {
+            console.warn("[Modal] 통합 차트 데이터 없음.");
+             // 필요시 캔버스 대신 안내 메시지 표시
+            const chartCanvas = document.getElementById('combinedRadarChart');
+            if (chartCanvas) {
+                 const ctx = chartCanvas.getContext('2d');
+                 ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height); // 캔버스 클리어
+                 // ctx.fillText("차트 데이터를 불러올 수 없습니다.", 10, 50); // 간단한 텍스트
+            }
+        }
+
+        // 커스텀 범례 생성
+        if (dataForTab.customLegend && dataForTab.customLegend.length > 0) {
+            dataForTab.customLegend.forEach(item => {
+                const legendItemDiv = document.createElement('div');
+                legendItemDiv.className = 'custom-legend-item';
+
+                const colorBox = document.createElement('span');
+                colorBox.className = 'custom-legend-color-box';
+                colorBox.style.backgroundColor = item.color;
+                legendItemDiv.appendChild(colorBox);
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'custom-legend-text';
+                textSpan.textContent = item.text;
+                legendItemDiv.appendChild(textSpan);
+
+                customLegendArea.appendChild(legendItemDiv);
+            });
+        }
+
+    } else { // nebula 또는 syncTypeDetail 탭
+        overviewContent.style.display = 'none';
+        imageContainer.style.display = 'block';
+        if (syncTypeMainImage) {
+            syncTypeMainImage.src = dataForTab.image || "img/sync_type/default.png";
+            syncTypeMainImage.alt = `${tabId} 관련 이미지`;
+        }
+    }
+
+    syncTypeTabsContainer.querySelectorAll('.sync-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+}
 
     function updateTarotCollectionModal() {
         console.log("[Modal] 타로 콜렉션 모달 업데이트.");
