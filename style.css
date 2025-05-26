@@ -11,6 +11,8 @@
     --scrollbar-track-actual-color: #e9e9e9;
     --sample-answers-height: 50px;
     --header-height: 50px;
+    /* 강조색 RGB 값 (CSS 변수로 정의하여 JS에서도 사용 가능하게 함) */
+    --emphasis-color-rgb: 98, 129, 243;
 }
 
 * {
@@ -785,7 +787,7 @@ html, body {
     margin: 0 -25px; /* 카드를 겹치게 함 (너비의 약 1/4 ~ 1/3) */
     flex-shrink: 0;
     position: relative; /* transform 기준 */
-    transition: transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.3s ease;
+    transition: transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.3s ease, box-shadow 0.3s ease;
     border-radius: 8px; /* 이미지 자체에 radius가 없다면 여기서 */
     box-shadow: 0px 5px 15px rgba(0,0,0,0.3);
     overflow: hidden; /* 이미지 넘침 방지 */
@@ -801,7 +803,7 @@ html, body {
 }
 .tarot-card-carousel .tarot-card-item.selected {
     transform: translateY(-20px) scale(1.08) !important; /* 선택 시 위로 살짝 이동 및 확대. !important로 다른 transform 덮어쓰기 주의 */
-    box-shadow: 0px 8px 25px rgba(var(--emphasis-color-rgb, 98, 129, 243), 0.5); /* 강조색 그림자 */
+    box-shadow: 0px 8px 25px rgba(var(--emphasis-color-rgb), 0.5); /* 강조색 그림자 */
     filter: brightness(1.1);
 }
 /* 선택되지 않은 카드 약간 어둡게/작게 (선택 사항) */
@@ -809,17 +811,28 @@ html, body {
    transform: scale(1.03) translateY(-5px); /* 호버 시 약간 확대 */
 }
 
+.tarot-selection-actions {
+    display: flex;
+    justify-content: center; /* 버튼들을 중앙 정렬 */
+    align-items: center;
+    gap: 15px; /* 버튼 사이 간격 */
+    width: 100%;
+    max-width: 450px; /* 버튼 영역 최대 너비 */
+}
+
 .tarot-selection-confirm-btn {
     background-color: var(--emphasis-color);
     color: var(--white-color);
     border: none;
     border-radius: 25px;
-    padding: 12px 30px;
+    padding: 12px 25px; /* 패딩 약간 조정 */
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, opacity 0.2s;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    flex-grow: 1; /* 공간을 차지하도록 */
+    min-width: 120px; /* 최소 너비 */
 }
 .tarot-selection-confirm-btn:disabled {
     background-color: #A0B3F7;
@@ -828,4 +841,27 @@ html, body {
 }
 .tarot-selection-confirm-btn:hover:not(:disabled) {
     background-color: #4E6AD8;
+}
+
+.tarot-action-btn {
+    background-color: var(--white-color);
+    color: var(--emphasis-color);
+    border: 1px solid var(--emphasis-color);
+    border-radius: 25px;
+    padding: 10px 20px; /* 패딩 약간 조정 */
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.tarot-action-btn:hover {
+    background-color: #f0f4ff; /* 연한 강조색 배경 */
+}
+.tarot-action-btn:disabled { /* (만약 비활성화 상태가 필요하다면) */
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #adb5bd;
 }

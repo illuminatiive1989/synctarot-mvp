@@ -26,7 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const tarotCardCarousel = document.getElementById('tarotCardCarousel');
     const tarotCardInfo = document.getElementById('tarotCardInfo');
     const tarotSelectionConfirmBtn = document.getElementById('tarotSelectionConfirmBtn');
-
+    const tarotClearSelectionBtn = document.getElementById('tarotClearSelectionBtn'); // 추가
+    const tarotRandomSelectBtn = document.getElementById('tarotRandomSelectBtn');   // 추가
 
     // --- 전역 변수 및 상수 ---
     let userProfile;
@@ -1312,8 +1313,62 @@ function updateSyncTypeModal(tabId = 'overview') {
         // 선택 완료 후 봇에게 알림 (사용자 메시지로 처리)
         await processMessageExchange("카드 선택 완료", 'system_internal'); // 내부 시스템 메시지로 처리하여 사용자 입력 없이 진행
     }
+    function handleClearTarotSelection() {
+        if (isLoadingBotResponse || !tarotCardCarousel) return;
+        console.log("[TarotSelection] 모든 선택 취소.");
 
+        selectedTarotCardIndices = []; // 선택된 인덱스 배열 비우기
+        
+        // 캐러셀의 모든 카드에서 'selected' 클래스 제거
+        const cards = tarotCardCarousel.querySelectorAll('.tarot-card-item.selected');
+        cards.forEach(card => card.classList.remove('selected'));
 
+        updateTarotSelectionInfo(); // 정보 텍스트 업데이트
+        tarotSelectionConfirmBtn.disabled = true; // 선택 완료 버튼 비활성화
+    }
+
+    function handleRandomTarotSelection() {
+        if (isLoadingBotResponse || !tarotCardCarousel || cardsToSelectCount <= 0) return;
+        console.log(`[TarotSelection] 운에 맡기기. ${cardsToSelectCount}장 랜덤 선택.`);
+
+        handleClearTarotSelection(); // 기존 선택 모두 취소
+
+        let availableIndices = Array.from({ length: TOTAL_CARDS_IN_DECK }, (_, i) => i);
+        
+        for (let i = 0; i < cardsToSelectCount; i++) {
+            if (availableIndices.length === 0) break; // 더 이상 뽑을 카드가 없으면 중단
+
+            const randomIndexInAvailable = Math.floor(Math.random() * availableIndices.length);
+            const selectedCardRealIndex = availableIndices.splice(randomIndexInAvailable, 1)[0];
+            
+            selectedTarotCardIndices.push(selectedCardRealIndex);
+            
+            // 해당 인덱스의 카드 요소에 'selected' 클래스 추가
+            const cardElement = tarotCardCarousel.querySelector(`.tarot-card-item[data-index="${selectedCardRealIndex}"]`);
+            if (cardElement) {
+                cardElement.classList.add('selected');
+            }
+        }
+        
+        updateTarotSelectionInfo();
+        tarotSelectionConfirmBtn.disabled = selectedTarotCardIndices.length !== cardsToSelectCount;
+
+        // 랜덤 선택 후, 첫 번째 선택된 카드로 스크롤 (선택 사항)
+        if (selectedTarotCardIndices.length > 0 && tarotCardCarousel.firstElementChild) {
+            const firstSelectedCardIndex = selectedTarotCardIndices[0];
+            const cardToScrollTo = tarotCardCarousel.querySelector(`.tarot-card-item[data-index="${firstSelectedCardIndex}"]`);
+            if (cardToScrollTo) {
+                // 카드를 중앙으로 스크롤하는 로직 (populateTarotCarousel의 스크롤 로직과 유사하게 구현 가능)
+                const cardWidth = cardToScrollTo.offsetWidth;
+                const effectiveCardSpacing = cardWidth + parseInt(getComputedStyle(cardToScrollTo).marginLeft) + parseInt(getComputedStyle(cardToScrollTo).marginRight);
+                const targetScroll = (firstSelectedCardIndex * effectiveCardSpacing) - (tarotCardCarouselContainer.offsetWidth / 2) + (effectiveCardSpacing / 2);
+                tarotCardCarousel.scrollTo({ left: targetScroll, behavior: 'smooth' });
+                
+                // 스크롤 후 3D 효과 재적용
+                setTimeout(applyCarouselPerspective, 300); // 스크롤 애니메이션 시간 고려
+            }
+        }
+    }
     function applyCarouselPerspective() {
         if (!tarotCardCarousel || !tarotCardCarousel.children.length) return;
 
@@ -1675,11 +1730,23 @@ async function initializeChat() {
     moreOptionsBtn.disabled = true;
     requestAnimationFrame(adjustChatMessagesPadding);
 
+    // 타로 선택 UI 버튼들 이벤트 리스너
     if (tarotSelectionConfirmBtn) {
         tarotSelectionConfirmBtn.addEventListener('click', handleTarotSelectionConfirm);
     } else {
         console.error("[App] tarotSelectionConfirmBtn 요소를 찾을 수 없습니다.");
     }
+    if (tarotClearSelectionBtn) { // 추가
+        tarotClearSelectionBtn.addEventListener('click', handleClearTarotSelection);
+    } else {
+        console.error("[App] tarotClearSelectionBtn 요소를 찾을 수 없습니다.");
+    }
+    if (tarotRandomSelectBtn) { // 추가
+        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection);
+    } else {
+        console.error("[App] tarotRandomSelectBtn 요소를 찾을 수 없습니다.");
+    }
+
 
     isLoadingBotResponse = true;
     setUIInteractions(true, false);
@@ -1694,14 +1761,10 @@ async function initializeChat() {
         return;
     }
 
-    // 초기 봇 메시지 직접 추가
-    // API 응답 형식을 따르지 않고, 기존 방식대로 텍스트와 샘플 답변을 직접 사용합니다.
     try {
-        // action 부분을 가상으로 추가하거나, initialBotMessage에 포함시킬 수 있습니다.
-        // 여기서는 간단하게 initialBotMessage.text만 사용합니다.
-        const botMessageTextWithAction = `<i>루비가 반갑게 인사하며</i><br>${initialBotMessage.text}`; // 간단한 액션 추가
+        const botMessageTextWithAction = `<i>루비가 반갑게 인사하며</i><br>${initialBotMessage.text}`;
         await addMessage(botMessageTextWithAction, 'bot');
-        updateSampleAnswers(initialBotMessage.sampleAnswers); // 여기서 "카드뽑을래"가 포함된 배열이 전달되어야 함
+        updateSampleAnswers(initialBotMessage.sampleAnswers);
     } catch (error) {
         console.error("[App] 초기 메시지 표시 중 오류:", error);
         await addMessage("초기 메시지를 표시하는 중 오류가 발생했습니다.", "system");
