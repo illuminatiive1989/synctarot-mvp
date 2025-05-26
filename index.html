@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>모달 상세 구현 채팅</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="chat-app-container">
+        <!-- 채팅창 헤더 (예시, 필요에 따라 추가) -->
+        <div class="chat-header">
+            <h1>채팅</h1>
+            <!-- 뒤로가기 버튼 등 추가 가능 -->
+        </div>
+
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="sample-answers" id="sampleAnswersContainer"></div>
+        <div class="chat-input-area">
+            <button class="more-options-btn" id="moreOptionsBtn" aria-label="더 보기 옵션">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <circle cx="8.5" cy="8.5" r="2"/><circle cx="15.5" cy="8.5" r="2"/>
+                  <circle cx="8.5" cy="15.5" r="2"/><circle cx="15.5" cy="15.5" r="2"/>
+                </svg>
+            </button>
+            <textarea id="messageInput" placeholder="메시지를 입력해주세요" rows="1" aria-label="메시지 입력"></textarea>
+            <button class="send-btn" id="sendBtn" aria-label="메시지 보내기">
+                <span class="send-btn-text">보내기</span>
+                <div class="loading-indicator">
+                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+            </button>
+        </div>
+        <div class="more-options-panel" id="moreOptionsPanel"></div>
+    </div>
+
+    <!-- 싱크타입 모달 -->
+    <div id="syncTypeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>싱크타입 분석</h2>
+                <button class="close-modal-btn" onclick="closeModal('syncTypeModal')" aria-label="닫기">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="sync-type-image-container">
+                    <img id="syncTypeMainImage" src="img/sync_type/default.png" alt="싱크타입 대표 이미지">
+                </div>
+                <div class="sync-type-tabs">
+                    <button class="sync-tab-btn active" data-tab="overview">총평</button>
+                    <button class="sync-tab-btn" data-tab="nebula">성운</button>
+                    <button class="sync-tab-btn" data-tab="syncTypeDetail">싱크타입</button>
+                </div>
+                <div id="syncTypeDescription" class="sync-type-description">
+                    <p>여기에 선택된 탭의 설명이 표시됩니다. (초기: 총평)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 타로 콜렉션 모달 -->
+    <div id="tarotCollectionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>타로 콜렉션</h2>
+                <button class="close-modal-btn" onclick="closeModal('tarotCollectionModal')" aria-label="닫기">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="tarot-gauge-container">
+                    <p>수집률: <span id="tarotCollectedCount">0</span> / <span id="tarotTotalCount">156</span></p>
+                    <div class="gauge-bar">
+                        <div id="tarotGaugeFill" class="gauge-fill"></div>
+                    </div>
+                </div>
+                <div id="tarotCardGrid" class="tarot-card-grid">
+                    <!-- 타로 카드는 여기에 JavaScript로 동적으로 추가됩니다 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 소셜로그인 모달 (기존 유지) -->
+    <div id="socialLoginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>소셜로그인</h2>
+                <button class="close-modal-btn" onclick="closeModal('socialLoginModal')" aria-label="닫기">×</button>
+            </div>
+            <div class="modal-body">
+                <p>소셜로그인 버튼이나 관련 안내를 여기에 표시합니다.</p>
+                <!-- 예: <button>카카오 로그인</button> <button>네이버 로그인</button> -->
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
