@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initialBotMessage = {
         text: "안녕하세요! 무엇을 도와드릴까요?<br>아래에서 선택하거나 직접 입력해주세요.<br><b>도움말</b>이라고 입력하면 사용 가능한 명령어를 볼 수 있습니다.",
-        sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘", "카드뽑을래"] // 여기에 "카드뽑을래"가 있어야 합니다.
+        sampleAnswers: ["오늘의 운세", "카드뽑을래"] // 여기에 "카드뽑을래"가 있어야 합니다.
     };
 
     // 참고용 카드 파일명 목록 (실제 사용은 데이터 파일의 cardName 필드를 우선)
