@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const initialBotMessage = {
-        text: "안녕하세요! 무엇을 도와드릴까요?<br>아래에서 선택하거나 직접 입력해주세요.<br><b>도움말</b>이라고 입력하면 사용 가능한 명령어를 볼 수 있습니다.",
+        text: "안녕하세요. 어떤 타로를 보시겠어요?",
         sampleAnswers: ["오늘의 운세", "카드뽑을래"] // 여기에 "카드뽑을래"가 있어야 합니다.
     };
 
@@ -843,8 +843,8 @@ function saveUserProfileToLocalStorage(profile) {
     }
     function setUIInteractions(isProcessing, shouldFocusInput = false) {
         console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}`);
-        messageInput.disabled = isProcessing; // 로딩 중일 때 비활성화
-        sendBtn.disabled = isProcessing || messageInput.value.trim() === '';
+        if (messageInput) messageInput.disabled = isProcessing;
+        if (sendBtn) sendBtn.disabled = isProcessing || (messageInput && messageInput.value.trim() === '');
 
         const sampleButtons = sampleAnswersContainer.querySelectorAll('.sample-answer-btn');
         sampleButtons.forEach(btn => btn.disabled = isProcessing);
@@ -852,11 +852,19 @@ function saveUserProfileToLocalStorage(profile) {
         const panelOptions = moreOptionsPanel.querySelectorAll('.panel-option');
         panelOptions.forEach(opt => opt.disabled = isProcessing);
         
-        moreOptionsBtn.disabled = isProcessing;
+        if (moreOptionsBtn) moreOptionsBtn.disabled = isProcessing;
 
-        if (!isProcessing && shouldFocusInput) {
+        // 타로 선택 UI가 활성화되어 있으면 입력창 포커스하지 않음
+        if (!isProcessing && shouldFocusInput && !isTarotSelectionActive && messageInput) {
             console.log("[UI] 메시지 입력창 포커스 시도.");
+            // 모바일에서 키보드가 자동으로 올라오는 것을 방지하기 위해,
+            // 사용자가 직접 입력창을 터치했을 때만 포커스가 가도록 하는 것이 좋을 수 있음.
+            // 여기서는 일단 요청대로 'shouldFocusInput' 플래그에 따라 포커스.
             messageInput.focus();
+        } else if (isTarotSelectionActive && messageInput && document.activeElement === messageInput) {
+            // 타로 UI가 활성화되었는데 입력창에 포커스가 있다면 포커스 해제 (키보드 내리기)
+            messageInput.blur();
+            console.log("[UI] 타로 UI 활성화로 입력창 포커스 해제.");
         }
     }
 
@@ -870,10 +878,10 @@ function saveUserProfileToLocalStorage(profile) {
         }
 
         let shouldClearChat = clearBeforeSend;
-        if (!hasUserSentMessage && source !== 'system_init') { // 초기 메시지 로드는 제외
+        if (!hasUserSentMessage && source !== 'system_init') {
             shouldClearChat = true;
             hasUserSentMessage = true;
-            userProfile.메뉴단계 = 2; // 사용자가 첫 메시지를 보내면 메뉴 2단계로 변경
+            userProfile.메뉴단계 = 2;
             console.log("[ProcessExchange] 사용자의 첫 메시지. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
         }
 
@@ -884,7 +892,9 @@ function saveUserProfileToLocalStorage(profile) {
 
         isLoadingBotResponse = true;
         sendBtn.classList.add('loading');
+        // 메시지 처리 시작 시에는 입력창 포커스를 주지 않음 (setUIInteractions의 shouldFocusInput = false)
         setUIInteractions(true, false);
+
 
         if (moreOptionsPanel.classList.contains('active')) {
             console.log("[ProcessExchange] 더보기 패널 닫기.");
@@ -892,7 +902,7 @@ function saveUserProfileToLocalStorage(profile) {
             moreOptionsBtn.classList.remove('active');
         }
 
-        if (source !== 'system_init_skip_user_message') { // 시스템 초기 메시지 로드 시 사용자 메시지 추가 건너뛰기
+        if (source !== 'system_init_skip_user_message' && source !== 'system_internal') { // 시스템 내부 메시지일 경우 사용자 메시지 추가 안함
              await addMessage(messageText, 'user');
         }
 
@@ -903,40 +913,39 @@ function saveUserProfileToLocalStorage(profile) {
         }
 
         try {
-            const botApiResponse = await simulateBotResponse(messageText); // API 응답 전체를 받음
+            const botApiResponse = await simulateBotResponse(messageText);
             
-            // 사용자 프로필 업데이트 적용
             if (botApiResponse.user_profile_update) {
                 for (const key in botApiResponse.user_profile_update) {
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
                         if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
-                            // API에서 빈 배열로 초기화하라는 지시가 아니면, 기존 선택된 카드 유지 (예: 해석 단계)
-                            // 명시적으로 빈 배열을 보내면 초기화
+                            //
                         } else {
                             userProfile[key] = botApiResponse.user_profile_update[key];
                         }
                     }
                 }
-                saveUserProfileToLocalStorage(userProfile); // 변경사항 저장
+                saveUserProfileToLocalStorage(userProfile);
                 console.log("[UserProfile] API 응답으로 프로필 업데이트:", botApiResponse.user_profile_update);
             }
 
-            // 챗봇 메시지 추가 (action + assistantmsg)
             const fullBotMessage = `${botApiResponse.action ? `<i>${botApiResponse.action}</i><br>` : ''}${botApiResponse.assistantmsg}`;
             await addMessage(fullBotMessage, 'bot');
             
             const sampleAnswersArray = botApiResponse.sampleanswer ? botApiResponse.sampleanswer.split('|').map(s => s.trim()).filter(s => s) : [];
             updateSampleAnswers(sampleAnswersArray);
 
-            // 타로 카드 선택 UI 표시 로직
             if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
-                let currentTarotBg = userProfile.tarotbg || 'default.png'; // 프로필 기본값 또는 'default.png'
-                if (menuItemData && menuItemData.tarotbg) { // 패널 메뉴에서 전달된 tarotbg가 있다면
+                // 타로 UI 표시 전, 현재 활성화된 엘리먼트가 입력창이라면 blur 처리하여 키보드를 내린다.
+                if (document.activeElement === messageInput) {
+                    messageInput.blur();
+                }
+                let currentTarotBg = userProfile.tarotbg || 'default.png';
+                if (menuItemData && menuItemData.tarotbg) {
                     currentTarotBg = menuItemData.tarotbg;
-                    userProfile.tarotbg = currentTarotBg; // 사용자 프로필에 이 배경 저장
+                    userProfile.tarotbg = currentTarotBg;
                     saveUserProfileToLocalStorage(userProfile);
                 }
-                // "카드뽑을래"와 같이 일반 샘플 답변으로 tarotbg가 지정되지 않은 경우, userProfile.tarotbg 사용
                 console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
                 showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
             }
@@ -944,15 +953,17 @@ function saveUserProfileToLocalStorage(profile) {
         } catch (error) {
             console.error("[ProcessExchange] 오류 발생:", error);
             await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
-            updateSampleAnswers(initialBotMessage.sampleAnswers); // 초기 샘플 답변으로 복구
+            updateSampleAnswers(initialBotMessage.sampleAnswers);
         } finally {
             isLoadingBotResponse = false;
             sendBtn.classList.remove('loading');
-            setUIInteractions(false, source === 'input' || source === 'sample_button'); // 입력창 또는 샘플버튼 클릭시에만 포커스
+            // 메시지 소스에 따라 입력창 포커스 여부 결정
+            // 'input' (직접 입력 후 엔터/전송 버튼), 'sample_button_direct_input' (샘플답변이 입력창에 채워지고 전송되는 경우) 일 때만 포커스
+            const shouldFocus = (source === 'input');
+            setUIInteractions(false, shouldFocus);
             console.log("[ProcessExchange] 완료.");
         }
     }
-
     async function handleSendMessage() {
         const messageText = messageInput.value.trim();
         await processMessageExchange(messageText, 'input');
@@ -1183,21 +1194,26 @@ function updateSyncTypeModal(tabId = 'overview') {
             return;
         }
 
+        // 타로 UI 표시 전, 현재 활성화된 엘리먼트가 입력창이라면 blur 처리하여 키보드를 내린다.
+        if (messageInput && document.activeElement === messageInput) {
+            messageInput.blur();
+            console.log("[TarotSelection] 입력창 포커스 해제 (키보드 내리기).");
+        }
+
+
         tarotSelectionOverlay.style.backgroundImage = `url('img/tarot/bg/${backgroundFileName}')`;
         cardsToSelectCount = cardsToPick;
-        selectedTarotCardIndices = []; // 선택된 카드 인덱스 초기화
+        selectedTarotCardIndices = [];
 
-        populateTarotCarousel(); // 캐러셀 내용 생성 및 중앙 정렬
+        populateTarotCarousel();
         updateTarotSelectionInfo();
 
-        tarotSelectionConfirmBtn.disabled = true; // 처음엔 비활성화
+        tarotSelectionConfirmBtn.disabled = true;
         tarotSelectionOverlay.classList.add('active');
-        isTarotSelectionActive = true;
-        document.body.style.overflow = 'hidden'; // 뒷 배경 스크롤 방지
+        isTarotSelectionActive = true; // 플래그 설정
+        document.body.style.overflow = 'hidden';
 
-        // 캐러셀 드래그 스크롤 이벤트 리스너 등록
         setupCarouselDragScroll();
-        // 스크롤 이벤트에 따른 3D 효과 적용 리스너 등록
         tarotCardCarousel.addEventListener('scroll', applyCarouselPerspective);
     }
 

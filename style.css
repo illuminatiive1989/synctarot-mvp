@@ -813,11 +813,11 @@ html, body {
 
 .tarot-selection-actions {
     display: flex;
-    justify-content: center; /* 버튼들을 중앙 정렬 */
-    align-items: center;
-    gap: 15px; /* 버튼 사이 간격 */
+    flex-direction: column; /* 버튼들을 세로로 배치 */
+    align-items: center; /* 가로 중앙 정렬 */
+    gap: 10px; /* 버튼 그룹 사이 간격 */
     width: 100%;
-    max-width: 450px; /* 버튼 영역 최대 너비 */
+    max-width: 300px; /* 버튼 영역 최대 너비 조정 */
 }
 
 .tarot-selection-confirm-btn {
@@ -825,14 +825,14 @@ html, body {
     color: var(--white-color);
     border: none;
     border-radius: 25px;
-    padding: 12px 25px; /* 패딩 약간 조정 */
+    padding: 12px 20px; /* 패딩 조정 */
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, opacity 0.2s;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    flex-grow: 1; /* 공간을 차지하도록 */
-    min-width: 120px; /* 최소 너비 */
+    width: 100%; /* 부모 너비에 꽉 차게 */
+    order: 1; /* 기본 순서 (가장 위 또는 flex-direction: column-reverse 시 가장 아래) */
 }
 .tarot-selection-confirm-btn:disabled {
     background-color: #A0B3F7;
@@ -843,22 +843,33 @@ html, body {
     background-color: #4E6AD8;
 }
 
+.tarot-selection-sub-actions {
+    display: flex;
+    justify-content: space-between; /* 두 버튼을 양쪽으로 분산 */
+    width: 100%; /* 부모 너비에 꽉 차게 */
+    gap: 10px; /* 버튼 사이 간격 */
+    order: 2; /* "선택 완료" 버튼 아래에 위치 */
+    margin-top: 10px; /* "선택 완료" 버튼과의 간격 */
+}
+
 .tarot-action-btn {
     background-color: var(--white-color);
     color: var(--emphasis-color);
     border: 1px solid var(--emphasis-color);
     border-radius: 25px;
-    padding: 10px 20px; /* 패딩 약간 조정 */
+    padding: 10px 15px; /* 패딩 조정 */
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, color 0.2s;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    flex-grow: 1; /* 가능한 공간을 동일하게 나눠 가짐 */
+    text-align: center;
 }
 .tarot-action-btn:hover {
     background-color: #f0f4ff; /* 연한 강조색 배경 */
 }
-.tarot-action-btn:disabled { /* (만약 비활성화 상태가 필요하다면) */
+.tarot-action-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     background-color: #e9ecef;
