@@ -1904,7 +1904,7 @@ async function initializeChat() {
     }
 
     try {
-        // action 필드 없이 initialBotMessage.text만 사용
+        // action 필드 없이이 initialBotMessage.text만 사용
         await addMessage(initialBotMessage.text, 'bot');
         updateSampleAnswers(initialBotMessage.sampleAnswers);
     } catch (error) {
