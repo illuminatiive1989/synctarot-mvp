@@ -94,61 +94,69 @@ html, body { height: 100%; font-family: 'Noto Sans KR', sans-serif; background-c
 
 .tarot-card-item {
     width: 100%;
-    position: relative; /* 툴팁 위치의 기준점 */
+    position: relative; /* 툴팁의 기준점 */
     background-color: transparent;
     border-radius: 8px;
-    overflow: visible; /* 툴팁이 카드 밖으로 나갈 수 있도록 */
+    /* overflow: visible; 삭제 - 툴팁은 카드 아이템의 자식이지만, 카드 아이템 자체는 그리드 셀이므로 hidden 권장 */
+    overflow: hidden; /* 내부 img가 radius를 따르도록 */
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     cursor: pointer;
-    display: flex; /* 내부 이미지 중앙 정렬 (선택적) */
-    justify-content: center; /* 내부 이미지 중앙 정렬 (선택적) */
-    align-items: center; /* 내부 이미지 중앙 정렬 (선택적) */
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
 }
 .tarot-card-item img {
     display: block;
-    width: 100%; /* 이미지 너비를 아이템에 맞춤 */
-    height: auto; /* 높이는 비율에 따라 자동 */
-    max-height: 100%; /* 이미지가 아이템보다 커지는 것 방지 (object-fit:contain과 함께) */
-    object-fit: contain; /* 이미지가 잘리지 않고 아이템 내부에 모두 보이도록 */
+    width: 100%; 
+    height: auto; 
+    max-height: 100%; 
+    object-fit: contain; 
     transition: transform 0.4s ease-in-out, filter 0.3s ease;
-    border-radius: 6px;
+    border-radius: 6px; /* 이미지 자체에도 둥근 모서리 (선택적) */
 }
 .tarot-card-item.reversed-card img { transform: rotate(180deg); }
 .tarot-card-item.not-collected img { opacity: 0.5; filter: grayscale(100%); }
 
 /* 공용 툴팁 스타일 */
 .tooltip {
-    position: absolute; /* 이제 부모 요소(.tarot-card-item) 기준 */
-    background-color: rgba(20, 20, 20, 0.9); /* 배경 약간 더 진하게 */
+    position: absolute; /* 부모(.tarot-card-item) 기준 */
+    background-color: rgba(30, 30, 30, 0.92); /* 배경 약간 더 불투명하게 */
     color: var(--white-color);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 0.85em; /* 약간 작게 조정 */
-    z-index: 10; /* 카드 아이템 내부에서는 이정도로 충분 */
+    padding: 10px 14px; /* 패딩 늘림 */
+    border-radius: 8px; /* 둥근 모서리 늘림 */
+    font-size: 0.9em; 
+    z-index: 10; 
     opacity: 0;
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+    /* 기본적으로 숨겨진 상태에서 나타날 때 애니메이션 */
+    visibility: hidden; /* opacity와 함께 사용하여 접근성 향상 */
+    transition: opacity 0.2s ease-out, visibility 0s linear 0.2s, transform 0.2s ease-out;
     pointer-events: none;
     white-space: normal;
     text-align: center;
-    /* 위치는 JS에서 설정, 기본 transform으로 중앙 상단 정렬 */
-    transform: translate(-50%, -100%); 
-    left: 50%; /* 부모 요소의 중앙 */
-    bottom: calc(100% + 5px); /* 부모 요소의 상단에서 5px 위 */
-    width: auto; /* 내용에 따라 너비 자동 */
-    min-width: 100px; /* 최소 너비 (선택적) */
-    /* max-width 는 JS에서 카드 너비 기준으로 설정 */
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    
+    /* 위치: 부모(.tarot-card-item)의 정중앙 */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9); /* 초기 스케일 작게 */
+    
+    width: auto; 
+    /* max-width는 JS에서 카드 너비의 90% 정도로 설정 */
+    box-shadow: 0 3px 8px rgba(0,0,0,0.25);
 }
 .tooltip.visible {
     opacity: 1;
-    transform: translate(-50%, -100%) translateY(-5px); /* 살짝 올라오는 효과 */
+    visibility: visible;
+    transform: translate(-50%, -50%) scale(1); /* 원래 크기로 */
+    transition-delay: 0s, 0s, 0s; /* visibility 즉시, 나머지는 애니메이션 */
 }
 .tooltip .tooltip-name {
-    font-weight: 600; /* 이름 더 강조 */
-    display: block;
-    margin-bottom: 4px;
+    font-weight: 600; 
+    display: block; 
+    margin-bottom: 5px; /* 간격 약간 늘림 */
+    font-size: 1.05em; /* 이름 약간 크게 */
 }
 .tooltip .tooltip-description {
-    font-size: 0.9em;
-    opacity: 0.9; /* 설명 약간 더 잘보이게 */
+    font-size: 0.9em; 
+    opacity: 0.9; 
+    line-height: 1.4; /* 줄간격 */
 }

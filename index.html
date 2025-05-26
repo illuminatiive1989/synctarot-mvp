@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>툴팁 고정 위치 채팅</title>
+    <title>툴팁 중앙 위치 채팅</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -67,8 +67,9 @@
                         <div id="tarotGaugeFill" class="gauge-fill"></div>
                     </div>
                 </div>
-                <div class="tarot-card-grid-scroll-wrapper" id="tarotCardScrollWrapper"> {/* ID 추가 */}
+                <div class="tarot-card-grid-scroll-wrapper" id="tarotCardScrollWrapper">
                     <div id="tarotCardGrid" class="tarot-card-grid">
+                        <!-- 타로 카드는 여기에 JavaScript로 동적으로 추가됩니다 -->
                     </div>
                 </div>
             </div>
@@ -87,6 +88,7 @@
         </div>
     </div>
 
+    <!-- 외부 스크립트 로드 -->
     <script src="tarotData.js"></script>
     <script src="script.js"></script>
 </body>
