@@ -44,7 +44,7 @@ html, body {
     height: var(--header-height);
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: space-between; /* h1과 뼈다귀 표시를 양쪽으로 분산 */
     border-bottom: 1px solid var(--input-border-color);
     flex-shrink: 0;
 }
@@ -54,6 +54,26 @@ html, body {
     font-weight: 500;
     color: var(--normal-text-color);
 }
+
+/* 사용자 재화(뼈다귀) 표시 스타일 */
+.user-currency-display {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* 아이콘과 숫자 사이 간격 */
+}
+
+.currency-icon {
+    width: 20px; /* 아이콘 크기 조절 */
+    height: 20px; /* 아이콘 크기 조절 */
+    object-fit: contain;
+}
+
+#userBoneCount {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--normal-text-color);
+}
+
 
 .chat-messages {
     flex-grow: 1;
@@ -113,19 +133,18 @@ html, body {
 }
 
 .bot-message {
-    background-color: transparent;
+    background-color: transparent; /* 일반 봇 메시지는 투명 배경 */
     color: var(--normal-text-color);
     align-self: flex-start;
     border: none;
-    border-radius: 0;
-    padding: 8px 0px;
+    border-radius: 0; /* 기본 bot-message에는 radius 없음 (내부 컨텐츠에 적용) */
+    padding: 8px 0px; /* 기본 상하 패딩, 좌우는 없음 */
     width: 100%;
-    line-height: calc(1.6 * 1.2); /* 이 부분이 이미지 높이에 영향을 줄 수 있음 */
-    opacity: 1;
+    line-height: calc(1.6 * 1.2);
+    opacity: 1; /* 기본적으로 1, 애니메이션은 내부 청크에서 */
     transform: translateY(0);
-    animation: none;
-    /* white-space: pre-wrap; /* 이 설정이 유지되어야 <br> 등이 정상 작동 */
-    word-break: break-word; /* 이미지가 너무 클 경우를 대비는 아니지만, 텍스트와 함께 있을 때 필요 */
+    animation: none; /* 메시지 전체 애니메이션은 messageAppearFull 사용 */
+    word-break: break-word;
 }
 
 .bot-message b,
@@ -174,6 +193,62 @@ html, body {
     opacity: 1;
     transform: translateX(0);
     animation: none;
+}
+
+/* 메시지 내 임베디드 이미지 스타일 (일반 봇 메시지용) */
+.bot-message .chat-embedded-image {
+    display: block;
+    max-width: 80%;
+    max-height: 280px;
+    height: auto;
+    margin: 10px auto;
+    border-radius: 8px;
+    border: 1px solid var(--input-border-color);
+    background-color: #f9f9f9;
+    object-fit: contain;
+}
+
+/* 조수 해석 컨테이너를 위한 스타일 */
+/* assistant-type-message 클래스가 bot-message와 함께 있을 때 적용 */
+.bot-message.assistant-type-message {
+    padding: 0; /* bot-message의 기본 상하 패딩을 제거 */
+    /* margin-bottom은 .message 클래스에서 이미 12px로 적용됨 */
+    /* background-color, border-radius 등은 내부 컨테이너가 담당 */
+}
+
+.assistant-interpretation-container {
+    background-color: var(--input-bg-color); /* 입력창 배경과 유사한 색상 */
+    border-radius: 12px; /* 둥근 모서리 */
+    padding: 15px; /* 내부 여백 */
+    width: 100%; /* bot-message(.assistant-type-message) 내부에서 꽉 차도록 */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06); /* 은은한 그림자 */
+    line-height: 1.6; /* 내부 텍스트 줄 간격 */
+}
+
+/* 조수 컨테이너 내부의 카드 이미지 스타일 */
+.assistant-interpretation-container .chat-embedded-image {
+    display: block;
+    max-width: 70%; /* 컨테이너 내부에서 이미지 크기 조정 (예시: 70%) */
+    /* max-height: 200px; /* 필요시 최대 높이 제한 */
+    height: auto;
+    margin: 0 auto 12px auto; /* 위쪽 여백 0, 아래쪽 12px, 좌우 중앙 정렬 */
+    border-radius: 6px;
+    border: 1px solid var(--input-border-color); /* 이미지가 배경과 비슷할 경우 대비 */
+    background-color: var(--white-color); /* 이미지 로드 전 배경 */
+}
+
+/* 조수 컨테이너 내부의 해석 텍스트 */
+.assistant-interpretation-container .interpretation-text {
+    font-size: 0.95rem;
+    color: var(--normal-text-color);
+    text-align: left; /* 기본 왼쪽 정렬 */
+    margin: 0;
+    white-space: pre-wrap; /* 줄바꿈 및 공백 유지 */
+}
+.assistant-interpretation-container .interpretation-text b,
+.assistant-interpretation-container .interpretation-text strong {
+    color: var(--emphasis-color); /* 강조색 동일하게 적용 */
+    font-weight: 600;
 }
 
 
@@ -496,7 +571,7 @@ html, body {
 /* 이미지 컨테이너 (성운, 싱크타입 탭) */
 .sync-type-image-container {
     width: 100%;
-    height: 220px; /* 높이를 조금 더 확보하거나 aspect-ratio 사용 */
+    height: 220px;
     margin-bottom: 15px;
     display: flex;
     justify-content: center;
@@ -514,34 +589,34 @@ html, body {
 
 /* 총평 탭 - 차트와 커스텀 범례 영역 */
 .sync-type-overview-content {
-    display: flex; /* 내부 .overview-chart-area와 .overview-custom-legend-area를 가로 배치 */
+    display: flex;
     width: 100%;
     margin-bottom: 15px;
-    gap: 15px; /* 차트 영역과 범례 영역 사이 간격 */
-    align-items: flex-start; /* 상단 정렬 */
-    height: 220px; /* .sync-type-image-container와 유사한 높이 */
+    gap: 15px;
+    align-items: flex-start;
+    height: 220px;
 }
 .overview-chart-area {
-    flex: 0 0 70%; /* 차트 영역이 약 70% 너비 차지, 늘어나거나 줄어들지 않음 */
-    height: 100%; /* 부모 높이에 맞춤 */
+    flex: 0 0 70%;
+    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #f9f9f9; /* 선택적 배경 */
+    background-color: #f9f9f9;
     border-radius: 8px;
-    padding: 5px; /* 차트와 테두리 간 여백 */
+    padding: 5px;
 }
 .overview-chart-area canvas {
     max-width: 100%;
     max-height: 100%;
 }
 .overview-custom-legend-area {
-    flex-grow: 1; /* 남은 공간 차지 (약 30%) */
-    height: 100%; /* 부모 높이에 맞춤 */
+    flex-grow: 1;
+    height: 100%;
     display: flex;
-    flex-direction: column; /* 범례 항목들을 세로로 배치 */
-    justify-content: center; /* 세로 중앙 정렬 (또는 flex-start) */
-    padding-left: 10px; /* 차트 영역과의 시각적 구분 */
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 10px;
     font-size: 0.85em;
 }
 .custom-legend-item {
@@ -554,7 +629,7 @@ html, body {
     height: 12px;
     border-radius: 2px;
     margin-right: 8px;
-    border: 1px solid rgba(0,0,0,0.1); /* 색상이 너무 밝을 경우 대비 */
+    border: 1px solid rgba(0,0,0,0.1);
 }
 .custom-legend-text {
     color: var(--normal-text-color);
@@ -715,16 +790,16 @@ html, body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.85); /* 기본 어두운 배경 */
+    background-color: rgba(0, 0, 0, 0.85);
     background-size: cover;
     background-position: center;
-    display: none; /* 기본 숨김 */
+    display: none;
     align-items: center;
     justify-content: center;
-    z-index: 2000; /* 다른 모달보다 위에 */
+    z-index: 2000;
     opacity: 0;
     transition: opacity 0.3s ease-in-out;
-    flex-direction: column; /* 내부 요소들을 세로로 배치 */
+    flex-direction: column;
     padding: 20px;
 }
 .tarot-selection-overlay.active {
@@ -738,8 +813,8 @@ html, body {
     justify-content: center;
     width: 100%;
     height: 100%;
-    max-width: 600px; /* 캐러셀 최대 너비 */
-    user-select: none; /* 텍스트 드래그 방지 */
+    max-width: 600px;
+    user-select: none;
 }
 .tarot-card-info {
     color: var(--white-color);
@@ -752,28 +827,27 @@ html, body {
 }
 .tarot-card-carousel-container {
     width: 100%;
-    height: auto; /* 내용에 따라 높이 조절, 예: 350px 또는 카드의 높이 기준 */
-    min-height: 250px; /* 최소 높이 */
-    max-height: 40vh; /* 화면 높이의 일부만 사용 */
+    height: auto;
+    min-height: 250px;
+    max-height: 40vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    perspective: 1200px; /* 원근감 설정 */
+    perspective: 1200px;
     margin-bottom: 30px;
-    overflow: hidden; /* 내부 캐러셀 스크롤바 숨김 */
+    overflow: hidden;
     position: relative;
 }
 .tarot-card-carousel {
     display: flex;
-    align-items: center; /* 카드들을 수직 중앙 정렬 */
-    height: 100%; /* 컨테이너 높이 채움 */
-    padding: 20px 0; /* 상하 여백으로 카드 전체 보이게 */
+    align-items: center;
+    height: 100%;
+    padding: 20px 0;
     transform-style: preserve-3d;
-    overflow-x: auto; /* 가로 스크롤 활성화 */
+    overflow-x: auto;
     overflow-y: hidden;
-    -webkit-overflow-scrolling: touch; /* 모바일 부드러운 스크롤 */
+    -webkit-overflow-scrolling: touch;
     cursor: grab;
-    /* 스크롤바 숨기기 */
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none;  /* IE and Edge */
 }
@@ -783,43 +857,42 @@ html, body {
 .tarot-card-carousel.dragging {
     cursor: grabbing;
 }
-.tarot-card-carousel .tarot-card-item { /* 캐러셀 내의 카드 아이템 */
-    width: 100px; /* 카드 너비, JS에서 비율로도 설정 가능 */
-    height: calc(100px * 1.7); /* 카드 높이 (일반적인 타로카드 비율 1:1.7 근사) */
-    margin: 0 -25px; /* 카드를 겹치게 함 (너비의 약 1/4 ~ 1/3) */
+.tarot-card-carousel .tarot-card-item {
+    width: 100px;
+    height: calc(100px * 1.7);
+    margin: 0 -25px;
     flex-shrink: 0;
-    position: relative; /* transform 기준 */
+    position: relative;
     transition: transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.3s ease, box-shadow 0.3s ease;
-    border-radius: 8px; /* 이미지 자체에 radius가 없다면 여기서 */
+    border-radius: 8px;
     box-shadow: 0px 5px 15px rgba(0,0,0,0.3);
-    overflow: hidden; /* 이미지 넘침 방지 */
-    background-color: #555; /* 이미지 로드 전 배경 */
+    overflow: hidden;
+    background-color: #555;
 }
 .tarot-card-carousel .tarot-card-item img {
     width: 100%;
     height: 100%;
-    object-fit: cover; /* 카드를 채우도록 */
+    object-fit: cover;
     display: block;
-    pointer-events: none; /* 이미지 자체 클릭 이벤트 방지 */
-    border-radius: inherit; /* 부모의 radius 상속 */
+    pointer-events: none;
+    border-radius: inherit;
 }
 .tarot-card-carousel .tarot-card-item.selected {
-    transform: translateY(-20px) scale(1.08) !important; /* 선택 시 위로 살짝 이동 및 확대. !important로 다른 transform 덮어쓰기 주의 */
-    box-shadow: 0px 8px 25px rgba(var(--emphasis-color-rgb), 0.5); /* 강조색 그림자 */
+    transform: translateY(-20px) scale(1.08) !important;
+    box-shadow: 0px 8px 25px rgba(var(--emphasis-color-rgb), 0.5);
     filter: brightness(1.1);
 }
-/* 선택되지 않은 카드 약간 어둡게/작게 (선택 사항) */
 .tarot-card-carousel .tarot-card-item:not(.selected):hover {
-   transform: scale(1.03) translateY(-5px); /* 호버 시 약간 확대 */
+   transform: scale(1.03) translateY(-5px);
 }
 
 .tarot-selection-actions {
     display: flex;
-    flex-direction: column; /* 버튼들을 세로로 배치 */
-    align-items: center; /* 가로 중앙 정렬 */
-    gap: 10px; /* 버튼 그룹 사이 간격 */
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    max-width: 300px; /* 버튼 영역 최대 너비 조정 */
+    max-width: 300px;
 }
 
 .tarot-selection-confirm-btn {
@@ -827,14 +900,14 @@ html, body {
     color: var(--white-color);
     border: none;
     border-radius: 25px;
-    padding: 12px 20px; /* 패딩 조정 */
+    padding: 12px 20px;
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, opacity 0.2s;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    width: 100%; /* 부모 너비에 꽉 차게 */
-    order: 1; /* 기본 순서 (가장 위 또는 flex-direction: column-reverse 시 가장 아래) */
+    width: 100%;
+    order: 1;
 }
 .tarot-selection-confirm-btn:disabled {
     background-color: #A0B3F7;
@@ -847,11 +920,11 @@ html, body {
 
 .tarot-selection-sub-actions {
     display: flex;
-    justify-content: space-between; /* 두 버튼을 양쪽으로 분산 */
-    width: 100%; /* 부모 너비에 꽉 차게 */
-    gap: 10px; /* 버튼 사이 간격 */
-    order: 2; /* "선택 완료" 버튼 아래에 위치 */
-    margin-top: 10px; /* "선택 완료" 버튼과의 간격 */
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+    order: 2;
+    margin-top: 10px;
 }
 
 .tarot-action-btn {
@@ -859,17 +932,17 @@ html, body {
     color: var(--emphasis-color);
     border: 1px solid var(--emphasis-color);
     border-radius: 25px;
-    padding: 10px 15px; /* 패딩 조정 */
+    padding: 10px 15px;
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, color 0.2s;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    flex-grow: 1; /* 가능한 공간을 동일하게 나눠 가짐 */
+    flex-grow: 1;
     text-align: center;
 }
 .tarot-action-btn:hover {
-    background-color: #f0f4ff; /* 연한 강조색 배경 */
+    background-color: #f0f4ff;
 }
 .tarot-action-btn:disabled {
     opacity: 0.5;
@@ -877,17 +950,4 @@ html, body {
     background-color: #e9ecef;
     border-color: #ced4da;
     color: #adb5bd;
-}
-
-/* 메시지 내 임베디드 이미지 스타일 */
-.bot-message .chat-embedded-image {
-    display: block; /* 이미지를 블록 요소로 만들어 단독 라인 차지 */
-    max-width: 80%; /* 너비를 100%보다 작게 하여 좌우 여백이 보이도록 */
-    max-height: 280px; /* 이미지 최대 높이 제한 (조정 가능) */
-    height: auto; /* 가로세로 비율 유지 */
-    margin: 10px auto; /* 상하 10px, 좌우 auto로 중앙 정렬 */
-    border-radius: 8px; /* 이미지 모서리 약간 둥글게 */
-    border: 1px solid var(--input-border-color); /* 연한 테두리 */
-    background-color: #f9f9f9; /* 이미지 로드 전 배경색 */
-    object-fit: contain; /* 이미지가 잘리지 않고 컨테이너 안에 모두 보이도록 */
 }
