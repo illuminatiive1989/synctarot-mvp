@@ -2108,7 +2108,7 @@ async function initializeChat() {
         console.error("[App] tarotClearSelectionBtn 요소를 찾을 수 없습니다.");
     }
     if (tarotRandomSelectBtn) {
-        tarotRandomSelectBtn.addEventListener('click', handleRandomSelectBtn); // 함수명 수정 가능성 (기존과 동일하면 그대로)
+        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection); // 수정된 부분
     } else {
         console.error("[App] tarotRandomSelectBtn 요소를 찾을 수 없습니다.");
     }
@@ -2144,6 +2144,5 @@ async function initializeChat() {
 
     console.log("[App] 초기화 완료.");
 }
-
     initializeChat();
 });
