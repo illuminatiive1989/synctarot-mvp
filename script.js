@@ -601,68 +601,56 @@ function saveUserProfileToLocalStorage(profile) {
 
 function sanitizeBotHtml(htmlString) {
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlString; // 1. 먼저 HTML 문자열을 DOM으로 파싱
-    // console.log('[Sanitize] Input HTML string:', htmlString);
-    // console.log('[Sanitize] Parsed tempDiv innerHTML:', tempDiv.innerHTML);
+    tempDiv.innerHTML = htmlString;
 
-    // 허용할 태그와, 각 태그별 허용할 속성 정의
     const allowedElements = {
         'B': [],
         'STRONG': [],
         'BR': [],
-        'SPAN': ['style', 'class'], // 스타일과 클래스 허용 (필요시 style 내용은 추가 검증)
-        'DIV': ['style', 'class'],  // 스타일과 클래스 허용
-        'IMG': ['src', 'alt', 'title', 'class'] // IMG는 src, alt, title, class 허용
+        'SPAN': ['style', 'class'], // 툴팁 <span class="recommend-tooltip"> 허용
+        'DIV': ['style', 'class'],
+        'IMG': ['src', 'alt', 'title', 'class'],
+        'BUTTON': ['class', 'data-value', 'disabled', 'type'] // <button> 태그 및 주요 속성 허용
     };
 
     function cleanNodeRecursive(node) {
-        // 텍스트 노드는 그대로 반환
         if (node.nodeType === Node.TEXT_NODE) {
             return document.createTextNode(node.textContent);
         }
 
-        // 엘리먼트 노드 처리
         if (node.nodeType === Node.ELEMENT_NODE) {
             const tagName = node.tagName.toUpperCase();
 
-            // 허용된 태그인지 확인
             if (allowedElements.hasOwnProperty(tagName)) {
                 const newNode = document.createElement(node.tagName.toLowerCase());
                 const allowedAttributes = allowedElements[tagName];
 
-                // 허용된 속성만 복사
                 for (const attr of Array.from(node.attributes)) {
                     const attrNameLower = attr.name.toLowerCase();
                     if (allowedAttributes.includes(attrNameLower)) {
-                        if (attrNameLower === 'src') { // src 속성 특별 처리 (URL 유효성 등)
+                        if (attrNameLower === 'src') {
                             const srcValue = attr.value;
                             if (srcValue && (srcValue.startsWith('http') || srcValue.startsWith('/') || srcValue.startsWith('img/') || srcValue.match(/^[a-zA-Z0-9_\-\/\.]+$/))) {
                                 newNode.setAttribute(attr.name, srcValue);
                             } else {
                                 console.warn(`[Sanitize] 유효하지 않거나 허용되지 않는 ${tagName} src: ${srcValue}`);
                             }
-                        } else if (attrNameLower === 'style') { // style 속성 (더 엄격한 필터링 필요할 수 있음)
-                            // 간단히는 허용하되, 복잡한 CSS injection 방지를 위해 정제 로직 추가 가능
-                            newNode.setAttribute(attr.name, attr.value);
-                        }
-                        else {
+                        } else if (attrNameLower === 'style') {
+                            newNode.setAttribute(attr.name, attr.value); // 스타일은 일단 허용
+                        } else {
                             newNode.setAttribute(attr.name, attr.value);
                         }
                     } else if (attrNameLower.startsWith('on')) {
                         console.warn(`[Sanitize] on* 이벤트 핸들러 제거: ${attr.name} for ${tagName}`);
-                    } else {
-                         // console.log(`[Sanitize] Disallowed attribute: ${attr.name} for ${tagName}`);
                     }
                 }
 
-                // 자식 노드들도 재귀적으로 처리
                 for (const childNode of Array.from(node.childNodes)) {
                     newNode.appendChild(cleanNodeRecursive(childNode));
                 }
                 return newNode;
             } else {
-                // 허용되지 않은 태그는 제거하고, 자식 노드들만 가져와서 이어붙임 (텍스트 등 보존)
-                // console.log(`[Sanitize] Disallowed tag: ${tagName}. Processing children.`);
+                // 허용되지 않은 태그는 제거, 자식 노드들만 가져와서 이어붙임
                 const fragment = document.createDocumentFragment();
                 for (const childNode of Array.from(node.childNodes)) {
                     fragment.appendChild(cleanNodeRecursive(childNode));
@@ -670,12 +658,10 @@ function sanitizeBotHtml(htmlString) {
                 return fragment;
             }
         }
-        // 그 외 노드 타입 (주석 등)은 빈 DocumentFragment 반환하여 무시
         return document.createDocumentFragment();
     }
 
     const fragment = document.createDocumentFragment();
-    // tempDiv의 자식 노드들을 순회하며 정제
     Array.from(tempDiv.childNodes).forEach(child => {
         fragment.appendChild(cleanNodeRecursive(child));
     });
@@ -685,7 +671,6 @@ function sanitizeBotHtml(htmlString) {
     // console.log('[Sanitize] Sanitized HTML result:', resultDiv.innerHTML);
     return resultDiv.innerHTML;
 }
-
     function clearChatMessages() {
         if (chatMessages) {
             while (chatMessages.firstChild) {
@@ -731,7 +716,7 @@ async function addMessage(data, type, options = {}) {
                 messageDiv.classList.add('assistant-type-message');
                 const interpretationContainer = document.createElement('div');
                 interpretationContainer.className = 'assistant-interpretation-container';
-                interpretationContainer.innerHTML = sanitizeBotHtml(data.interpretationHtml); // 조수 해석은 sanitize
+                interpretationContainer.innerHTML = sanitizeBotHtml(data.interpretationHtml);
                 messageDiv.appendChild(interpretationContainer);
                 if (chatMessages) chatMessages.appendChild(messageDiv);
                 requestAnimationFrame(() => {
@@ -743,24 +728,29 @@ async function addMessage(data, type, options = {}) {
             } else { // 일반 봇 메시지 (루비, 채팅창 내 버튼 포함 가능)
                 const messageContentString = typeof data === 'string' ? data : data.text;
                 
+                // 먼저 messageDiv를 DOM에 추가 (애니메이션 시작점)
                 if (chatMessages) chatMessages.appendChild(messageDiv);
-                requestAnimationFrame(() => { // DOM 추가 후 스크롤/패딩 조정 먼저
+                 requestAnimationFrame(() => { // DOM 추가 후 스크롤/패딩 조정 먼저
                     adjustChatMessagesPadding();
                     scrollToBottom();
                 });
+
 
                 // 메시지 내용에 버튼 컨테이너 HTML이 포함되어 있는지 확인
                 const containsChatButtons = messageContentString.includes("<div class='chat-interaction-buttons-container'>");
 
                 if (containsChatButtons) {
                     // 버튼이 포함된 메시지는 sanitize 후 바로 innerHTML로 설정 (타이핑 효과 X)
+                    // 이 시점에서 messageDiv는 이미 DOM에 추가되어 있으므로, 애니메이션이 적용됨
                     messageDiv.innerHTML = sanitizeBotHtml(messageContentString);
                     console.log("[Message] 봇 메시지 (버튼 포함) 즉시 표시 완료.");
                 } else {
                     // 버튼 없는 일반 텍스트 메시지는 타이핑 효과 적용
-                    const sanitizedHtml = sanitizeBotHtml(messageContentString);
+                    // 타이핑 효과를 위해 messageDiv의 내용을 비우고 시작
+                    messageDiv.innerHTML = ''; 
+                    const sanitizedHtmlForTyping = sanitizeBotHtml(messageContentString);
                     const tempContainer = document.createElement('div');
-                    tempContainer.innerHTML = sanitizedHtml;
+                    tempContainer.innerHTML = sanitizedHtmlForTyping;
                     const typingChunks = [];
                     function extractChunksRecursive(node) {
                         if (node.nodeType === Node.TEXT_NODE) {
@@ -776,7 +766,7 @@ async function addMessage(data, type, options = {}) {
                             const tagName = node.tagName.toLowerCase();
                             if (tagName === 'img') typingChunks.push({ type: 'element_immediate', element: node.cloneNode(true) });
                             else if (tagName === 'br') typingChunks.push({ type: 'br_tag' });
-                            else {
+                            else { // b, strong, span 등
                                 typingChunks.push({ type: 'open_tag', tagName: tagName, attributes: Array.from(node.attributes) });
                                 Array.from(node.childNodes).forEach(extractChunksRecursive);
                                 typingChunks.push({ type: 'close_tag', tagName: tagName });
@@ -784,8 +774,7 @@ async function addMessage(data, type, options = {}) {
                         }
                     }
                     Array.from(tempContainer.childNodes).forEach(extractChunksRecursive);
-                    let currentContextElement = messageDiv; // messageDiv 자체에 청크 추가 시작
-                    messageDiv.innerHTML = ''; // 타이핑 전 내용 비우기
+                    let currentContextElement = messageDiv;
 
                     for (let i = 0; i < typingChunks.length; i++) {
                         const chunk = typingChunks[i];
@@ -795,7 +784,7 @@ async function addMessage(data, type, options = {}) {
                             await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
                             if (chunk.type === 'text_word') {
                                 const wordSpan = document.createElement('span');
-                                wordSpan.className = 'message-text-chunk-animated';
+                                wordSpan.className = 'message-text-chunk-animated'; // 페이드인 애니메이션
                                 wordSpan.textContent = chunk.content;
                                 currentContextElement.appendChild(wordSpan);
                             } else if (chunk.type === 'text_whitespace') {
