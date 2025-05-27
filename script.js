@@ -867,12 +867,23 @@ function updateBoneCountDisplay() {
                 answers.forEach((answerData, index) => {
                     const button = document.createElement('button');
                     button.classList.add('sample-answer-btn');
+                    
                     const answerText = (typeof answerData === 'string') ? answerData : answerData.text;
                     const answerValue = (typeof answerData === 'string') ? answerData : (answerData.value || answerData.text);
+                    
                     button.textContent = answerText;
                     button.dataset.answer = answerValue;
                     button.style.animationDelay = `${index * 70}ms`;
                     button.disabled = isLoadingBotResponse;
+
+                    // 버튼 텍스트 내용에 따라 클래스 추가
+                    if (answerText.includes('(🦴-')) { // 유료 액션 감지
+                        button.classList.add('paid-action');
+                    } else if (answerText.includes('(무료)')) { // 무료 액션 감지
+                        button.classList.add('free-action');
+                    }
+                    // 그 외는 기본 .sample-answer-btn 스타일 유지
+
                     sampleAnswersContainer.appendChild(button);
                 });
             } else {
