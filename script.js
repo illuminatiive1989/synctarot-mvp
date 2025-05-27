@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPanelMenuKey = 'main';
     let menuNavigationHistory = [];
     let hasUserSentMessage = false;
+    const SHOW_RECOMMEND_TOOLTIP_ON_PAID_BUTTONS = true; // 유료 버튼 '추천' 툴팁 표시 여부
 
 
     // 타로 카드 선택 관련 변수
@@ -697,7 +698,7 @@ function sanitizeBotHtml(htmlString) {
         }
     }
 
-async function addMessage(data, type, options = {}) { // 첫 번째 인자를 data 객체로 받거나, 텍스트와 타입을 분리
+async function addMessage(data, type, options = {}) {
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message');
     
@@ -706,7 +707,7 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
         textContentForLog = data;
     } else if (data && typeof data.text === 'string') {
         textContentForLog = data.text;
-    } else if (data && typeof data.interpretationHtml === 'string') { // 조수 해석용 객체
+    } else if (data && typeof data.interpretationHtml === 'string') {
         textContentForLog = "조수 해석 컨텐츠";
     }
 
@@ -715,7 +716,7 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
     return new Promise(async (resolveAllMessagesAdded) => {
         if (type === 'user') {
             messageDiv.classList.add('user-message');
-            messageDiv.textContent = typeof data === 'string' ? data : data.text; // data가 문자열일 수도 객체일 수도 있음
+            messageDiv.textContent = typeof data === 'string' ? data : data.text;
             if (chatMessages) chatMessages.appendChild(messageDiv);
             requestAnimationFrame(() => {
                 adjustChatMessagesPadding();
@@ -725,14 +726,12 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
             });
         } else if (type === 'bot') {
             messageDiv.classList.add('bot-message');
-            // 만약 data.isAssistantInterpretation 플래그가 true이면 특별 클래스 추가
-            if (data && data.isAssistantInterpretation) {
-                messageDiv.classList.add('assistant-type-message'); // 이 클래스로 CSS에서 패딩 등 조절
-                // 내부 컨테이너 직접 생성
+            
+            if (data && data.isAssistantInterpretation) { // 조수 해석 메시지
+                messageDiv.classList.add('assistant-type-message');
                 const interpretationContainer = document.createElement('div');
                 interpretationContainer.className = 'assistant-interpretation-container';
-                // data.interpretationHtml은 이미 HTML 문자열로 가정 (sanitize는 simulateBotResponse에서 미리 처리)
-                interpretationContainer.innerHTML = sanitizeBotHtml(data.interpretationHtml);
+                interpretationContainer.innerHTML = sanitizeBotHtml(data.interpretationHtml); // 조수 해석은 sanitize
                 messageDiv.appendChild(interpretationContainer);
                 if (chatMessages) chatMessages.appendChild(messageDiv);
                 requestAnimationFrame(() => {
@@ -741,93 +740,92 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
                     console.log("[Message] 조수 해석 메시지 DOM 추가 완료.");
                     resolveAllMessagesAdded();
                 });
-
-            } else { // 일반 봇 메시지 (루비)
-                if (chatMessages) chatMessages.appendChild(messageDiv);
+            } else { // 일반 봇 메시지 (루비, 채팅창 내 버튼 포함 가능)
+                const messageContentString = typeof data === 'string' ? data : data.text;
                 
-                requestAnimationFrame(() => {
+                if (chatMessages) chatMessages.appendChild(messageDiv);
+                requestAnimationFrame(() => { // DOM 추가 후 스크롤/패딩 조정 먼저
                     adjustChatMessagesPadding();
                     scrollToBottom();
                 });
 
-                const textToType = typeof data === 'string' ? data : data.text; // 일반 봇 메시지 텍스트
-                const sanitizedHtml = sanitizeBotHtml(textToType);
-                
-                const tempContainer = document.createElement('div');
-                tempContainer.innerHTML = sanitizedHtml;
+                // 메시지 내용에 버튼 컨테이너 HTML이 포함되어 있는지 확인
+                const containsChatButtons = messageContentString.includes("<div class='chat-interaction-buttons-container'>");
 
-                const typingChunks = [];
-                function extractChunksRecursive(node) {
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        const textContent = node.textContent;
-                        if (textContent.trim() !== '') {
-                            const words = textContent.match(/\S+\s*|\S/g) || [];
-                            words.forEach(word => {
-                                if (word.trim() !== '') {
-                                    typingChunks.push({ type: 'text_word', content: word });
-                                } else if (word.length > 0) {
-                                    typingChunks.push({ type: 'text_whitespace', content: word });
-                                }
-                            });
-                        } else if (textContent.length > 0) {
-                            typingChunks.push({ type: 'text_whitespace', content: textContent });
-                        }
-                    } else if (node.nodeType === Node.ELEMENT_NODE) {
-                        const tagName = node.tagName.toLowerCase();
-                        if (tagName === 'img') {
-                            typingChunks.push({ type: 'element_immediate', element: node.cloneNode(true) });
-                        } else if (tagName === 'br') {
-                            typingChunks.push({ type: 'br_tag' });
-                        } else {
-                            typingChunks.push({ type: 'open_tag', tagName: tagName, attributes: Array.from(node.attributes) });
-                            Array.from(node.childNodes).forEach(extractChunksRecursive);
-                            typingChunks.push({ type: 'close_tag', tagName: tagName });
-                        }
-                    }
-                }
-
-                Array.from(tempContainer.childNodes).forEach(extractChunksRecursive);
-                let currentContextElement = messageDiv;
-
-                for (let i = 0; i < typingChunks.length; i++) {
-                    const chunk = typingChunks[i];
-                    if (chunk.type === 'element_immediate') {
-                        currentContextElement.appendChild(chunk.element);
-                    } else {
-                        await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
-                        if (chunk.type === 'text_word') {
-                            const wordSpan = document.createElement('span');
-                            wordSpan.className = 'message-text-chunk-animated';
-                            wordSpan.textContent = chunk.content;
-                            currentContextElement.appendChild(wordSpan);
-                        } else if (chunk.type === 'text_whitespace') {
-                            currentContextElement.appendChild(document.createTextNode(chunk.content));
-                        } else if (chunk.type === 'br_tag') {
-                            currentContextElement.appendChild(document.createElement('br'));
-                        } else if (chunk.type === 'open_tag') {
-                            const newElement = document.createElement(chunk.tagName);
-                            chunk.attributes.forEach(attr => newElement.setAttribute(attr.name, attr.value));
-                            currentContextElement.appendChild(newElement);
-                            currentContextElement = newElement;
-                        } else if (chunk.type === 'close_tag') {
-                            if (currentContextElement.tagName.toLowerCase() === chunk.tagName && currentContextElement.parentElement && currentContextElement !== messageDiv) {
-                                currentContextElement = currentContextElement.parentElement;
+                if (containsChatButtons) {
+                    // 버튼이 포함된 메시지는 sanitize 후 바로 innerHTML로 설정 (타이핑 효과 X)
+                    messageDiv.innerHTML = sanitizeBotHtml(messageContentString);
+                    console.log("[Message] 봇 메시지 (버튼 포함) 즉시 표시 완료.");
+                } else {
+                    // 버튼 없는 일반 텍스트 메시지는 타이핑 효과 적용
+                    const sanitizedHtml = sanitizeBotHtml(messageContentString);
+                    const tempContainer = document.createElement('div');
+                    tempContainer.innerHTML = sanitizedHtml;
+                    const typingChunks = [];
+                    function extractChunksRecursive(node) {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            const textContent = node.textContent;
+                            if (textContent.trim() !== '') {
+                                const words = textContent.match(/\S+\s*|\S/g) || [];
+                                words.forEach(word => {
+                                    if (word.trim() !== '') typingChunks.push({ type: 'text_word', content: word });
+                                    else if (word.length > 0) typingChunks.push({ type: 'text_whitespace', content: word });
+                                });
+                            } else if (textContent.length > 0) typingChunks.push({ type: 'text_whitespace', content: textContent });
+                        } else if (node.nodeType === Node.ELEMENT_NODE) {
+                            const tagName = node.tagName.toLowerCase();
+                            if (tagName === 'img') typingChunks.push({ type: 'element_immediate', element: node.cloneNode(true) });
+                            else if (tagName === 'br') typingChunks.push({ type: 'br_tag' });
+                            else {
+                                typingChunks.push({ type: 'open_tag', tagName: tagName, attributes: Array.from(node.attributes) });
+                                Array.from(node.childNodes).forEach(extractChunksRecursive);
+                                typingChunks.push({ type: 'close_tag', tagName: tagName });
                             }
                         }
                     }
-                    if (i % 3 === 0 || i === typingChunks.length - 1) {
-                         requestAnimationFrame(scrollToBottom);
+                    Array.from(tempContainer.childNodes).forEach(extractChunksRecursive);
+                    let currentContextElement = messageDiv; // messageDiv 자체에 청크 추가 시작
+                    messageDiv.innerHTML = ''; // 타이핑 전 내용 비우기
+
+                    for (let i = 0; i < typingChunks.length; i++) {
+                        const chunk = typingChunks[i];
+                        if (chunk.type === 'element_immediate') {
+                            currentContextElement.appendChild(chunk.element);
+                        } else {
+                            await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
+                            if (chunk.type === 'text_word') {
+                                const wordSpan = document.createElement('span');
+                                wordSpan.className = 'message-text-chunk-animated';
+                                wordSpan.textContent = chunk.content;
+                                currentContextElement.appendChild(wordSpan);
+                            } else if (chunk.type === 'text_whitespace') {
+                                currentContextElement.appendChild(document.createTextNode(chunk.content));
+                            } else if (chunk.type === 'br_tag') {
+                                currentContextElement.appendChild(document.createElement('br'));
+                            } else if (chunk.type === 'open_tag') {
+                                const newElement = document.createElement(chunk.tagName);
+                                chunk.attributes.forEach(attr => newElement.setAttribute(attr.name, attr.value));
+                                currentContextElement.appendChild(newElement);
+                                currentContextElement = newElement;
+                            } else if (chunk.type === 'close_tag') {
+                                if (currentContextElement.tagName.toLowerCase() === chunk.tagName && currentContextElement.parentElement && currentContextElement !== messageDiv) {
+                                    currentContextElement = currentContextElement.parentElement;
+                                }
+                            }
+                        }
+                        if (i % 3 === 0 || i === typingChunks.length - 1) {
+                             requestAnimationFrame(scrollToBottom);
+                        }
                     }
+                    console.log("[Message] 봇 메시지(루비, 텍스트) 타이핑 완료.");
                 }
-                
+                // 최종적으로 DOM 변경 후 한 번 더 패딩/스크롤 조정
                 requestAnimationFrame(() => {
                     adjustChatMessagesPadding();
                     scrollToBottom();
                 });
-                console.log("[Message] 봇 메시지(루비) 타이핑 완료.");
                 resolveAllMessagesAdded();
             }
-
         } else if (type === 'system') {
             messageDiv.classList.add('system-message');
             messageDiv.textContent = typeof data === 'string' ? data : data.text;
@@ -840,7 +838,7 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
             });
         } else {
             console.warn(`[Message] 알 수 없는 메시지 타입: ${type}`);
-            resolveAllMessagesAdded(); // 알 수 없는 타입도 일단 Promise는 resolve
+            resolveAllMessagesAdded();
         }
     });
 }
@@ -929,36 +927,39 @@ async function simulateBotResponse(userMessageText) {
 
         let responseData = {
             assistantmsg: "",
-            assistant_interpretation: null, // 조수 해석용
+            assistant_interpretation: null,
             tarocardview: false,
             cards_to_select: null,
-            sampleanswer: [], // 기본적으로 빈 배열 (채팅창 버튼 없을 시 여기에 채워짐)
-            show_chat_buttons: false, // 채팅창 내 버튼 표시 여부 플래그
+            sampleanswer: [],
+            show_chat_buttons: false,
             user_profile_update: {}
         };
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // --- 공통 버튼 생성 함수 ---
         function createChatButtonHTML(text, value, type = '') { // type: 'paid', 'free'
             let buttonClass = 'chat-internal-button';
-            if (type === 'paid') buttonClass += ' paid-action';
-            else if (type === 'free') buttonClass += ' free-action';
-            // data-value를 사용하여 클릭 시 서버로 전달될 실제 값 지정
-            return `<button class="${buttonClass}" data-value="${value}">${text}</button>`;
+            let tooltipHTML = '';
+            if (type === 'paid') {
+                buttonClass += ' paid-action';
+                if (SHOW_RECOMMEND_TOOLTIP_ON_PAID_BUTTONS) {
+                    tooltipHTML = '<span class="recommend-tooltip">추천</span>';
+                }
+            }
+            // 'free' 타입은 별도 클래스 추가 안 함 (기본 .chat-internal-button 스타일 적용)
+            return `<button class="${buttonClass}" data-value="${value}">${tooltipHTML}${text}</button>`;
         }
 
         if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래") {
             responseData.assistantmsg = "카드를 몇 장 뽑으시겠어요?<div class='chat-interaction-buttons-container'>";
-            responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)", "free");
+            responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)"); // 'free' 타입 명시 안함
             responseData.assistantmsg += createChatButtonHTML("3장 (🦴-2)", "3장 (🦴-2)", "paid");
             responseData.assistantmsg += "</div>";
-            responseData.show_chat_buttons = true; // 채팅창 내 버튼 표시
+            responseData.show_chat_buttons = true;
         } else if (userMessageText === "한 장만 (무료)") {
             responseData.assistantmsg = "네, 알겠습니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>1장</b>의 카드를 선택해주십시오.";
             responseData.tarocardview = true;
             responseData.cards_to_select = 1;
-            // 타로 선택 UI가 나오므로, 샘플 답변은 "선택 취소|운에 맡기기" 그대로 사용 (기존 로직 활용)
-            responseData.sampleanswer = ["선택 취소", "운에 맡기기"]; 
+            responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
             responseData.user_profile_update = { "시나리오": "tarot_single_pick" };
         } else if (userMessageText === "3장 (🦴-2)") {
             if (userProfile.bones >= 2) {
@@ -968,20 +969,16 @@ async function simulateBotResponse(userMessageText) {
                 responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.";
                 responseData.tarocardview = true;
                 responseData.cards_to_select = 3;
-                responseData.sampleanswer = ["선택 취소", "운에 맡기기"];
+                responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
                 responseData.user_profile_update = { "시나리오": "tarot_triple_pick", "bones": userProfile.bones };
             } else {
                 responseData.assistantmsg = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>한 장만 무료로 보시겠어요?<div class='chat-interaction-buttons-container'>";
-                responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)", "free");
+                responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)");
                 responseData.assistantmsg += createChatButtonHTML("다음에 할게요", "다음에 할게요");
                 responseData.assistantmsg += "</div>";
                 responseData.show_chat_buttons = true;
             }
         } else if (userMessageText === "카드 선택 완료") {
-            // ... (조수 해석 및 루비 해설 로직은 이전과 거의 동일) ...
-            // 이 부분은 길어서 생략. 이전 답변의 로직을 참고하되,
-            // 다음 샘플 답변 대신 채팅창 버튼을 생성하도록 수정 필요.
-
             let assistantInterpretationHTML = "";
             let rubyCommentary = "";
             let chatButtonHTML = "<div class='chat-interaction-buttons-container'>";
@@ -1015,7 +1012,7 @@ async function simulateBotResponse(userMessageText) {
                     chatButtonHTML += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-3)", "더 깊은 해석을 듣고싶어 (🦴-3)", "paid");
                 } else if (userProfile.선택된타로카드들.length === 3) {
                     rubyCommentary += ` 여러 카드의 조합을 보니 더욱 다각적인 해석이 가능할 것 같아요.`;
-                    chatButtonHTML += createChatButtonHTML("조금만 더 풀이해줘", "조금만 더 풀이해줘"); // 무료 옵션
+                    chatButtonHTML += createChatButtonHTML("조금만 더 풀이해줘", "조금만 더 풀이해줘");
                     chatButtonHTML += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-1)", "더 깊은 해석을 듣고싶어 (🦴-1)", "paid");
                 } else {
                     chatButtonHTML += createChatButtonHTML("알겠습니다", "알겠습니다");
@@ -1030,7 +1027,8 @@ async function simulateBotResponse(userMessageText) {
             chatButtonHTML += "</div>";
             
             responseData.assistant_interpretation = assistantInterpretationHTML;
-            responseData.assistantmsg = rubyCommentary + chatButtonHTML; // 루비 해설 뒤에 버튼 HTML 추가
+            // assistantmsg는 루비 해설과 버튼 HTML을 포함. addMessage에서 HTML로 처리됨.
+            responseData.assistantmsg = rubyCommentary + chatButtonHTML; 
             responseData.show_chat_buttons = true;
 
         } else if (userMessageText === "2장 더 뽑을래 (🦴-2)") {
@@ -1041,7 +1039,7 @@ async function simulateBotResponse(userMessageText) {
                 responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 추가로 <b>2장</b>의 카드를 더 선택해주세요.";
                 responseData.tarocardview = true;
                 responseData.cards_to_select = 2;
-                responseData.sampleanswer = ["선택 취소", "운에 맡기기"];
+                responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
                 responseData.user_profile_update = { "시나리오": "tarot_add_two_pick", "bones": userProfile.bones };
             } else {
                 responseData.assistantmsg = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>지금 상태로 더 깊은 해석을 들어보시겠어요?<div class='chat-interaction-buttons-container'>";
@@ -1084,7 +1082,6 @@ async function simulateBotResponse(userMessageText) {
                 responseData.sampleanswer = (baseResponse.sampleAnswers || []).map(ans => ({ text: ans, value: ans }));
             }
         } else {
-            // 일반 메시지 처리
             let baseResponse = botKnowledgeBase[userMessageText];
             if (!baseResponse) {
                 if (lowerUserMessage.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
@@ -1095,7 +1092,6 @@ async function simulateBotResponse(userMessageText) {
             if (!baseResponse) baseResponse = botKnowledgeBase["기본"];
             
             responseData.assistantmsg = baseResponse.response;
-            // 일반 메시지는 sampleanswer를 객체 배열로 변환
             responseData.sampleanswer = (baseResponse.sampleAnswers || []).map(ans => ({ text: ans, value: ans }));
         }
         

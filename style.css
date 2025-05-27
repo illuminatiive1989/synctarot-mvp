@@ -44,7 +44,7 @@ html, body {
     height: var(--header-height);
     display: flex;
     align-items: center;
-    justify-content: space-between; /* h1과 뼈다귀 표시를 양쪽으로 분산 */
+    justify-content: space-between;
     border-bottom: 1px solid var(--input-border-color);
     flex-shrink: 0;
 }
@@ -55,16 +55,15 @@ html, body {
     color: var(--normal-text-color);
 }
 
-/* 사용자 재화(뼈다귀) 표시 스타일 */
 .user-currency-display {
     display: flex;
     align-items: center;
-    gap: 6px; /* 아이콘과 숫자 사이 간격 */
+    gap: 6px;
 }
 
 .currency-icon {
-    width: 20px; /* 아이콘 크기 조절 */
-    height: 20px; /* 아이콘 크기 조절 */
+    width: 20px;
+    height: 20px;
     object-fit: contain;
 }
 
@@ -133,17 +132,17 @@ html, body {
 }
 
 .bot-message {
-    background-color: transparent; /* 일반 봇 메시지는 투명 배경 */
+    background-color: transparent;
     color: var(--normal-text-color);
     align-self: flex-start;
     border: none;
-    border-radius: 0; /* 기본 bot-message에는 radius 없음 (내부 컨텐츠에 적용) */
-    padding: 8px 0px; /* 기본 상하 패딩, 좌우는 없음 */
+    border-radius: 0;
+    padding: 8px 0px;
     width: 100%;
     line-height: calc(1.6 * 1.2);
-    opacity: 1; /* 기본적으로 1, 애니메이션은 내부 청크에서 */
+    opacity: 1;
     transform: translateY(0);
-    animation: none; /* 메시지 전체 애니메이션은 messageAppearFull 사용 */
+    animation: none;
     word-break: break-word;
 }
 
@@ -195,7 +194,6 @@ html, body {
     animation: none;
 }
 
-/* 메시지 내 임베디드 이미지 스타일 (일반 봇 메시지용) */
 .bot-message .chat-embedded-image {
     display: block;
     max-width: 80%;
@@ -208,60 +206,141 @@ html, body {
     object-fit: contain;
 }
 
-/* 조수 해석 컨테이너를 위한 스타일 */
-/* assistant-type-message 클래스가 bot-message와 함께 있을 때 적용 */
 .bot-message.assistant-type-message {
-    padding: 0; /* bot-message의 기본 상하 패딩을 제거 */
-    /* margin-bottom은 .message 클래스에서 이미 12px로 적용됨 */
-    /* background-color, border-radius 등은 내부 컨테이너가 담당 */
+    padding: 0;
 }
 
 .assistant-interpretation-container {
-    background-color: var(--input-bg-color); /* 입력창 배경과 유사한 색상 */
-    border-radius: 12px; /* 둥근 모서리 */
-    padding: 15px; /* 내부 여백 */
-    width: 100%; /* bot-message(.assistant-type-message) 내부에서 꽉 차도록 */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.06); /* 은은한 그림자 */
-    line-height: 1.6; /* 내부 텍스트 줄 간격 */
+    background-color: var(--input-bg-color);
+    border-radius: 12px;
+    padding: 15px;
+    width: 100%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    line-height: 1.6;
 }
 
-/* 조수 컨테이너 내부의 카드 이미지 스타일 */
 .assistant-interpretation-container .chat-embedded-image {
     display: block;
-    max-width: 70%; /* 컨테이너 내부에서 이미지 크기 조정 (예시: 70%) */
-    /* max-height: 200px; /* 필요시 최대 높이 제한 */
+    max-width: 70%;
     height: auto;
-    margin: 0 auto 12px auto; /* 위쪽 여백 0, 아래쪽 12px, 좌우 중앙 정렬 */
+    margin: 0 auto 12px auto;
     border-radius: 6px;
-    border: 1px solid var(--input-border-color); /* 이미지가 배경과 비슷할 경우 대비 */
-    background-color: var(--white-color); /* 이미지 로드 전 배경 */
+    border: 1px solid var(--input-border-color);
+    background-color: var(--white-color);
 }
 
-/* 조수 컨테이너 내부의 해석 텍스트 */
 .assistant-interpretation-container .interpretation-text {
     font-size: 0.95rem;
     color: var(--normal-text-color);
-    text-align: left; /* 기본 왼쪽 정렬 */
+    text-align: left;
     margin: 0;
-    white-space: pre-wrap; /* 줄바꿈 및 공백 유지 */
+    white-space: pre-wrap;
 }
 .assistant-interpretation-container .interpretation-text b,
 .assistant-interpretation-container .interpretation-text strong {
-    color: var(--emphasis-color); /* 강조색 동일하게 적용 */
+    color: var(--emphasis-color);
     font-weight: 600;
 }
 
+/* 채팅 메시지 내 상호작용 버튼 컨테이너 */
+.chat-interaction-buttons-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    align-items: center; /* 버튼들을 가로 중앙 정렬 */
+}
 
-.sample-answers {
-    display: flex; /* 내부 버튼 중앙 정렬 및 flex 속성 유지 */
-    flex-wrap: nowrap; /* 기본적으로 한 줄에 표시되도록 (안내 메시지 버튼용) */
-    justify-content: center; /* 비활성화된 안내 버튼 하나만 있을 때 중앙 정렬 */
-    align-items: center;
-    padding: 0px 10px; /* 패딩 유지 또는 조정 */
+/* 채팅 메시지 내 상호작용 버튼 기본 스타일 */
+.chat-internal-button {
     background-color: var(--white-color);
-    border-top: 1px solid transparent; /* 기본 테두리 투명 */
+    border: 1px solid var(--emphasis-color);
+    color: var(--emphasis-color);
+    padding: 10px 15px;
+    border-radius: 20px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+    text-align: center;
+    width: 80%; /* 버튼 너비 조정 (예: 80%) */
+    max-width: 280px; /* 최대 너비 설정 */
+    box-sizing: border-box;
+    position: relative; /* 툴팁을 위한 position context */
+}
+
+.chat-internal-button:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--emphasis-color) 10%, var(--white-color));
+}
+
+.chat-internal-button:disabled {
+    background-color: #f0f0f0;
+    border-color: #d0d0d0;
+    color: #a0a0a0;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 채팅 메시지 내 유료 버튼 스타일 */
+.chat-internal-button.paid-action {
+    background-color: var(--emphasis-color);
+    color: var(--white-color);
+    border-color: var(--emphasis-color);
+}
+
+.chat-internal-button.paid-action:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
+    border-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
+}
+
+/* 채팅 메시지 내 무료 버튼 스타일 (별도 스타일링 제거, 기본 .chat-internal-button 따름) */
+/* .chat-internal-button.free-action 관련 스타일은 삭제 또는 주석 처리 */
+
+/* 유료 버튼 추천 툴팁 스타일 */
+.chat-internal-button .recommend-tooltip {
+    position: absolute;
+    top: -28px; /* 버튼 위로 살짝 이동 */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--normal-text-color);
+    color: var(--white-color);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0s linear 0.2s;
+    pointer-events: none; /* 툴팁이 클릭 방해하지 않도록 */
+}
+.chat-internal-button .recommend-tooltip::after { /* 말풍선 꼬리 */
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--normal-text-color) transparent transparent transparent;
+}
+.chat-internal-button.paid-action:hover .recommend-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0.3s, 0.3s; /* 호버 시 약간 늦게 나타나도록 */
+}
+
+
+/* 샘플 답변 영역 스타일 수정 */
+.sample-answers {
+    display: flex;
+    flex-wrap: wrap; /* 여러 버튼이 있을 경우 줄바꿈 허용 */
+    justify-content: flex-start; /* 좌측 정렬 */
+    align-items: center;
+    padding: 0px 10px;
+    background-color: var(--white-color);
+    border-top: 1px solid transparent;
     flex-shrink: 0;
-    overflow-x: hidden; /* 가로 스크롤 필요 없음 */
+    overflow-x: auto; /* 버튼이 많을 경우 가로 스크롤 (기존 유지) */
     overflow-y: hidden;
     height: var(--sample-answers-height);
     min-height: var(--sample-answers-height);
@@ -270,10 +349,12 @@ html, body {
     transition: padding 0.25s ease-out, border-color 0.25s ease-out;
 }
 .sample-answers.has-buttons {
-    padding-top: 0px; /* 패딩 값 유지 또는 조정 */
+    padding-top: 0px;
     padding-bottom: 0px;
-    border-top-color: var(--input-border-color); /* 버튼이 있을 때(안내 버튼 포함) 상단 구분선 표시 */
+    border-top-color: var(--input-border-color);
 }
+
+/* 샘플 답변 버튼 기본 스타일 (유료/무료 구분 스타일은 여기서 제거됨) */
 .sample-answer-btn {
     background-color: var(--white-color);
     border: 1px solid var(--input-border-color);
@@ -568,7 +649,6 @@ html, body {
     padding: 15px;
 }
 
-/* 이미지 컨테이너 (성운, 싱크타입 탭) */
 .sync-type-image-container {
     width: 100%;
     height: 220px;
@@ -587,7 +667,6 @@ html, body {
     object-fit: contain;
 }
 
-/* 총평 탭 - 차트와 커스텀 범례 영역 */
 .sync-type-overview-content {
     display: flex;
     width: 100%;
@@ -744,7 +823,7 @@ html, body {
 }
 
 
-/* Tooltip Styles */
+/* Tooltip Styles (기본 툴팁, 카드 콜렉션 등에서 사용) */
 .tooltip {
     position: absolute;
     background-color: rgba(30, 30, 30, 0.92);
@@ -848,10 +927,10 @@ html, body {
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     cursor: grab;
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none; 
+    -ms-overflow-style: none; 
 }
-.tarot-card-carousel::-webkit-scrollbar { /* Chrome, Safari, Opera */
+.tarot-card-carousel::-webkit-scrollbar {
     display: none;
 }
 .tarot-card-carousel.dragging {
@@ -951,65 +1030,3 @@ html, body {
     border-color: #ced4da;
     color: #adb5bd;
 }
-
-
-
-
-.chat-interaction-buttons-container {
-    display: flex;
-    flex-direction: column; /* 버튼들을 세로로 나열 */
-    gap: 8px; /* 버튼 사이 간격 */
-    margin-top: 12px; /* 봇 메시지 텍스트와의 간격 */
-    align-items: stretch; /* 버튼들이 컨테이너 너비에 맞게 늘어나도록 */
-}
-
-.chat-internal-button {
-    background-color: var(--white-color);
-    border: 1px solid var(--emphasis-color);
-    color: var(--emphasis-color);
-    padding: 10px 15px;
-    border-radius: 20px; /* 샘플 답변 버튼과 유사한 둥근 모서리 */
-    font-size: 0.95rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s, color 0.2s, opacity 0.2s;
-    text-align: center;
-    width: 100%; /* 컨테이너 너비에 꽉 차도록 */
-    box-sizing: border-box; /* 패딩과 테두리가 너비에 포함되도록 */
-}
-
-.chat-internal-button:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--emphasis-color) 10%, var(--white-color)); /* 연한 강조색 배경 */
-}
-
-.chat-internal-button:disabled {
-    background-color: #f0f0f0;
-    border-color: #d0d0d0;
-    color: #a0a0a0;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.chat-internal-button.paid-action {
-    background-color: var(--emphasis-color);
-    color: var(--white-color);
-    border-color: var(--emphasis-color);
-}
-
-.chat-internal-button.paid-action:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
-    border-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
-}
-
-.chat-internal-button.free-action {
-    border-color: color-mix(in srgb, var(--input-border-color) 80%, var(--normal-text-color));
-    color: color-mix(in srgb, var(--emphasis-color) 85%, var(--white-color));
-    background-color: var(--white-color); /* 기본 배경 흰색 */
-    opacity: 0.9; /* 약간 흐리게 */
-}
-
-.chat-internal-button.free-action:hover:not(:disabled) {
-    background-color: #f8f8f8;
-    opacity: 1;
-}
-
