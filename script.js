@@ -2107,11 +2107,15 @@ async function initializeChat() {
     } else {
         console.error("[App] tarotClearSelectionBtn 요소를 찾을 수 없습니다.");
     }
+    // === 여기를 확인해주세요 ===
     if (tarotRandomSelectBtn) {
-        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection); // 수정된 부분
+        // 이전 답변에서 'handleRandomSelectBtn'으로 잘못 안내드렸을 수 있습니다.
+        // 'handleRandomTarotSelection'이 올바른 함수명입니다.
+        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection);
     } else {
         console.error("[App] tarotRandomSelectBtn 요소를 찾을 수 없습니다.");
     }
+    // ========================
 
     isLoadingBotResponse = true;
     setUIInteractions(true, false);
