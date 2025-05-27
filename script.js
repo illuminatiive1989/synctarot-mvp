@@ -683,155 +683,58 @@ function sanitizeBotHtml(htmlString) {
         }
     }
 
-async function addMessage(data, type, options = {}) {
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message');
-    
-    let textContentForLog = "";
-    if (typeof data === 'string') {
-        textContentForLog = data;
-    } else if (data && typeof data.text === 'string') {
-        textContentForLog = data.text;
-    } else if (data && typeof data.interpretationHtml === 'string') {
-        textContentForLog = "조수 해석 컨텐츠";
+function addChatButtons(buttonsArray) {
+    if (!chatMessages || !buttonsArray || buttonsArray.length === 0) {
+        console.log("[ChatButtons] 버튼 추가 스킵: 대상 영역 없거나 버튼 데이터 없음.");
+        return;
     }
 
-    console.log(`[Message] '${type}' 메시지 추가 시작: "${textContentForLog.substring(0, 70)}..."`);
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'chat-interaction-buttons-container';
 
-    return new Promise(async (resolveAllMessagesAdded) => {
-        if (type === 'user') {
-            messageDiv.classList.add('user-message');
-            messageDiv.textContent = typeof data === 'string' ? data : data.text;
-            if (chatMessages) chatMessages.appendChild(messageDiv);
-            requestAnimationFrame(() => {
-                adjustChatMessagesPadding();
-                scrollToBottom();
-                console.log("[Message] 사용자 메시지 DOM 추가 완료.");
-                resolveAllMessagesAdded();
-            });
-        } else if (type === 'bot') {
-            messageDiv.classList.add('bot-message');
-            
-            if (data && data.isAssistantInterpretation) { // 조수 해석 메시지
-                messageDiv.classList.add('assistant-type-message');
-                const interpretationContainer = document.createElement('div');
-                interpretationContainer.className = 'assistant-interpretation-container';
-                interpretationContainer.innerHTML = sanitizeBotHtml(data.interpretationHtml);
-                messageDiv.appendChild(interpretationContainer);
-                if (chatMessages) chatMessages.appendChild(messageDiv);
-                requestAnimationFrame(() => {
-                    adjustChatMessagesPadding();
-                    scrollToBottom();
-                    console.log("[Message] 조수 해석 메시지 DOM 추가 완료.");
-                    resolveAllMessagesAdded();
-                });
-            } else { // 일반 봇 메시지 (루비, 채팅창 내 버튼 포함 가능)
-                const messageContentString = typeof data === 'string' ? data : data.text;
-                
-                // 먼저 messageDiv를 DOM에 추가 (애니메이션 시작점)
-                if (chatMessages) chatMessages.appendChild(messageDiv);
-                 requestAnimationFrame(() => { // DOM 추가 후 스크롤/패딩 조정 먼저
-                    adjustChatMessagesPadding();
-                    scrollToBottom();
-                });
+    buttonsArray.forEach(buttonData => {
+        const buttonEl = document.createElement('button');
+        buttonEl.className = 'chat-internal-button';
+        buttonEl.textContent = buttonData.text;
+        buttonEl.dataset.value = buttonData.value; // 클릭 시 전달될 값
 
-
-                // 메시지 내용에 버튼 컨테이너 HTML이 포함되어 있는지 확인
-                const containsChatButtons = messageContentString.includes("<div class='chat-interaction-buttons-container'>");
-
-                if (containsChatButtons) {
-                    // 버튼이 포함된 메시지는 sanitize 후 바로 innerHTML로 설정 (타이핑 효과 X)
-                    // 이 시점에서 messageDiv는 이미 DOM에 추가되어 있으므로, 애니메이션이 적용됨
-                    messageDiv.innerHTML = sanitizeBotHtml(messageContentString);
-                    console.log("[Message] 봇 메시지 (버튼 포함) 즉시 표시 완료.");
-                } else {
-                    // 버튼 없는 일반 텍스트 메시지는 타이핑 효과 적용
-                    // 타이핑 효과를 위해 messageDiv의 내용을 비우고 시작
-                    messageDiv.innerHTML = ''; 
-                    const sanitizedHtmlForTyping = sanitizeBotHtml(messageContentString);
-                    const tempContainer = document.createElement('div');
-                    tempContainer.innerHTML = sanitizedHtmlForTyping;
-                    const typingChunks = [];
-                    function extractChunksRecursive(node) {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            const textContent = node.textContent;
-                            if (textContent.trim() !== '') {
-                                const words = textContent.match(/\S+\s*|\S/g) || [];
-                                words.forEach(word => {
-                                    if (word.trim() !== '') typingChunks.push({ type: 'text_word', content: word });
-                                    else if (word.length > 0) typingChunks.push({ type: 'text_whitespace', content: word });
-                                });
-                            } else if (textContent.length > 0) typingChunks.push({ type: 'text_whitespace', content: textContent });
-                        } else if (node.nodeType === Node.ELEMENT_NODE) {
-                            const tagName = node.tagName.toLowerCase();
-                            if (tagName === 'img') typingChunks.push({ type: 'element_immediate', element: node.cloneNode(true) });
-                            else if (tagName === 'br') typingChunks.push({ type: 'br_tag' });
-                            else { // b, strong, span 등
-                                typingChunks.push({ type: 'open_tag', tagName: tagName, attributes: Array.from(node.attributes) });
-                                Array.from(node.childNodes).forEach(extractChunksRecursive);
-                                typingChunks.push({ type: 'close_tag', tagName: tagName });
-                            }
-                        }
-                    }
-                    Array.from(tempContainer.childNodes).forEach(extractChunksRecursive);
-                    let currentContextElement = messageDiv;
-
-                    for (let i = 0; i < typingChunks.length; i++) {
-                        const chunk = typingChunks[i];
-                        if (chunk.type === 'element_immediate') {
-                            currentContextElement.appendChild(chunk.element);
-                        } else {
-                            await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
-                            if (chunk.type === 'text_word') {
-                                const wordSpan = document.createElement('span');
-                                wordSpan.className = 'message-text-chunk-animated'; // 페이드인 애니메이션
-                                wordSpan.textContent = chunk.content;
-                                currentContextElement.appendChild(wordSpan);
-                            } else if (chunk.type === 'text_whitespace') {
-                                currentContextElement.appendChild(document.createTextNode(chunk.content));
-                            } else if (chunk.type === 'br_tag') {
-                                currentContextElement.appendChild(document.createElement('br'));
-                            } else if (chunk.type === 'open_tag') {
-                                const newElement = document.createElement(chunk.tagName);
-                                chunk.attributes.forEach(attr => newElement.setAttribute(attr.name, attr.value));
-                                currentContextElement.appendChild(newElement);
-                                currentContextElement = newElement;
-                            } else if (chunk.type === 'close_tag') {
-                                if (currentContextElement.tagName.toLowerCase() === chunk.tagName && currentContextElement.parentElement && currentContextElement !== messageDiv) {
-                                    currentContextElement = currentContextElement.parentElement;
-                                }
-                            }
-                        }
-                        if (i % 3 === 0 || i === typingChunks.length - 1) {
-                             requestAnimationFrame(scrollToBottom);
-                        }
-                    }
-                    console.log("[Message] 봇 메시지(루비, 텍스트) 타이핑 완료.");
-                }
-                // 최종적으로 DOM 변경 후 한 번 더 패딩/스크롤 조정
-                requestAnimationFrame(() => {
-                    adjustChatMessagesPadding();
-                    scrollToBottom();
-                });
-                resolveAllMessagesAdded();
+        if (buttonData.isPaid) {
+            buttonEl.classList.add('paid-action');
+            if (SHOW_RECOMMEND_TOOLTIP_ON_PAID_BUTTONS && buttonData.showRecommendTooltip !== false) { // 명시적으로 false가 아니면 툴팁 표시
+                const tooltipSpan = document.createElement('span');
+                tooltipSpan.className = 'recommend-tooltip';
+                tooltipSpan.textContent = '추천';
+                buttonEl.appendChild(tooltipSpan);
             }
-        } else if (type === 'system') {
-            messageDiv.classList.add('system-message');
-            messageDiv.textContent = typeof data === 'string' ? data : data.text;
-            if (chatMessages) chatMessages.appendChild(messageDiv);
-            requestAnimationFrame(() => {
-                adjustChatMessagesPadding();
-                scrollToBottom();
-                console.log("[Message] 시스템 메시지 DOM 추가 완료.");
-                resolveAllMessagesAdded();
-            });
-        } else {
-            console.warn(`[Message] 알 수 없는 메시지 타입: ${type}`);
-            resolveAllMessagesAdded();
         }
+        // 무료 버튼은 별도 클래스 없음 (기본 .chat-internal-button 스타일)
+
+        buttonsContainer.appendChild(buttonEl);
+    });
+
+    // 새 메시지 div를 만들어서 버튼 컨테이너를 넣고, chatMessages에 추가
+    // 이렇게 하면 버튼들도 하나의 메시지처럼 취급되어 스크롤 및 간격 유지에 용이
+    const buttonMessageDiv = document.createElement('div');
+    buttonMessageDiv.classList.add('message', 'bot-message'); // 버튼도 봇 메시지 스타일 기반
+    // buttonMessageDiv.style.padding = '0'; // 필요시 패딩 조절
+    // buttonMessageDiv.style.animation = 'none'; // 등장 애니메이션 제거
+    // buttonMessageDiv.style.opacity = '1'; // 즉시 보이도록
+    
+    // 버튼 컨테이너를 감싸는 div를 만들어서, 이 div가 messageAppearFull 애니메이션을 받도록 함
+    const wrapperForAnimation = document.createElement('div');
+    // wrapperForAnimation는 특별한 클래스 없이, 버튼 컨테이너만 담음
+    wrapperForAnimation.appendChild(buttonsContainer);
+    buttonMessageDiv.appendChild(wrapperForAnimation);
+
+
+    chatMessages.appendChild(buttonMessageDiv);
+    console.log(`[ChatButtons] ${buttonsArray.length}개의 버튼을 채팅창에 추가 완료.`);
+    
+    requestAnimationFrame(() => {
+        adjustChatMessagesPadding();
+        scrollToBottom();
     });
 }
-
 function updateBoneCountDisplay() {
     const userBoneCountEl = document.getElementById('userBoneCount');
     if (userBoneCountEl && userProfile && typeof userProfile.bones === 'number') {
@@ -915,35 +818,19 @@ async function simulateBotResponse(userMessageText) {
         await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
 
         let responseData = {
-            assistantmsg: "",
-            assistant_interpretation: null,
+            assistantmsg: "", // 루비의 일반 텍스트 메시지
+            assistant_interpretation: null, // 조수 해석 HTML (버튼 없음)
             tarocardview: false,
             cards_to_select: null,
-            sampleanswer: [],
-            show_chat_buttons: false,
+            sampleanswer: [], // 샘플 답변 목록 (텍스트 또는 {text, value} 객체 배열)
             user_profile_update: {}
         };
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        function createChatButtonHTML(text, value, type = '') { // type: 'paid', 'free'
-            let buttonClass = 'chat-internal-button';
-            let tooltipHTML = '';
-            if (type === 'paid') {
-                buttonClass += ' paid-action';
-                if (SHOW_RECOMMEND_TOOLTIP_ON_PAID_BUTTONS) {
-                    tooltipHTML = '<span class="recommend-tooltip">추천</span>';
-                }
-            }
-            // 'free' 타입은 별도 클래스 추가 안 함 (기본 .chat-internal-button 스타일 적용)
-            return `<button class="${buttonClass}" data-value="${value}">${tooltipHTML}${text}</button>`;
-        }
-
+        // 시나리오별 응답 정의 (버튼 HTML 없이 순수 텍스트와 샘플 답변만)
         if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래") {
-            responseData.assistantmsg = "카드를 몇 장 뽑으시겠어요?<div class='chat-interaction-buttons-container'>";
-            responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)"); // 'free' 타입 명시 안함
-            responseData.assistantmsg += createChatButtonHTML("3장 (🦴-2)", "3장 (🦴-2)", "paid");
-            responseData.assistantmsg += "</div>";
-            responseData.show_chat_buttons = true;
+            responseData.assistantmsg = "카드를 몇 장 뽑으시겠어요?";
+            // 샘플 답변은 여기서 제공하지 않고, processMessageExchange에서 이 메시지 수신 후 버튼을 직접 생성
         } else if (userMessageText === "한 장만 (무료)") {
             responseData.assistantmsg = "네, 알겠습니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>1장</b>의 카드를 선택해주십시오.";
             responseData.tarocardview = true;
@@ -951,26 +838,17 @@ async function simulateBotResponse(userMessageText) {
             responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
             responseData.user_profile_update = { "시나리오": "tarot_single_pick" };
         } else if (userMessageText === "3장 (🦴-2)") {
-            if (userProfile.bones >= 2) {
-                userProfile.bones -= 2;
-                updateBoneCountDisplay();
-                saveUserProfileToLocalStorage(userProfile);
-                responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.";
-                responseData.tarocardview = true;
-                responseData.cards_to_select = 3;
-                responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
-                responseData.user_profile_update = { "시나리오": "tarot_triple_pick", "bones": userProfile.bones };
-            } else {
-                responseData.assistantmsg = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>한 장만 무료로 보시겠어요?<div class='chat-interaction-buttons-container'>";
-                responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)");
-                responseData.assistantmsg += createChatButtonHTML("다음에 할게요", "다음에 할게요");
-                responseData.assistantmsg += "</div>";
-                responseData.show_chat_buttons = true;
-            }
+            // 재화 확인 및 차감 로직은 processMessageExchange 또는 버튼 클릭 핸들러로 이동
+            // 여기서는 일단 재화가 충분하다고 가정하고 메시지만 반환
+            responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.";
+            responseData.tarocardview = true;
+            responseData.cards_to_select = 3;
+            responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
+            responseData.user_profile_update = { "시나리오": "tarot_triple_pick" };
+            // 실제 재화 차감은 버튼 클릭 시점에서 처리해야 함
         } else if (userMessageText === "카드 선택 완료") {
             let assistantInterpretationHTML = "";
             let rubyCommentary = "";
-            let chatButtonHTML = "<div class='chat-interaction-buttons-container'>";
 
             if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
                 assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
@@ -997,80 +875,36 @@ async function simulateBotResponse(userMessageText) {
                 rubyCommentary = `흠... 흥미로운 카드들이 나왔군요! ${userProfile.사용자애칭}님의 상황에 대해 좀 더 깊이 생각해볼 수 있겠어요.`;
                 if (userProfile.선택된타로카드들.length === 1) {
                     rubyCommentary += ` 특히 첫 번째 카드는 현재 상황을 잘 보여주는 것 같네요.`;
-                    chatButtonHTML += createChatButtonHTML("2장 더 뽑을래 (🦴-2)", "2장 더 뽑을래 (🦴-2)", "paid");
-                    chatButtonHTML += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-3)", "더 깊은 해석을 듣고싶어 (🦴-3)", "paid");
                 } else if (userProfile.선택된타로카드들.length === 3) {
                     rubyCommentary += ` 여러 카드의 조합을 보니 더욱 다각적인 해석이 가능할 것 같아요.`;
-                    chatButtonHTML += createChatButtonHTML("조금만 더 풀이해줘", "조금만 더 풀이해줘");
-                    chatButtonHTML += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-1)", "더 깊은 해석을 듣고싶어 (🦴-1)", "paid");
-                } else {
-                    chatButtonHTML += createChatButtonHTML("알겠습니다", "알겠습니다");
-                    chatButtonHTML += createChatButtonHTML("다른 질문", "다른 질문");
                 }
             } else {
-                assistantInterpretationHTML = "선택된 카드가 없습니다. 다시 시도해주십시오.";
+                assistantInterpretationHTML = "선택된 카드가 없습니다. 다시 시도해주십시오."; // 이 경우는 거의 없음 (UI에서 막으므로)
                 rubyCommentary = "다음에 다시 카드를 뽑아보세요!";
-                chatButtonHTML += createChatButtonHTML("카드 뽑기", "카드 뽑기");
-                chatButtonHTML += createChatButtonHTML("다른 질문", "다른 질문");
             }
-            chatButtonHTML += "</div>";
-            
             responseData.assistant_interpretation = assistantInterpretationHTML;
-            // assistantmsg는 루비 해설과 버튼 HTML을 포함. addMessage에서 HTML로 처리됨.
-            responseData.assistantmsg = rubyCommentary + chatButtonHTML; 
-            responseData.show_chat_buttons = true;
-
+            responseData.assistantmsg = rubyCommentary;
+            // 샘플 답변은 여기서 제공하지 않고, processMessageExchange에서 이 메시지 수신 후 버튼을 직접 생성
         } else if (userMessageText === "2장 더 뽑을래 (🦴-2)") {
-            if (userProfile.bones >= 2) {
-                userProfile.bones -= 2;
-                updateBoneCountDisplay();
-                saveUserProfileToLocalStorage(userProfile);
-                responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 추가로 <b>2장</b>의 카드를 더 선택해주세요.";
-                responseData.tarocardview = true;
-                responseData.cards_to_select = 2;
-                responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
-                responseData.user_profile_update = { "시나리오": "tarot_add_two_pick", "bones": userProfile.bones };
-            } else {
-                responseData.assistantmsg = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>지금 상태로 더 깊은 해석을 들어보시겠어요?<div class='chat-interaction-buttons-container'>";
-                responseData.assistantmsg += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-3)", "더 깊은 해석을 듣고싶어 (🦴-3)", "paid");
-                responseData.assistantmsg += createChatButtonHTML("다음에 할게요", "다음에 할게요");
-                responseData.assistantmsg += "</div>";
-                responseData.show_chat_buttons = true;
-            }
+            // 재화 확인 및 차감 로직은 processMessageExchange 또는 버튼 클릭 핸들러로 이동
+            responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 추가로 <b>2장</b>의 카드를 더 선택해주세요.";
+            responseData.tarocardview = true;
+            responseData.cards_to_select = 2;
+            responseData.sampleanswer = ["선택 취소", "운에 맡기기"].map(ans => ({text: ans, value: ans}));
+            responseData.user_profile_update = { "시나리오": "tarot_add_two_pick" };
         } else if (userMessageText === "조금만 더 풀이해줘") {
-            responseData.assistantmsg = "알겠습니다. 선택하신 카드들에 대해 조금 더 보충 설명을 드릴게요.<br><br>...(추가 풀이 내용)...<br><br>이 정도면 도움이 되셨을까요?<div class='chat-interaction-buttons-container'>";
-            responseData.assistantmsg += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-1)", "더 깊은 해석을 듣고싶어 (🦴-1)", "paid");
-            responseData.assistantmsg += createChatButtonHTML("충분해요, 고마워요", "충분해요, 고마워요");
-            responseData.assistantmsg += "</div>";
-            responseData.show_chat_buttons = true;
+            responseData.assistantmsg = "알겠습니다. 선택하신 카드들에 대해 조금 더 보충 설명을 드릴게요.<br><br>...(추가 풀이 내용)...<br><br>이 정도면 도움이 되셨을까요?";
+            // 샘플 답변은 여기서 제공하지 않고, processMessageExchange에서 이 메시지 수신 후 버튼을 직접 생성
         } else if (lowerUserMessage.startsWith("더 깊은 해석을 듣고싶어")) {
-            let cost = 0;
-            let requiredBones = 0;
-            if (userMessageText.includes("(🦴-3)")) { cost = 3; requiredBones = 3;}
-            else if (userMessageText.includes("(🦴-1)")) { cost = 1; requiredBones = 1;}
-
-            if (cost > 0 && userProfile.bones >= requiredBones) {
-                userProfile.bones -= requiredBones;
-                updateBoneCountDisplay();
-                saveUserProfileToLocalStorage(userProfile);
-                responseData.assistantmsg = `네, 뼈다귀 ${requiredBones}개를 사용합니다. ${userProfile.사용자애칭}님을 위한 더 깊은 해석을 준비 중입니다... <br><br>...(AI가 생성한 깊은 해석 내용)...<br><br>이 해석이 당신의 길을 밝히는 데 도움이 되길 바랍니다.<div class='chat-interaction-buttons-container'>`;
-                responseData.assistantmsg += createChatButtonHTML("정말 고마워요!", "정말 고마워요!");
-                responseData.assistantmsg += createChatButtonHTML("다른 질문 있어요", "다른 질문 있어요");
-                responseData.assistantmsg += "</div>";
-                responseData.show_chat_buttons = true;
-                responseData.user_profile_update = { "bones": userProfile.bones };
-            } else if (cost > 0) {
-                responseData.assistantmsg = "이런! 뼈다귀가 부족해서 더 깊은 해석을 듣기 어렵겠어요. (현재 🦴: " + userProfile.bones + "개)<br>다른 도움이 필요하신가요?<div class='chat-interaction-buttons-container'>";
-                responseData.assistantmsg += createChatButtonHTML("괜찮아요", "괜찮아요");
-                responseData.assistantmsg += createChatButtonHTML("뼈다귀는 어떻게 얻나요?", "뼈다귀는 어떻게 얻나요?");
-                responseData.assistantmsg += "</div>";
-                responseData.show_chat_buttons = true;
-            } else { 
-                let baseResponse = botKnowledgeBase["기본"];
-                responseData.assistantmsg = baseResponse.response;
-                responseData.sampleanswer = (baseResponse.sampleAnswers || []).map(ans => ({ text: ans, value: ans }));
-            }
+            // 재화 확인 및 차감 로직은 processMessageExchange 또는 버튼 클릭 핸들러로 이동
+            let costText = "";
+            if (userMessageText.includes("(🦴-3)")) costText = "뼈다귀 3개";
+            else if (userMessageText.includes("(🦴-1)")) costText = "뼈다귀 1개";
+            
+            responseData.assistantmsg = `네, ${costText}를 사용합니다. ${userProfile.사용자애칭}님을 위한 더 깊은 해석을 준비 중입니다... <br><br>...(AI가 생성한 깊은 해석 내용)...<br><br>이 해석이 당신의 길을 밝히는 데 도움이 되길 바랍니다.`;
+            // 샘플 답변은 여기서 제공하지 않고, processMessageExchange에서 이 메시지 수신 후 버튼을 직접 생성
         } else {
+            // 일반 메시지 처리
             let baseResponse = botKnowledgeBase[userMessageText];
             if (!baseResponse) {
                 if (lowerUserMessage.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
@@ -1084,7 +918,7 @@ async function simulateBotResponse(userMessageText) {
             responseData.sampleanswer = (baseResponse.sampleAnswers || []).map(ans => ({ text: ans, value: ans }));
         }
         
-        console.log(`[BotResponse] 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
+        console.log(`[BotResponse] 생성된 응답 데이터 (버튼 HTML 없음):`, JSON.parse(JSON.stringify(responseData)));
         resolve(responseData);
     });
 }
@@ -1125,11 +959,11 @@ async function processMessageExchange(messageText, source = 'input', options = {
     }
 
     let shouldClearChat = clearBeforeSend;
-    if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset') {
+    if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal_no_user_echo' && source !== 'panel_option_topic_reset') {
         shouldClearChat = true;
         hasUserSentMessage = true;
         userProfile.메뉴단계 = 2;
-        console.log("[ProcessExchange] 사용자의 첫 상호작용(입력 또는 샘플/패널). 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
+        console.log("[ProcessExchange] 사용자의 첫 상호작용. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
     }
 
     if (shouldClearChat) {
@@ -1141,7 +975,6 @@ async function processMessageExchange(messageText, source = 'input', options = {
     setUIInteractions(true, false);
 
     if (moreOptionsPanel.classList.contains('active')) {
-        console.log("[ProcessExchange] 더보기 패널 닫기.");
         moreOptionsPanel.classList.remove('active');
         moreOptionsBtn.classList.remove('active');
     }
@@ -1155,18 +988,63 @@ async function processMessageExchange(messageText, source = 'input', options = {
         adjustTextareaHeight();
     }
 
+    // --- 버튼 클릭으로 인한 재화 처리 ---
+    // 이 부분은 버튼 클릭 핸들러 내부 또는 여기서 처리 가능.
+    // 여기서는 명확성을 위해 버튼 클릭 핸들러에서 처리하는 것을 권장.
+    // 다만, "3장 (🦴-2)"와 같은 메시지가 직접 입력되었을 때의 처리는 여기서 필요.
+    let bonesToConsume = 0;
+    let insufficientBonesMessage = null;
+
+    if (messageText === "3장 (🦴-2)") {
+        bonesToConsume = 2;
+        if (userProfile.bones < bonesToConsume) {
+            insufficientBonesMessage = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>한 장만 무료로 보시겠어요?";
+        }
+    } else if (messageText === "2장 더 뽑을래 (🦴-2)") {
+        bonesToConsume = 2;
+        if (userProfile.bones < bonesToConsume) {
+            insufficientBonesMessage = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>지금 상태로 더 깊은 해석을 들어보시겠어요?";
+        }
+    } else if (messageText.startsWith("더 깊은 해석을 듣고싶어")) {
+        if (messageText.includes("(🦴-3)")) bonesToConsume = 3;
+        else if (messageText.includes("(🦴-1)")) bonesToConsume = 1;
+        if (bonesToConsume > 0 && userProfile.bones < bonesToConsume) {
+            insufficientBonesMessage = "이런! 뼈다귀가 부족해서 더 깊은 해석을 듣기 어렵겠어요. (현재 🦴: " + userProfile.bones + "개)<br>다른 도움이 필요하신가요?";
+        }
+    }
+
+    if (insufficientBonesMessage) { // 재화 부족 시 특별 처리
+        await addMessage(insufficientBonesMessage, 'bot');
+        let buttonsForInsufficiency = [];
+        if (messageText === "3장 (🦴-2)" || messageText === "2장 더 뽑을래 (🦴-2)") {
+            buttonsForInsufficiency.push({ text: "한 장만 (무료)", value: "한 장만 (무료)" });
+            buttonsForInsufficiency.push({ text: "다음에 할게요", value: "다음에 할게요" });
+        } else if (messageText.startsWith("더 깊은 해석을 듣고싶어")) {
+            buttonsForInsufficiency.push({ text: "괜찮아요", value: "괜찮아요" });
+            buttonsForInsufficiency.push({ text: "뼈다귀는 어떻게 얻나요?", value: "뼈다귀는 어떻게 얻나요?" });
+        }
+        addChatButtons(buttonsForInsufficiency);
+        updateSampleAnswers([], true); // 샘플 답변 영역은 안내 메시지로
+
+        isLoadingBotResponse = false;
+        if(sendBtn) sendBtn.classList.remove('loading');
+        setUIInteractions(false, (source === 'input' && !isTarotSelectionActive));
+        return; // 재화 부족 시 여기서 처리 종료
+    }
+
+    // 재화 소모 (실제 소모는 simulateBotResponse 이후 또는 버튼 클릭 핸들러에서)
+    // 여기서는 simulateBotResponse 호출 전에 userProfile을 업데이트하지 않음.
+    // simulateBotResponse는 순수 메시지만 반환하므로, 재화 관련 메시지는 여기서 직접 구성.
+
     try {
         const botApiResponse = await simulateBotResponse(messageText); 
         
+        // userProfile 업데이트는 API 응답에 따라 (bones 제외)
         if (botApiResponse.user_profile_update) {
             for (const key in botApiResponse.user_profile_update) {
                 if (key !== "bones") { 
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
-                        if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
-                            // 예외 처리
-                        } else {
-                            userProfile[key] = botApiResponse.user_profile_update[key];
-                        }
+                        userProfile[key] = botApiResponse.user_profile_update[key];
                     }
                 }
             }
@@ -1176,19 +1054,76 @@ async function processMessageExchange(messageText, source = 'input', options = {
             console.log("[UserProfile] API 응답으로 프로필 업데이트 (일부):", botApiResponse.user_profile_update);
         }
 
+        // 조수 해석 표시
         if (botApiResponse.assistant_interpretation) {
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
         }
 
-        if (botApiResponse.assistantmsg) { // assistantmsg는 이제 HTML 버튼을 포함할 수 있음
-            await addMessage(botApiResponse.assistantmsg, 'bot'); // addMessage가 HTML을 처리하도록
+        // 루비 메시지 표시
+        if (botApiResponse.assistantmsg) {
+            await addMessage(botApiResponse.assistantmsg, 'bot');
         }
         
-        // sampleanswer에 내용이 있더라도, show_chat_buttons가 true면 안내 메시지만 표시
-        updateSampleAnswers(botApiResponse.sampleanswer || [], botApiResponse.show_chat_buttons);
+        // --- 조건에 따른 하드코딩된 버튼 표시 로직 ---
+        let chatButtonsToShow = [];
+        let showChatButtonsInMessage = false;
 
+        if (botApiResponse.assistantmsg === "카드를 몇 장 뽑으시겠어요?") {
+            chatButtonsToShow = [
+                { text: "한 장만 (무료)", value: "한 장만 (무료)" }, // isPaid: false (기본값)
+                { text: "3장 (🦴-2)", value: "3장 (🦴-2)", isPaid: true }
+            ];
+            showChatButtonsInMessage = true;
+        } else if (source === 'system_internal_no_user_echo' && messageText === "카드 선택 완료") { // 타로 해석 후
+            if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length === 1) {
+                chatButtonsToShow = [
+                    { text: "2장 더 뽑을래 (🦴-2)", value: "2장 더 뽑을래 (🦴-2)", isPaid: true },
+                    { text: "더 깊은 해석을 듣고싶어 (🦴-3)", value: "더 깊은 해석을 듣고싶어 (🦴-3)", isPaid: true }
+                ];
+            } else if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length === 3) {
+                chatButtonsToShow = [
+                    { text: "조금만 더 풀이해줘", value: "조금만 더 풀이해줘" },
+                    { text: "더 깊은 해석을 듣고싶어 (🦴-1)", value: "더 깊은 해석을 듣고싶어 (🦴-1)", isPaid: true }
+                ];
+            }
+            if (chatButtonsToShow.length > 0) showChatButtonsInMessage = true;
+        } else if (botApiResponse.assistantmsg && botApiResponse.assistantmsg.includes("이 정도면 도움이 되셨을까요?")) { // "조금만 더 풀이해줘" 이후
+             chatButtonsToShow = [
+                { text: "더 깊은 해석을 듣고싶어 (🦴-1)", value: "더 깊은 해석을 듣고싶어 (🦴-1)", isPaid: true },
+                { text: "충분해요, 고마워요", value: "충분해요, 고마워요" }
+            ];
+            showChatButtonsInMessage = true;
+        } else if (botApiResponse.assistantmsg && botApiResponse.assistantmsg.includes("이 해석이 당신의 길을 밝히는 데 도움이 되길 바랍니다.")) { // "더 깊은 해석" 이후
+            chatButtonsToShow = [
+                { text: "정말 고마워요!", value: "정말 고마워요!" },
+                { text: "다른 질문 있어요", value: "다른 질문 있어요" }
+            ];
+            showChatButtonsInMessage = true;
+        }
+        // TODO: 시스템 정의 주관식/객관식 질문 후 버튼 표시 로직 추가
 
+        if (showChatButtonsInMessage && chatButtonsToShow.length > 0) {
+            addChatButtons(chatButtonsToShow);
+            updateSampleAnswers([], true); // 샘플 답변 영역은 안내 메시지로
+        } else {
+            // API가 제공한 샘플 답변 사용 (또는 기본값)
+            updateSampleAnswers(botApiResponse.sampleanswer || [], false);
+        }
+
+        // 타로 카드 선택 UI 표시
         if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
+            // 재화 소모는 여기서 최종 결정 후 UI 표시
+            if (messageText === "3장 (🦴-2)" && userProfile.bones >= 2) {
+                 userProfile.bones -= 2; // 실제 차감
+            } else if (messageText === "2장 더 뽑을래 (🦴-2)" && userProfile.bones >= 2) {
+                 userProfile.bones -= 2; // 실제 차감
+            }
+            // "더 깊은 해석"은 타로 UI를 띄우지 않으므로, 해당 버튼 클릭 핸들러에서 재화 차감.
+            // "한 장만 (무료)"는 재화 소모 없음.
+            updateBoneCountDisplay();
+            saveUserProfileToLocalStorage(userProfile);
+
+
             if (messageInput && document.activeElement === messageInput) {
                 messageInput.blur();
             }
@@ -1198,7 +1133,6 @@ async function processMessageExchange(messageText, source = 'input', options = {
                 userProfile.tarotbg = currentTarotBg;
                 saveUserProfileToLocalStorage(userProfile);
             }
-            console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
             showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
         }
 
@@ -1206,7 +1140,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         console.error("[ProcessExchange] 오류 발생:", error);
         await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
         const fallbackSampleAnswers = (typeof initialBotMessage !== 'undefined' && initialBotMessage.sampleAnswers) ? initialBotMessage.sampleAnswers : ["도움말"];
-        updateSampleAnswers(fallbackSampleAnswers.map(ans => ({ text: ans, value: ans })), false); // fallback은 일반 샘플 답변
+        updateSampleAnswers(fallbackSampleAnswers.map(ans => ({ text: ans, value: ans })), false);
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
@@ -1990,22 +1924,63 @@ function handleRandomTarotSelection() {
     });
 
         // --- 채팅 메시지 내 버튼 클릭 이벤트 핸들러 ---
+    // --- 채팅 메시지 내 버튼 클릭 이벤트 핸들러 ---
     if (chatMessages) {
         chatMessages.addEventListener('click', async (e) => {
             const targetButton = e.target.closest('.chat-internal-button');
             if (targetButton && !targetButton.disabled && !isLoadingBotResponse) {
-                const buttonValue = targetButton.dataset.value || targetButton.textContent; // data-value 우선 사용
-                console.log(`[ChatInternalButton] 클릭: "${buttonValue}"`);
+                const buttonValue = targetButton.dataset.value || targetButton.textContent;
+                const buttonText = targetButton.textContent; // 화면에 표시된 텍스트
+                console.log(`[ChatInternalButton] 클릭: "${buttonValue}" (표시 텍스트: "${buttonText}")`);
 
-                // 클릭된 버튼은 즉시 비활성화 (중복 클릭 방지)
+                let消费Bones = 0;
+                let 부족Message = null;
+
+                // 재화 관련 버튼 텍스트 확인 및 필요 재화량 설정
+                if (buttonText.includes("3장 (🦴-2)"))消费Bones = 2;
+                else if (buttonText.includes("2장 더 뽑을래 (🦴-2)"))消费Bones = 2;
+                else if (buttonText.includes("더 깊은 해석을 듣고싶어 (🦴-3)"))消费Bones = 3;
+                else if (buttonText.includes("더 깊은 해석을 듣고싶어 (🦴-1)"))消费Bones = 1;
+
+                if (消费Bones > 0 && userProfile.bones <消费Bones) {
+                    // 재화 부족 메시지 생성 (processMessageExchange와 유사하게)
+                    if (buttonText.includes("3장") || buttonText.includes("2장 더")) {
+                        부족Message = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>한 장만 무료로 보시겠어요?";
+                    } else if (buttonText.includes("더 깊은 해석")) {
+                        부족Message = "이런! 뼈다귀가 부족해서 더 깊은 해석을 듣기 어렵겠어요. (현재 🦴: " + userProfile.bones + "개)<br>다른 도움이 필요하신가요?";
+                    }
+                    
+                    if (부족Message) {
+                        await addMessage(부족Message, 'bot');
+                        let buttonsForInsufficiency = [];
+                        if (buttonText.includes("3장") || buttonText.includes("2장 더")) {
+                            buttonsForInsufficiency.push({ text: "한 장만 (무료)", value: "한 장만 (무료)" });
+                            buttonsForInsufficiency.push({ text: "다음에 할게요", value: "다음에 할게요" });
+                        } else if (buttonText.includes("더 깊은 해석")) {
+                            buttonsForInsufficiency.push({ text: "괜찮아요", value: "괜찮아요" });
+                            buttonsForInsufficiency.push({ text: "뼈다귀는 어떻게 얻나요?", value: "뼈다귀는 어떻게 얻나요?" });
+                        }
+                        addChatButtons(buttonsForInsufficiency);
+                        updateSampleAnswers([], true);
+                        // 클릭된 버튼은 이미 비활성화됨
+                        const buttonContainer = targetButton.closest('.chat-interaction-buttons-container');
+                        if (buttonContainer) {
+                            buttonContainer.querySelectorAll('.chat-internal-button').forEach(btn => btn.disabled = true);
+                        }
+                        return; // 재화 부족 시 여기서 종료
+                    }
+                }
+
+                // 클릭된 버튼은 즉시 비활성화
                 targetButton.disabled = true; 
-                // (선택) 동일 컨테이너 내 다른 버튼들도 비활성화
                 const buttonContainer = targetButton.closest('.chat-interaction-buttons-container');
                 if (buttonContainer) {
-                    buttonContainer.querySelectorAll('.chat-internal-button').forEach(btn => btn.disabled = true);
+                    buttonContainer.querySelectorAll('.chat-internal-button').forEach(btn => {
+                        if (btn !== targetButton) btn.disabled = true; // 다른 버튼도 비활성화
+                    });
                 }
                 
-                // 메시지 처리 함수 호출
+                // 메시지 처리 함수 호출 (buttonValue 사용)
                 await processMessageExchange(buttonValue, 'chat_button'); 
             }
         });
