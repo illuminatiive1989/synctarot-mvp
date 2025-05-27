@@ -13,6 +13,7 @@
     <div class="chat-app-container">
         <div class="chat-header">
             <h1>채팅</h1>
+            <!-- 필요하다면 여기에 다른 헤더 요소 추가 가능 -->
         </div>
 
         <!-- 카드 공개 애니메이션 컨테이너 -->
@@ -20,7 +21,39 @@
             <!-- 카드가 여기에 동적으로 추가됨 -->
         </div>
 
-        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-messages" id="chatMessages">
+            <!--
+                여기에 채팅 메시지들이 동적으로 추가됩니다.
+                사용자가 타로 카드를 선택하고 해석을 요청하면,
+                script.js의 addMessage 함수가 아래와 유사한 구조의
+                '루비의 타로 해석' 컨테이너를 생성하여 이 곳에 삽입합니다.
+
+                <div class="message bot-message">
+                    <div class="tarot-reading-container">
+                        <div class="tarot-reading-header">
+                            <img src="img/ruby_avatar.png" alt="루비 아바타" class="ruby-avatar">
+                            <h3>루비의 타로 카드 해석</h3>
+                        </div>
+                        <div class="tarot-reading-body">
+                            <div class="tarot-card-interpretation-item">
+                                <div class="tarot-card-image-wrapper">
+                                    <img src="img/tarot/major_00_fool_upright.png" alt="선택된 타로 카드 1" class="interpreted-tarot-card-image">
+                                    <span class="interpreted-card-name">0. 바보 (The Fool) - 정방향</span>
+                                </div>
+                                <div class="tarot-card-interpretation-text">
+                                    <p>해석 내용...</p>
+                                    <p><strong>조언:</strong> 조언 내용...</p>
+                                </div>
+                            </div>
+                            카드 개수만큼 반복
+                        </div>
+                        <div class="tarot-reading-footer">
+                            <p>"이 해석이 당신의 길에 작은 등불이 되길 바래요! - 루비"</p>
+                        </div>
+                    </div>
+                </div>
+            -->
+        </div>
         <div class="sample-answers" id="sampleAnswersContainer"></div>
         <div class="chat-input-area">
             <button class="more-options-btn" id="moreOptionsBtn" aria-label="더 보기 옵션">
@@ -47,7 +80,6 @@
                 <button class="close-modal-btn" onclick="closeModal('syncTypeModal')" aria-label="닫기">×</button>
             </div>
             <div class="modal-body sync-type-body">
-                <!-- 총평 탭 내용: 차트와 커스텀 범례를 위한 새 구조 -->
                 <div class="sync-type-overview-content" style="display: none;">
                     <div class="overview-chart-area">
                         <canvas id="combinedRadarChart"></canvas>
@@ -56,7 +88,6 @@
                         <!-- JS로 범례 내용 동적 추가 -->
                     </div>
                 </div>
-                <!-- 기존 이미지 컨테이너 (성운, 싱크타입 탭에서 사용) -->
                 <div class="sync-type-image-container" style="display: none;">
                     <img id="syncTypeMainImage" src="img/sync_type/default.png" alt="싱크타입 대표 이미지">
                 </div>
@@ -103,6 +134,7 @@
             </div>
             <div class="modal-body">
                 <p>소셜로그인 버튼이나 관련 안내를 여기에 표시합니다.</p>
+                <!-- 예시: <button>카카오 로그인</button> <button>구글 로그인</button> -->
             </div>
         </div>
     </div>
