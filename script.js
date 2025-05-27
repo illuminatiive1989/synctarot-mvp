@@ -855,34 +855,40 @@ function updateBoneCountDisplay() {
     }
 }
 
-    function updateSampleAnswers(answers = []) {
-        console.log("[SampleAnswers] 업데이트 시작. 답변 개수:", answers.length);
+    function updateSampleAnswers(answers = [], showChatButtonsInstead = false) { // 두 번째 인자로 플래그 추가
+        console.log("[SampleAnswers] 업데이트 시작. 답변 개수:", answers.length, "채팅창 버튼 표시:", showChatButtonsInstead);
         const existingButtons = Array.from(sampleAnswersContainer.querySelectorAll('.sample-answer-btn'));
         const buttonFadeOutDuration = 200;
 
-        function addAndAnimateNewButtons() {
-            sampleAnswersContainer.innerHTML = '';
-            if (answers.length > 0) {
+        function renderButtons() {
+            sampleAnswersContainer.innerHTML = ''; // 일단 비우기
+
+            if (showChatButtonsInstead) {
+                sampleAnswersContainer.classList.add('has-buttons'); // 구분선은 계속 표시
+                const 안내버튼 = document.createElement('button');
+                안내버튼.classList.add('sample-answer-btn');
+                안내버튼.textContent = '채팅창에서 버튼을 선택해주세요';
+                안내버튼.disabled = true; // 항상 비활성화
+                sampleAnswersContainer.appendChild(안내버튼);
+            } else if (answers.length > 0) {
                 sampleAnswersContainer.classList.add('has-buttons');
                 answers.forEach((answerData, index) => {
                     const button = document.createElement('button');
                     button.classList.add('sample-answer-btn');
                     
+                    // answerData가 문자열일 수도, {text, value} 객체일 수도 있음을 고려
                     const answerText = (typeof answerData === 'string') ? answerData : answerData.text;
                     const answerValue = (typeof answerData === 'string') ? answerData : (answerData.value || answerData.text);
                     
                     button.textContent = answerText;
-                    button.dataset.answer = answerValue;
+                    button.dataset.answer = answerValue; // 실제 전달될 값은 data-answer에
                     button.style.animationDelay = `${index * 70}ms`;
                     button.disabled = isLoadingBotResponse;
 
-                    // 버튼 텍스트 내용에 따라 클래스 추가
-                    if (answerText.includes('(🦴-')) { // 유료 액션 감지
-                        button.classList.add('paid-action');
-                    } else if (answerText.includes('(무료)')) { // 무료 액션 감지
-                        button.classList.add('free-action');
-                    }
-                    // 그 외는 기본 .sample-answer-btn 스타일 유지
+                    // 샘플 답변 영역의 유료/무료 스타일링 (필요하다면 여기서 클래스 추가)
+                    // 예: if (answerText.includes('(🦴-')) button.classList.add('paid-action');
+                    // 지금은 채팅창 내 버튼으로 옮겼으므로, 이 부분은 필요 없을 수 있음.
+                    // 하지만 일반 샘플 답변 중에도 유료/무료가 있다면 이 로직 유지 또는 수정 필요.
 
                     sampleAnswersContainer.appendChild(button);
                 });
@@ -896,9 +902,9 @@ function updateBoneCountDisplay() {
         if (existingButtons.length > 0) {
             console.log("[SampleAnswers] 기존 버튼 페이드 아웃.");
             existingButtons.forEach(btn => btn.classList.add('fade-out'));
-            setTimeout(addAndAnimateNewButtons, buttonFadeOutDuration);
+            setTimeout(renderButtons, buttonFadeOutDuration);
         } else {
-            addAndAnimateNewButtons();
+            renderButtons();
         }
     }
 
@@ -916,201 +922,169 @@ const botKnowledgeBase = {
     "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
     "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
 };
-async function simulateBotResponse(userMessageText) { // async로 변경 (재화 소모 등 비동기 작업 있을 수 있음)
+async function simulateBotResponse(userMessageText) {
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
-    // 실제로는 API 호출이 될 수 있으므로 Promise 반환 유지
-    return new Promise(async (resolve) => { // 내부 로직도 async/await 사용 가능하도록
-        // 약간의 지연 추가
+    return new Promise(async (resolve) => {
         await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
 
-        let responseData = {};
+        let responseData = {
+            assistantmsg: "",
+            assistant_interpretation: null, // 조수 해석용
+            tarocardview: false,
+            cards_to_select: null,
+            sampleanswer: [], // 기본적으로 빈 배열 (채팅창 버튼 없을 시 여기에 채워짐)
+            show_chat_buttons: false, // 채팅창 내 버튼 표시 여부 플래그
+            user_profile_update: {}
+        };
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래") { // "카드뽑을래"도 호환
-            responseData = {
-                assistantmsg: "카드를 몇 장 뽑으시겠어요?",
-                tarocardview: false, // 아직 카드 선택 UI는 아님
-                cards_to_select: null,
-                sampleanswer: "한 장만 (무료)|3장 (🦴-2)",
-                user_profile_update: {}
-            };
+        // --- 공통 버튼 생성 함수 ---
+        function createChatButtonHTML(text, value, type = '') { // type: 'paid', 'free'
+            let buttonClass = 'chat-internal-button';
+            if (type === 'paid') buttonClass += ' paid-action';
+            else if (type === 'free') buttonClass += ' free-action';
+            // data-value를 사용하여 클릭 시 서버로 전달될 실제 값 지정
+            return `<button class="${buttonClass}" data-value="${value}">${text}</button>`;
+        }
+
+        if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래") {
+            responseData.assistantmsg = "카드를 몇 장 뽑으시겠어요?<div class='chat-interaction-buttons-container'>";
+            responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)", "free");
+            responseData.assistantmsg += createChatButtonHTML("3장 (🦴-2)", "3장 (🦴-2)", "paid");
+            responseData.assistantmsg += "</div>";
+            responseData.show_chat_buttons = true; // 채팅창 내 버튼 표시
         } else if (userMessageText === "한 장만 (무료)") {
-            // 재화 소모 없음
-            responseData = {
-                assistantmsg: "네, 알겠습니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>1장</b>의 카드를 선택해주십시오.",
-                tarocardview: true,
-                cards_to_select: 1,
-                sampleanswer: "선택 취소|운에 맡기기",
-                user_profile_update: { "시나리오": "tarot_single_pick" } // 시나리오 상태 저장
-            };
+            responseData.assistantmsg = "네, 알겠습니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>1장</b>의 카드를 선택해주십시오.";
+            responseData.tarocardview = true;
+            responseData.cards_to_select = 1;
+            // 타로 선택 UI가 나오므로, 샘플 답변은 "선택 취소|운에 맡기기" 그대로 사용 (기존 로직 활용)
+            responseData.sampleanswer = ["선택 취소", "운에 맡기기"]; 
+            responseData.user_profile_update = { "시나리오": "tarot_single_pick" };
         } else if (userMessageText === "3장 (🦴-2)") {
             if (userProfile.bones >= 2) {
                 userProfile.bones -= 2;
-                updateBoneCountDisplay(); // UI 업데이트
-                saveUserProfileToLocalStorage(userProfile); // 변경된 재화 저장
-                responseData = {
-                    assistantmsg: "네, 뼈다귀 2개를 사용합니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.",
-                    tarocardview: true,
-                    cards_to_select: 3,
-                    sampleanswer: "선택 취소|운에 맡기기",
-                    user_profile_update: { "시나리오": "tarot_triple_pick", "bones": userProfile.bones }
-                };
+                updateBoneCountDisplay();
+                saveUserProfileToLocalStorage(userProfile);
+                responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 잠시 카드를 준비하겠습니다.<br>준비가 되면 아래에서 <b>3장</b>의 카드를 선택해주십시오.";
+                responseData.tarocardview = true;
+                responseData.cards_to_select = 3;
+                responseData.sampleanswer = ["선택 취소", "운에 맡기기"];
+                responseData.user_profile_update = { "시나리오": "tarot_triple_pick", "bones": userProfile.bones };
             } else {
-                responseData = {
-                    assistantmsg: "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>한 장만 무료로 보시겠어요?",
-                    tarocardview: false,
-                    cards_to_select: null,
-                    sampleanswer: "한 장만 (무료)|다음에 할게요",
-                    user_profile_update: {}
-                };
+                responseData.assistantmsg = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>한 장만 무료로 보시겠어요?<div class='chat-interaction-buttons-container'>";
+                responseData.assistantmsg += createChatButtonHTML("한 장만 (무료)", "한 장만 (무료)", "free");
+                responseData.assistantmsg += createChatButtonHTML("다음에 할게요", "다음에 할게요");
+                responseData.assistantmsg += "</div>";
+                responseData.show_chat_buttons = true;
             }
         } else if (userMessageText === "카드 선택 완료") {
-            let assistantInterpretationHTML = ""; // 조수 해석 HTML
-            let rubyCommentary = ""; // 루비 해설
-            let nextSampleAnswers = "";
+            // ... (조수 해석 및 루비 해설 로직은 이전과 거의 동일) ...
+            // 이 부분은 길어서 생략. 이전 답변의 로직을 참고하되,
+            // 다음 샘플 답변 대신 채팅창 버튼을 생성하도록 수정 필요.
+
+            let assistantInterpretationHTML = "";
+            let rubyCommentary = "";
+            let chatButtonHTML = "<div class='chat-interaction-buttons-container'>";
 
             if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
-                // 1. 조수 해석 컨테이너 생성
                 assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
-                assistantInterpretationHTML += `<div class="interpretation-text">선택하신 카드에 대한 풀이입니다.<br><br></div>`; // 조수 도입부
-
+                assistantInterpretationHTML += `<div class="interpretation-text">선택하신 카드에 대한 풀이입니다.<br><br></div>`;
                 userProfile.선택된타로카드들.forEach((cardId, index) => {
                     let cardDisplayName = cardId.replace(/_/g, ' ');
                     let imageNameForFile = cardId;
                     let isReversed = cardId.endsWith('_reversed');
-
                     if (typeof TAROT_CARD_DATA !== 'undefined' && TAROT_CARD_DATA[cardId]) {
                         cardDisplayName = TAROT_CARD_DATA[cardId].name;
                     } else {
-                        cardDisplayName = cardId.replace(/_/g, ' ')
-                                              .replace(/\b\w/g, l => l.toUpperCase())
-                                              .replace(' Reversed', ' (역방향)')
-                                              .replace(' Upright', ' (정방향)');
+                        cardDisplayName = cardId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()).replace(' Reversed', ' (역방향)').replace(' Upright', ' (정방향)');
                     }
-
-                    if (isReversed) {
-                        imageNameForFile = cardId.substring(0, cardId.lastIndexOf('_reversed')) + '_upright';
-                    } else if (cardId.endsWith('_upright')) {
-                        imageNameForFile = cardId;
-                    }
-                    
+                    if (isReversed) imageNameForFile = cardId.substring(0, cardId.lastIndexOf('_reversed')) + '_upright';
+                    else if (cardId.endsWith('_upright')) imageNameForFile = cardId;
                     const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
                     const cardInterpretation = (TAROT_CARD_DATA && TAROT_CARD_DATA[cardId]) ? TAROT_CARD_DATA[cardId].description : "이 카드에 대한 해석은 아직 준비되지 않았습니다.";
-
-                    assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`; // 조수 컨테이너 내부 이미지
+                    assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
                     assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${index + 1}. ${cardDisplayName}</b></div>`;
-                    assistantInterpretationHTML += `<div class="interpretation-text">${cardInterpretation.replace(/\n/g, '<br>')}</div><br>`; // 조수 해석
+                    assistantInterpretationHTML += `<div class="interpretation-text">${cardInterpretation.replace(/\n/g, '<br>')}</div><br>`;
                 });
-                assistantInterpretationHTML += `<div class="interpretation-text"><br>이상으로 카드 풀이를 마치겠습니다.</div>`; // 조수 마무리
-                assistantInterpretationHTML += `</div>`; // .assistant-interpretation-container 닫기
-
-                // 2. 루비의 해설 (예시)
+                assistantInterpretationHTML += `<div class="interpretation-text"><br>이상으로 카드 풀이를 마치겠습니다.</div>`;
+                assistantInterpretationHTML += `</div>`;
                 rubyCommentary = `흠... 흥미로운 카드들이 나왔군요! ${userProfile.사용자애칭}님의 상황에 대해 좀 더 깊이 생각해볼 수 있겠어요.`;
                 if (userProfile.선택된타로카드들.length === 1) {
                     rubyCommentary += ` 특히 첫 번째 카드는 현재 상황을 잘 보여주는 것 같네요.`;
-                } else {
-                    rubyCommentary += ` 여러 카드의 조합을 보니 더욱 다각적인 해석이 가능할 것 같아요.`;
-                }
-                
-                // 3. 다음 샘플 답변 설정
-                if (userProfile.선택된타로카드들.length === 1) {
-                    // 현재 시나리오가 "tarot_single_pick"이고, 사용자가 1장만 뽑은 상태
-                    nextSampleAnswers = "2장 더 뽑을래 (🦴-2)|더 깊은 해석을 듣고싶어 (🦴-3)";
+                    chatButtonHTML += createChatButtonHTML("2장 더 뽑을래 (🦴-2)", "2장 더 뽑을래 (🦴-2)", "paid");
+                    chatButtonHTML += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-3)", "더 깊은 해석을 듣고싶어 (🦴-3)", "paid");
                 } else if (userProfile.선택된타로카드들.length === 3) {
-                     // 현재 시나리오가 "tarot_triple_pick"이고, 사용자가 3장을 뽑은 상태
-                    nextSampleAnswers = "조금만 더 풀이해줘|더 깊은 해석을 듣고싶어 (🦴-1)";
+                    rubyCommentary += ` 여러 카드의 조합을 보니 더욱 다각적인 해석이 가능할 것 같아요.`;
+                    chatButtonHTML += createChatButtonHTML("조금만 더 풀이해줘", "조금만 더 풀이해줘"); // 무료 옵션
+                    chatButtonHTML += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-1)", "더 깊은 해석을 듣고싶어 (🦴-1)", "paid");
                 } else {
-                    // 예외 상황 (1장도 3장도 아닌 경우) - 기본값
-                    nextSampleAnswers = "알겠습니다|다른 질문";
+                    chatButtonHTML += createChatButtonHTML("알겠습니다", "알겠습니다");
+                    chatButtonHTML += createChatButtonHTML("다른 질문", "다른 질문");
                 }
-
             } else {
-                assistantInterpretationHTML = "선택된 카드가 없어 풀이를 진행할 수 없습니다. 다시 시도해주십시오.";
+                assistantInterpretationHTML = "선택된 카드가 없습니다. 다시 시도해주십시오.";
                 rubyCommentary = "다음에 다시 카드를 뽑아보세요!";
-                nextSampleAnswers = "카드 뽑기|다른 질문";
+                chatButtonHTML += createChatButtonHTML("카드 뽑기", "카드 뽑기");
+                chatButtonHTML += createChatButtonHTML("다른 질문", "다른 질문");
             }
+            chatButtonHTML += "</div>";
             
-            // assistantmsg에 조수 해석 HTML과 루비 해설을 순차적으로 합침
-            // 루비 해설은 일반 봇 메시지처럼, 조수 해석은 특별한 컨테이너로.
-            // addMessage 함수에서 이를 구분할 수 있도록, 조수 부분은 특별한 마커나 객체 형태로 전달 필요
-            // 여기서는 문자열로 합치되, addMessage에서 파싱하도록 가정하거나, 객체로 전달
-            responseData = {
-                assistant_interpretation: assistantInterpretationHTML, // 조수 해석 부분 (새로운 키)
-                assistantmsg: rubyCommentary, // 루비 해설 부분
-                tarocardview: false,
-                cards_to_select: null,
-                sampleanswer: nextSampleAnswers,
-                user_profile_update: {} // 필요시 시나리오 업데이트
-            };
+            responseData.assistant_interpretation = assistantInterpretationHTML;
+            responseData.assistantmsg = rubyCommentary + chatButtonHTML; // 루비 해설 뒤에 버튼 HTML 추가
+            responseData.show_chat_buttons = true;
 
         } else if (userMessageText === "2장 더 뽑을래 (🦴-2)") {
             if (userProfile.bones >= 2) {
                 userProfile.bones -= 2;
                 updateBoneCountDisplay();
                 saveUserProfileToLocalStorage(userProfile);
-                // 기존 1장에 추가로 2장을 더 뽑는 것이므로, cards_to_select는 2
-                // 선택 완료 후, userProfile.선택된타로카드들에는 총 3장이 되어야 함.
-                responseData = {
-                    assistantmsg: "네, 뼈다귀 2개를 사용합니다. 추가로 <b>2장</b>의 카드를 더 선택해주세요.",
-                    tarocardview: true,
-                    cards_to_select: 2, // 추가로 뽑을 카드 수
-                    sampleanswer: "선택 취소|운에 맡기기",
-                    user_profile_update: { "시나리오": "tarot_add_two_pick", "bones": userProfile.bones }
-                };
+                responseData.assistantmsg = "네, 뼈다귀 2개를 사용합니다. 추가로 <b>2장</b>의 카드를 더 선택해주세요.";
+                responseData.tarocardview = true;
+                responseData.cards_to_select = 2;
+                responseData.sampleanswer = ["선택 취소", "운에 맡기기"];
+                responseData.user_profile_update = { "시나리오": "tarot_add_two_pick", "bones": userProfile.bones };
             } else {
-                 responseData = {
-                    assistantmsg: "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>지금 상태로 더 깊은 해석을 들어보시겠어요?",
-                    tarocardview: false,
-                    cards_to_select: null,
-                    sampleanswer: "더 깊은 해석을 듣고싶어 (🦴-3)|다음에 할게요", // 1장 뽑은 후 상황이므로 뼈다귀 3개짜리 옵션
-                    user_profile_update: {}
-                };
+                responseData.assistantmsg = "이런! 뼈다귀가 부족해요. (현재 🦴: " + userProfile.bones + "개)<br>지금 상태로 더 깊은 해석을 들어보시겠어요?<div class='chat-interaction-buttons-container'>";
+                responseData.assistantmsg += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-3)", "더 깊은 해석을 듣고싶어 (🦴-3)", "paid");
+                responseData.assistantmsg += createChatButtonHTML("다음에 할게요", "다음에 할게요");
+                responseData.assistantmsg += "</div>";
+                responseData.show_chat_buttons = true;
             }
-        } else if (userMessageText === "조금만 더 풀이해줘") { // 3장 뽑은 후
-            // 재화 소모 없음 또는 소량 (여기선 무료로 가정)
-            responseData = {
-                assistantmsg: "알겠습니다. 선택하신 카드들에 대해 조금 더 보충 설명을 드릴게요.<br><br>...(추가 풀이 내용)...<br><br>이 정도면 도움이 되셨을까요?",
-                tarocardview: false,
-                cards_to_select: null,
-                sampleanswer: "더 깊은 해석을 듣고싶어 (🦴-1)|충분해요, 고마워요",
-                user_profile_update: {}
-            };
+        } else if (userMessageText === "조금만 더 풀이해줘") {
+            responseData.assistantmsg = "알겠습니다. 선택하신 카드들에 대해 조금 더 보충 설명을 드릴게요.<br><br>...(추가 풀이 내용)...<br><br>이 정도면 도움이 되셨을까요?<div class='chat-interaction-buttons-container'>";
+            responseData.assistantmsg += createChatButtonHTML("더 깊은 해석을 듣고싶어 (🦴-1)", "더 깊은 해석을 듣고싶어 (🦴-1)", "paid");
+            responseData.assistantmsg += createChatButtonHTML("충분해요, 고마워요", "충분해요, 고마워요");
+            responseData.assistantmsg += "</div>";
+            responseData.show_chat_buttons = true;
         } else if (lowerUserMessage.startsWith("더 깊은 해석을 듣고싶어")) {
             let cost = 0;
             let requiredBones = 0;
-            if (userMessageText.includes("(🦴-3)")) { // 1장 뽑은 후
-                cost = 3;
-                requiredBones = 3;
-            } else if (userMessageText.includes("(🦴-1)")) { // 3장 뽑은 후
-                cost = 1;
-                requiredBones = 1;
-            }
+            if (userMessageText.includes("(🦴-3)")) { cost = 3; requiredBones = 3;}
+            else if (userMessageText.includes("(🦴-1)")) { cost = 1; requiredBones = 1;}
 
             if (cost > 0 && userProfile.bones >= requiredBones) {
                 userProfile.bones -= requiredBones;
                 updateBoneCountDisplay();
                 saveUserProfileToLocalStorage(userProfile);
-                responseData = {
-                    assistantmsg: `네, 뼈다귀 ${requiredBones}개를 사용합니다. ${userProfile.사용자애칭}님을 위한 더 깊은 해석을 준비 중입니다... <br><br>...(AI가 생성한 깊은 해석 내용)...<br><br>이 해석이 당신의 길을 밝히는 데 도움이 되길 바랍니다.`,
-                    tarocardview: false,
-                    cards_to_select: null,
-                    sampleanswer: "정말 고마워요!|다른 질문 있어요",
-                    user_profile_update: { "bones": userProfile.bones }
-                };
-            } else if (cost > 0) { // 재화 부족
-                 responseData = {
-                    assistantmsg: "이런! 뼈다귀가 부족해서 더 깊은 해석을 듣기 어렵겠어요. (현재 🦴: " + userProfile.bones + "개)<br>다른 도움이 필요하신가요?",
-                    tarocardview: false,
-                    cards_to_select: null,
-                    sampleanswer: "괜찮아요|뼈다귀는 어떻게 얻나요?",
-                    user_profile_update: {}
-                };
-            } else { // 혹시 모를 오류 (비용 없는 "더 깊은 해석" 요청)
-                responseData = botKnowledgeBase["기본"]; // 기본 응답
+                responseData.assistantmsg = `네, 뼈다귀 ${requiredBones}개를 사용합니다. ${userProfile.사용자애칭}님을 위한 더 깊은 해석을 준비 중입니다... <br><br>...(AI가 생성한 깊은 해석 내용)...<br><br>이 해석이 당신의 길을 밝히는 데 도움이 되길 바랍니다.<div class='chat-interaction-buttons-container'>`;
+                responseData.assistantmsg += createChatButtonHTML("정말 고마워요!", "정말 고마워요!");
+                responseData.assistantmsg += createChatButtonHTML("다른 질문 있어요", "다른 질문 있어요");
+                responseData.assistantmsg += "</div>";
+                responseData.show_chat_buttons = true;
+                responseData.user_profile_update = { "bones": userProfile.bones };
+            } else if (cost > 0) {
+                responseData.assistantmsg = "이런! 뼈다귀가 부족해서 더 깊은 해석을 듣기 어렵겠어요. (현재 🦴: " + userProfile.bones + "개)<br>다른 도움이 필요하신가요?<div class='chat-interaction-buttons-container'>";
+                responseData.assistantmsg += createChatButtonHTML("괜찮아요", "괜찮아요");
+                responseData.assistantmsg += createChatButtonHTML("뼈다귀는 어떻게 얻나요?", "뼈다귀는 어떻게 얻나요?");
+                responseData.assistantmsg += "</div>";
+                responseData.show_chat_buttons = true;
+            } else { 
+                let baseResponse = botKnowledgeBase["기본"];
+                responseData.assistantmsg = baseResponse.response;
+                responseData.sampleanswer = (baseResponse.sampleAnswers || []).map(ans => ({ text: ans, value: ans }));
             }
-
         } else {
-            // 일반 메시지 처리 (기존 botKnowledgeBase 사용)
+            // 일반 메시지 처리
             let baseResponse = botKnowledgeBase[userMessageText];
             if (!baseResponse) {
                 if (lowerUserMessage.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
@@ -1120,16 +1094,12 @@ async function simulateBotResponse(userMessageText) { // async로 변경 (재화
             }
             if (!baseResponse) baseResponse = botKnowledgeBase["기본"];
             
-            responseData = {
-                assistantmsg: baseResponse.response,
-                tarocardview: false,
-                cards_to_select: null,
-                sampleanswer: (baseResponse.sampleAnswers || []).join('|') || "알겠습니다|다른 질문",
-                user_profile_update: {}
-            };
+            responseData.assistantmsg = baseResponse.response;
+            // 일반 메시지는 sampleanswer를 객체 배열로 변환
+            responseData.sampleanswer = (baseResponse.sampleAnswers || []).map(ans => ({ text: ans, value: ans }));
         }
         
-        console.log(`[BotResponse] 생성된 응답 데이터:`, responseData);
+        console.log(`[BotResponse] 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
         resolve(responseData);
     });
 }
@@ -1160,7 +1130,7 @@ async function simulateBotResponse(userMessageText) { // async로 변경 (재화
         }
     }
 
- async function processMessageExchange(messageText, source = 'input', options = {}) {
+async function processMessageExchange(messageText, source = 'input', options = {}) {
     const { clearBeforeSend = false, menuItemData = null } = options;
 
     console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, options);
@@ -1170,23 +1140,20 @@ async function simulateBotResponse(userMessageText) { // async로 변경 (재화
     }
 
     let shouldClearChat = clearBeforeSend;
-    if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset') { // topic_reset은 명시적으로 clear하므로 제외
-        shouldClearChat = true; // 사용자의 첫 '실제' 입력이나 초기 메뉴 외 샘플 버튼 클릭 시에만
+    if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset') {
+        shouldClearChat = true;
         hasUserSentMessage = true;
-        userProfile.메뉴단계 = 2; // 메뉴 단계 변경
+        userProfile.메뉴단계 = 2;
         console.log("[ProcessExchange] 사용자의 첫 상호작용(입력 또는 샘플/패널). 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
     }
 
-
     if (shouldClearChat) {
         clearChatMessages();
-        // 첫 메시지 시, 초기 봇 메시지 다시 보여줄 필요 없음. 사용자가 보낸 메시지부터 시작.
     }
 
     isLoadingBotResponse = true;
     if(sendBtn) sendBtn.classList.add('loading');
     setUIInteractions(true, false);
-
 
     if (moreOptionsPanel.classList.contains('active')) {
         console.log("[ProcessExchange] 더보기 패널 닫기.");
@@ -1194,11 +1161,9 @@ async function simulateBotResponse(userMessageText) { // async로 변경 (재화
         moreOptionsBtn.classList.remove('active');
     }
 
-    // 사용자가 보낸 메시지(또는 시스템 내부 메시지 중 사용자 메시지처럼 보여야 하는 것) 추가
     if (source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
          await addMessage(messageText, 'user');
     }
-
 
     if (source === 'input' && messageInput) {
         messageInput.value = '';
@@ -1206,52 +1171,46 @@ async function simulateBotResponse(userMessageText) { // async로 변경 (재화
     }
 
     try {
-        const botApiResponse = await simulateBotResponse(messageText); // simulateBotResponse는 이제 async
+        const botApiResponse = await simulateBotResponse(messageText); 
         
         if (botApiResponse.user_profile_update) {
             for (const key in botApiResponse.user_profile_update) {
-                // 재화(bones) 업데이트는 simulateBotResponse 내부에서 userProfile 직접 수정 및 저장, UI 업데이트까지 처리.
-                // 여기서는 그 외의 프로필 업데이트만 처리하거나, simulateBotResponse에서 반환된 값으로 덮어쓸지 결정.
-                // 현재 bones는 simulateBotResponse에서 직접 userProfile을 수정하므로, 여기서 또 덮어쓰지 않도록 주의.
-                if (key !== "bones") { // bones는 simulateBotResponse에서 직접 처리했으므로 제외
+                if (key !== "bones") { 
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
                         if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
-                            // 예외 처리 (선택된 카드 초기화 등)
+                            // 예외 처리
                         } else {
                             userProfile[key] = botApiResponse.user_profile_update[key];
                         }
                     }
                 }
             }
-            // bones를 제외한 다른 프로필 변경사항이 있다면 여기서 저장
             if (Object.keys(botApiResponse.user_profile_update).some(k => k !== "bones")) {
                 saveUserProfileToLocalStorage(userProfile);
             }
             console.log("[UserProfile] API 응답으로 프로필 업데이트 (일부):", botApiResponse.user_profile_update);
         }
 
-        // 조수 해석이 있다면 먼저 표시
         if (botApiResponse.assistant_interpretation) {
-            // addMessage 함수가 data 객체를 받도록 수정했으므로, isAssistantInterpretation 플래그와 html 전달
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
         }
 
-        // 루비의 메시지 (타이핑 효과 적용)
-        if (botApiResponse.assistantmsg) {
-            await addMessage(botApiResponse.assistantmsg, 'bot');
+        if (botApiResponse.assistantmsg) { // assistantmsg는 이제 HTML 버튼을 포함할 수 있음
+            await addMessage(botApiResponse.assistantmsg, 'bot'); // addMessage가 HTML을 처리하도록
         }
         
-        const sampleAnswersArray = botApiResponse.sampleanswer ? botApiResponse.sampleanswer.split('|').map(s => s.trim()).filter(s => s) : [];
-        updateSampleAnswers(sampleAnswersArray);
+        // sampleanswer에 내용이 있더라도, show_chat_buttons가 true면 안내 메시지만 표시
+        updateSampleAnswers(botApiResponse.sampleanswer || [], botApiResponse.show_chat_buttons);
+
 
         if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
             if (messageInput && document.activeElement === messageInput) {
                 messageInput.blur();
             }
             let currentTarotBg = userProfile.tarotbg || 'default.png';
-            if (menuItemData && menuItemData.tarotbg) { // 메뉴에서 지정한 배경이 있다면 사용
+            if (menuItemData && menuItemData.tarotbg) {
                 currentTarotBg = menuItemData.tarotbg;
-                userProfile.tarotbg = currentTarotBg; // 프로필에 저장
+                userProfile.tarotbg = currentTarotBg;
                 saveUserProfileToLocalStorage(userProfile);
             }
             console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
@@ -1261,13 +1220,11 @@ async function simulateBotResponse(userMessageText) { // async로 변경 (재화
     } catch (error) {
         console.error("[ProcessExchange] 오류 발생:", error);
         await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
-        // 초기 샘플 답변 또는 안전한 기본값으로 설정
         const fallbackSampleAnswers = (typeof initialBotMessage !== 'undefined' && initialBotMessage.sampleAnswers) ? initialBotMessage.sampleAnswers : ["도움말"];
-        updateSampleAnswers(fallbackSampleAnswers);
+        updateSampleAnswers(fallbackSampleAnswers.map(ans => ({ text: ans, value: ans })), false); // fallback은 일반 샘플 답변
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
-        // 입력창 포커스는 타로 UI가 활성화되지 않았을 때만 고려
         const shouldFocus = (source === 'input' && !isTarotSelectionActive);
         setUIInteractions(false, shouldFocus);
         console.log("[ProcessExchange] 완료.");
@@ -2046,6 +2003,28 @@ function handleRandomTarotSelection() {
             handleSendMessage();
         }
     });
+
+        // --- 채팅 메시지 내 버튼 클릭 이벤트 핸들러 ---
+    if (chatMessages) {
+        chatMessages.addEventListener('click', async (e) => {
+            const targetButton = e.target.closest('.chat-internal-button');
+            if (targetButton && !targetButton.disabled && !isLoadingBotResponse) {
+                const buttonValue = targetButton.dataset.value || targetButton.textContent; // data-value 우선 사용
+                console.log(`[ChatInternalButton] 클릭: "${buttonValue}"`);
+
+                // 클릭된 버튼은 즉시 비활성화 (중복 클릭 방지)
+                targetButton.disabled = true; 
+                // (선택) 동일 컨테이너 내 다른 버튼들도 비활성화
+                const buttonContainer = targetButton.closest('.chat-interaction-buttons-container');
+                if (buttonContainer) {
+                    buttonContainer.querySelectorAll('.chat-internal-button').forEach(btn => btn.disabled = true);
+                }
+                
+                // 메시지 처리 함수 호출
+                await processMessageExchange(buttonValue, 'chat_button'); 
+            }
+        });
+    }
     messageInput.addEventListener('input', () => {
         adjustTextareaHeight();
         if (!isLoadingBotResponse) sendBtn.disabled = messageInput.value.trim() === '';

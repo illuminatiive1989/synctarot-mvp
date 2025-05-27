@@ -253,15 +253,15 @@ html, body {
 
 
 .sample-answers {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    display: flex; /* 내부 버튼 중앙 정렬 및 flex 속성 유지 */
+    flex-wrap: nowrap; /* 기본적으로 한 줄에 표시되도록 (안내 메시지 버튼용) */
+    justify-content: center; /* 비활성화된 안내 버튼 하나만 있을 때 중앙 정렬 */
     align-items: center;
-    padding: 0px 10px;
+    padding: 0px 10px; /* 패딩 유지 또는 조정 */
     background-color: var(--white-color);
-    border-top: 1px solid transparent;
+    border-top: 1px solid transparent; /* 기본 테두리 투명 */
     flex-shrink: 0;
-    overflow-x: auto;
+    overflow-x: hidden; /* 가로 스크롤 필요 없음 */
     overflow-y: hidden;
     height: var(--sample-answers-height);
     min-height: var(--sample-answers-height);
@@ -270,9 +270,9 @@ html, body {
     transition: padding 0.25s ease-out, border-color 0.25s ease-out;
 }
 .sample-answers.has-buttons {
-    padding-top: 0px;
+    padding-top: 0px; /* 패딩 값 유지 또는 조정 */
     padding-bottom: 0px;
-    border-top-color: var(--input-border-color);
+    border-top-color: var(--input-border-color); /* 버튼이 있을 때(안내 버튼 포함) 상단 구분선 표시 */
 }
 .sample-answer-btn {
     background-color: var(--white-color);
@@ -952,35 +952,64 @@ html, body {
     color: #adb5bd;
 }
 
-.sample-answer-btn.paid-action {
+
+
+
+.chat-interaction-buttons-container {
+    display: flex;
+    flex-direction: column; /* 버튼들을 세로로 나열 */
+    gap: 8px; /* 버튼 사이 간격 */
+    margin-top: 12px; /* 봇 메시지 텍스트와의 간격 */
+    align-items: stretch; /* 버튼들이 컨테이너 너비에 맞게 늘어나도록 */
+}
+
+.chat-internal-button {
+    background-color: var(--white-color);
+    border: 1px solid var(--emphasis-color);
+    color: var(--emphasis-color);
+    padding: 10px 15px;
+    border-radius: 20px; /* 샘플 답변 버튼과 유사한 둥근 모서리 */
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+    text-align: center;
+    width: 100%; /* 컨테이너 너비에 꽉 차도록 */
+    box-sizing: border-box; /* 패딩과 테두리가 너비에 포함되도록 */
+}
+
+.chat-internal-button:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--emphasis-color) 10%, var(--white-color)); /* 연한 강조색 배경 */
+}
+
+.chat-internal-button:disabled {
+    background-color: #f0f0f0;
+    border-color: #d0d0d0;
+    color: #a0a0a0;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.chat-internal-button.paid-action {
     background-color: var(--emphasis-color);
     color: var(--white-color);
-    border-color: var(--emphasis-color); /* 테두리도 강조색으로 통일 */
+    border-color: var(--emphasis-color);
 }
-.sample-answer-btn.paid-action:hover:not(:disabled):not(.fade-out) {
-    background-color: color-mix(in srgb, var(--emphasis-color) 85%, black); /* 기존 hover보다 살짝 어둡게 */
+
+.chat-internal-button.paid-action:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
     border-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
 }
-.sample-answer-btn.paid-action:disabled { /* 비활성화 시에도 명확히 */
-    background-color: #A0B3F7; /* send-btn 비활성화 색상과 유사하게 */
-    color: var(--white-color);
-    opacity: 0.7; /* 비활성화 시 투명도 */
-    border-color: #A0B3F7;
+
+.chat-internal-button.free-action {
+    border-color: color-mix(in srgb, var(--input-border-color) 80%, var(--normal-text-color));
+    color: color-mix(in srgb, var(--emphasis-color) 85%, var(--white-color));
+    background-color: var(--white-color); /* 기본 배경 흰색 */
+    opacity: 0.9; /* 약간 흐리게 */
 }
 
-.sample-answer-btn.free-action {
-    border-color: color-mix(in srgb, var(--input-border-color) 70%, white); /* 테두리 약간 연하게 */
-    color: color-mix(in srgb, var(--emphasis-color) 80%, white); /* 텍스트 약간 연하게 */
+.chat-internal-button.free-action:hover:not(:disabled) {
+    background-color: #f8f8f8;
+    opacity: 1;
 }
 
-.sample-answer-btn.free-action:hover:not(:disabled):not(.fade-out) {
-    background-color: #f5f5f5; /* 호버 색상 약간 연하게 */
-}
-
-.sample-answer-btn.free-action:disabled {
-    /* 기존 disabled 스타일과 유사하게 유지하거나, 더 연하게 할 수 있음 */
-    opacity: 0.35 !important; /* 좀 더 흐리게 */
-    background-color: #fdfdff;
-    border-color: #f0f2fc;
-    color: #bec5e0;
-}
