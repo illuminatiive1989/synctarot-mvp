@@ -1660,7 +1660,7 @@ async function handleDeepAdviceActions(userMessageText, buttonData) {
              if (responseData.user_profile_update === undefined) responseData.user_profile_update = {};
         }
     } else if (userProfile.isInDeepAdviceMode && !(buttonData && buttonData.actionType) && userMessageText !== "고맙습니다" && userMessageText !== "다른 질문" && userMessageText !== "괜찮습니다" && userMessageText !== "뼈다귀는 어떻게 얻나요?" && userMessageText !== "알겠습니다" && userMessageText !== "understood_tarot_first_for_deep_advice" && userMessageText !== "error_acknowledged_deep_advice" && userMessageText !== "error_acknowledged_tarot_interp" && !tarotInitiationMessages.includes(userMessageText) && !userMessageText.startsWith("action_") ) {
-        showFullScreenLoader("루비가 답변을 준비 중입니다..."); 
+        // showFullScreenLoader("루비가 답변을 준비 중입니다...");  // 이 줄 제거
         let deepAdviceContinuationPrompt = LOADED_PROMPT_TAROT_ADVICE; 
         deepAdviceContinuationPrompt += `\n\n[사용자 정보]\n애칭: ${userProfile.사용자애칭}\n싱크타입: ${userProfile.결정된싱크타입 || '미결정'}\n성운: ${userProfile.사용자소속성운 || '미결정'}\n최근 고민: ${userProfile.사용자의고민 || '특정 고민 없음'}\n`;
         if(userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
@@ -1697,12 +1697,11 @@ async function handleDeepAdviceActions(userMessageText, buttonData) {
                 sampleAnswers: [], importance: 'low', disableChatInput: false, user_profile_update: {}
             };
         } finally {
-            hideFullScreenLoader();
+            // hideFullScreenLoader(); // 이 줄 제거
         }
     }
     return responseData;
 }
-
 function handleGeneralKnowledgeActions(userMessageText, buttonData) {
     let responseData = {};
     
