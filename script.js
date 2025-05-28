@@ -1695,37 +1695,43 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         resolve(responseData);
     });
 }
-    function setUIInteractions(isProcessing, shouldFocusInput = false) {
-        console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}`);
-        if (messageInput) messageInput.disabled = isProcessing;
-        if (sendBtn) sendBtn.disabled = isProcessing || (messageInput && messageInput.value.trim() === '');
+function setUIInteractions(isProcessing, shouldFocusInput = false, forceDisableInput = false) {
+    console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}, forceDisableInput=${forceDisableInput}`);
+    
+    const trulyDisabled = isProcessing || forceDisableInput;
 
-        const sampleButtons = sampleAnswersContainer.querySelectorAll('.sample-answer-btn');
-        sampleButtons.forEach(btn => btn.disabled = isProcessing);
+    if (messageInput) messageInput.disabled = trulyDisabled;
+    if (sendBtn) sendBtn.disabled = trulyDisabled || (messageInput && messageInput.value.trim() === '');
 
-        const panelOptions = moreOptionsPanel.querySelectorAll('.panel-option');
-        panelOptions.forEach(opt => opt.disabled = isProcessing);
-        
-        if (moreOptionsBtn) moreOptionsBtn.disabled = isProcessing;
-
-        // 타로 선택 UI가 활성화되어 있으면 입력창 포커스하지 않음
-        if (!isProcessing && shouldFocusInput && !isTarotSelectionActive && messageInput) {
-            console.log("[UI] 메시지 입력창 포커스 시도.");
-            // 모바일에서 키보드가 자동으로 올라오는 것을 방지하기 위해,
-            // 사용자가 직접 입력창을 터치했을 때만 포커스가 가도록 하는 것이 좋을 수 있음.
-            // 여기서는 일단 요청대로 'shouldFocusInput' 플래그에 따라 포커스.
-            messageInput.focus();
-        } else if (isTarotSelectionActive && messageInput && document.activeElement === messageInput) {
-            // 타로 UI가 활성화되었는데 입력창에 포커스가 있다면 포커스 해제 (키보드 내리기)
-            messageInput.blur();
-            console.log("[UI] 타로 UI 활성화로 입력창 포커스 해제.");
+    const sampleButtons = sampleAnswersContainer.querySelectorAll('.sample-answer-btn');
+    sampleButtons.forEach(btn => {
+        // info-disabled-btn 클래스가 없는 버튼만 isProcessing 상태에 따라 비활성화
+        if (!btn.classList.contains('info-disabled-btn')) {
+            btn.disabled = isProcessing;
         }
-    }
+    });
 
+    const panelOptions = moreOptionsPanel.querySelectorAll('.panel-option');
+    panelOptions.forEach(opt => opt.disabled = isProcessing);
+    
+    if (moreOptionsBtn) moreOptionsBtn.disabled = isProcessing;
+
+    if (!trulyDisabled && shouldFocusInput && !isTarotSelectionActive && messageInput) {
+        console.log("[UI] 메시지 입력창 포커스 시도.");
+        messageInput.focus();
+    } else if ((isTarotSelectionActive || trulyDisabled) && messageInput && document.activeElement === messageInput) {
+        messageInput.blur();
+        console.log("[UI] 타로 UI 활성화 또는 강제 비활성화로 입력창 포커스 해제.");
+    }
+}
 async function processMessageExchange(messageText, source = 'input', options = {}) {
     const { clearBeforeSend = false, menuItemData = null, buttonData: optionsButtonData = null } = options; 
 
     console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, options);
+    
+    // botApiResponse를 try 블록 외부에서 선언하여 finally에서도 접근 가능하도록 함
+    let botApiResponse; 
+
     if (isLoadingBotResponse && source !== 'system_internal_force') {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
@@ -1752,7 +1758,8 @@ async function processMessageExchange(messageText, source = 'input', options = {
 
     isLoadingBotResponse = true;
     if(sendBtn) sendBtn.classList.add('loading');
-    // setUIInteractions는 botApiResponse.disableChatInput 값에 따라 달라지므로 아래로 이동
+    // 초기 UI 상태 설정: 로딩 중, 입력창은 상황에 따라 (여기서는 우선 isProcessing=true로 비활성화)
+    setUIInteractions(true, false); 
 
     if (moreOptionsPanel.classList.contains('active')) {
         console.log("[ProcessExchange] 더보기 패널 닫기.");
@@ -1779,24 +1786,17 @@ async function processMessageExchange(messageText, source = 'input', options = {
     const effectiveMessageForAPI = (source === 'sample_button' && currentButtonData && currentButtonData.value) ? currentButtonData.value : messageText;
 
     try {
-        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI, currentButtonData); 
+        // botApiResponse 변수에 할당
+        botApiResponse = await simulateBotResponse(effectiveMessageForAPI, currentButtonData); 
         
-        // disableChatInput 플래그에 따라 UI 상호작용 설정
-        setUIInteractions(true, false); // 우선 로딩 중으로 설정
-        if (messageInput && sendBtn) {
-            if (botApiResponse.disableChatInput === true) {
-                messageInput.disabled = true;
-                sendBtn.disabled = true;
-                console.log("[UIControls] 채팅 입력창 및 전송 버튼 비활성화 (봇 요청).");
-            } else if (botApiResponse.disableChatInput === false) {
-                // false로 명시된 경우에만 강제로 활성화 (isLoadingBotResponse 해제 시 어차피 활성화됨)
-                // messageInput.disabled = false; 
-                // sendBtn.disabled = messageInput.value.trim() === '';
-                // console.log("[UIControls] 채팅 입력창 및 전송 버튼 활성화 (봇 요청).");
-            }
-            // undefined인 경우는 isLoadingBotResponse 상태에 따름 (아래 finally에서 처리)
-        }
-
+        // `disableChatInput` 플래그에 따른 직접적인 DOM 제어 제거
+        // if (messageInput && sendBtn) {
+        //     if (botApiResponse.disableChatInput === true) {
+        //         messageInput.disabled = true;
+        //         sendBtn.disabled = true;
+        //         console.log("[UIControls] 채팅 입력창 및 전송 버튼 비활성화 (봇 요청).");
+        //     }
+        // }
 
         if (botApiResponse.user_profile_update) {
              for (const key in botApiResponse.user_profile_update) {
@@ -1865,20 +1865,13 @@ async function processMessageExchange(messageText, source = 'input', options = {
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
-        // 여기서 UI 상호작용을 최종적으로 설정 (봇 응답의 disableChatInput 고려)
-        const botApiResponseForFinally = (typeof botApiResponse !== 'undefined') ? botApiResponse : {}; // try 블록에서 오류 시 botApiResponse가 없을 수 있음
-        const shouldDisableInputBasedOnBot = botApiResponseForFinally.disableChatInput === true;
-        const shouldEnableInputBasedOnBot = botApiResponseForFinally.disableChatInput === false;
-
-        if (shouldDisableInputBasedOnBot) {
-            setUIInteractions(false, false); // 로딩은 끝났지만 입력은 비활성화
-            if (messageInput) messageInput.disabled = true;
-            if (sendBtn) sendBtn.disabled = true;
-        } else if (shouldEnableInputBasedOnBot) {
-            setUIInteractions(false, (source === 'input' && !isTarotSelectionActive)); // 명시적으로 활성화
-        } else { // botApiResponse.disableChatInput이 undefined인 경우 (일반적인 경우)
-            setUIInteractions(false, (source === 'input' && !isTarotSelectionActive));
-        }
+        
+        const shouldFocusAfterProcessing = (source === 'input' && !isTarotSelectionActive);
+        // botApiResponse가 try 블록에서 정의되었으므로, finally에서 안전하게 접근 가능
+        const forceDisableChatInput = botApiResponse && botApiResponse.disableChatInput === true;
+        
+        setUIInteractions(false, shouldFocusAfterProcessing, forceDisableChatInput);
+        
         console.log("[ProcessExchange] 완료.");
     }
 }
