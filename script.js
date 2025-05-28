@@ -2893,8 +2893,6 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
             };
 
             if (chatHistory && chatHistory.length > 0) {
-                // chatHistory의 각 항목이 { role: "user"|"model", parts: [{text:"..."}] } 형식인지 확인
-                // 간단화를 위해 chatHistory는 이미 올바른 형식이라고 가정
                 requestBody.contents.push(...chatHistory);
             }
             requestBody.contents.push({ role: "user", parts: [{ text: promptContent }] });
@@ -2922,10 +2920,21 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
                 throw new Error("API 응답에서 유효한 텍스트를 찾을 수 없습니다.");
             }
             
-            // 성공 시, fetch 응답과 유사한 구조로 resolve (text() 메소드를 가진 객체)
+            let rawText = responseJson.candidates[0].content.parts[0].text;
+            // 마크다운 코드 블록 제거 로직 추가
+            if (rawText.startsWith("```json")) {
+                rawText = rawText.substring(7); // "```json\n" 또는 "```json " 제거 고려
+            } else if (rawText.startsWith("```")) { // json 명시 없이 ```만 있을 경우
+                rawText = rawText.substring(3);
+            }
+            if (rawText.endsWith("```")) {
+                rawText = rawText.substring(0, rawText.length - 3);
+            }
+            rawText = rawText.trim(); // 앞뒤 공백 제거
+
             return { 
-                json: () => Promise.resolve(responseJson), // 원본 JSON 응답 접근용
-                text: () => Promise.resolve(responseJson.candidates[0].content.parts[0].text), // 실제 텍스트 내용 추출
+                json: () => Promise.resolve(responseJson), 
+                text: () => Promise.resolve(rawText), // 정제된 텍스트 반환
                 ok: true 
             };
 
@@ -2936,12 +2945,11 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
                 console.error("[API] 최대 재시도 횟수 도달. 최종 실패.");
                 throw error; 
             }
-            const delayMs = 1000 * Math.pow(2, attempt -1); // 지수 백오프 (1s, 2s)
+            const delayMs = 1000 * Math.pow(2, attempt -1); 
             console.log(`[API] ${delayMs}ms 후 재시도...`);
             await new Promise(r => setTimeout(r, delayMs));
         }
     }
-    // 모든 재시도 실패 시 (이론상 throw error로 인해 여기까지 오지 않음)
     throw new Error("API 호출 최종 실패 (모든 재시도 후)");
 }
 
