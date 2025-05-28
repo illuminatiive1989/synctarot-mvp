@@ -964,20 +964,22 @@ html, body {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
-    align-items: center; /* 내부 아이템들을 수직 중앙 정렬 */
-    padding: 0px 10px; /* 상하 패딩은 내부 콘텐츠에 따라 유동적으로 */
+    align-items: center;
+    padding: 0px 10px; /* 버튼 없을 때의 기본 패딩 (상하 0) */
     background-color: var(--white-color);
     border-top: 1px solid transparent;
     flex-shrink: 0;
-    overflow-x: auto; /* 가로 스크롤은 유지 */
-    overflow-y: hidden; /* 세로 스크롤은 기본적으로 숨김, 내용 많을 경우 대비는 JS에서 관리 */
-    min-height: var(--sample-answers-height); /* 최소 높이는 유지 */
-    height: auto; /* 높이를 내용에 맞게 자동 조절 */
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: var(--sample-answers-height); /* 최소 높이 고정 */
+    height: auto; 
     position: relative;
     z-index: 5;
-    transition: padding 0.25s ease-out, border-color 0.25s ease-out, background-color 0.4s ease-in-out;
+    transition: padding 0.25s ease-out, 
+                border-color 0.4s ease-in-out,
+                background-color 0.4s ease-in-out,
+                min-height 0.25s ease-out; /* min-height 전환 추가 */
 }
-
 
 .sample-answers.high-importance {
     background-color: var(--emphasis-color); /* 목표 배경색 */
@@ -997,10 +999,13 @@ html, body {
     padding-bottom: 8px;
 }
 
-.sample-answers.high-importance .sample-answer-btn {
-    background-color: var(--white-color);
-    color: var(--emphasis-color);
-    border: 1px solid var(--emphasis-color);
+.sample-answers.has-buttons {
+    padding-top: 8px; /* 버튼 있을 때 상단 패딩 */
+    padding-bottom: 8px; /* 버튼 있을 때 하단 패딩 */
+    /* min-height는 var(--sample-answers-height)로 유지되거나, 
+       만약 버튼과 프롬프트로 인해 더 커져야 한다면 해당 높이로 자동 조절됩니다.
+       height: auto 덕분에 내용물에 따라 늘어납니다. 
+       만약 high-importance 시에 고정적으로 더 커지게 하려면 아래와 같이 min-height 조절 가능 */
 }
 
 .sample-answers.high-importance .sample-answer-btn:hover:not(:disabled):not(:fade-out) {
