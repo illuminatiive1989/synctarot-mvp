@@ -1737,19 +1737,24 @@ function handleGeneralKnowledgeActions(userMessageText, buttonData) {
 
 async function simulateBotResponse(userMessageText, buttonData = null) { 
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작. buttonData:`, buttonData);
-    return new Promise(async (resolve) => { 
+    return new Promise(async (resolve) => { // Promise 시작
 
         let responseData = {}; 
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // --- 초기 안내 버튼("info_initial_prompt") 클릭 또는 초기 챗봇 메시지에 대한 응답 처리 ---
-        if (userMessageText === "info_initial_prompt" || (buttonData && buttonData.value === "info_initial_prompt") || userMessageText === initialBotMessage.text) {
+        // tarotInitiationMessages는 전역 상수
+
+        // --- 초기 메시지 응답 처리 ---
+        // 앱 시작 시 봇의 첫 마디에 대한 응답, 또는 비활성화된 초기 안내 버튼이 (어떤 이유로든) 클릭된 경우
+        if ((userMessageText === initialBotMessage.text && !buttonData && !hasUserSentMessage) || 
+            userMessageText === "info_initial_prompt" || 
+            (buttonData && buttonData.value === "info_initial_prompt")) { 
             console.log("[BotResponse] 초기 안내 프롬프트 또는 초기 메시지 인식.");
             responseData = {
-                // assistantmsg: initialBotMessage.text, // 이미 채팅창에 표시된 첫 메시지이므로, 중복 표시 안 함
-                sampleAnswers: initialBotMessage.sampleAnswers, // "먼저 보고싶은 타로를 골라주세요" 버튼을 다시 표시
+                // assistantmsg는 이미 initializeChat에서 addMessage로 표시했으므로, 여기서는 추가하지 않음.
+                sampleAnswers: initialBotMessage.sampleAnswers, 
                 importance: 'low',
-                disableChatInput: true, // 메뉴 선택 유도
+                disableChatInput: true, 
                 user_profile_update: {}
             };
         }
@@ -1850,20 +1855,14 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         }
 
         if (Object.keys(responseData).length === 0 && buttonData && buttonData.actionType === 'info_disabled') {
-            // 이 경우는 위에서 이미 처리했거나, handleGeneralKnowledgeActions에서 처리됨.
-            // 만약 여기까지 왔다면, 최소한의 응답을 보장.
-            console.log("[BotResponse] Info_disabled 버튼으로 responseData가 비었음. 기본값 설정 시도.");
+            console.log("[BotResponse] Info_disabled 버튼 클릭으로 responseData가 비어있음. 추가 처리 없음.");
         }
 
         if (responseData.assistantmsg === undefined && responseData.assistant_interpretation === undefined && responseData.systemMessageOnConfirm === undefined) {
-             // 초기 안내 버튼 클릭("info_initial_prompt") 시에는 assistantmsg를 다시 보낼 필요 없음.
-            if (userMessageText !== "info_initial_prompt" && !(buttonData && buttonData.value === "info_initial_prompt")) {
+            if (userMessageText !== "info_initial_prompt" && !(buttonData && buttonData.value === "info_initial_prompt") && userMessageText !== initialBotMessage.text ) { // 초기메시지/프롬프트가 아닐때만 기본메시지
                  responseData.assistantmsg = userProfile.isInDeepAdviceMode ? 
                                              "죄송해요, 잘 이해하지 못했어요. 깊은 상담 중이시니 편하게 다시 말씀해주시겠어요?" :
                                              "죄송해요, 잘 이해하지 못했어요. <br>더보기 메뉴를 통해 원하시는 기능을 선택해주세요.";
-            } else if (!responseData.assistantmsg && (userMessageText === "info_initial_prompt" || (buttonData && buttonData.value === "info_initial_prompt"))) {
-                // 초기 안내 버튼 클릭 시에는 assistantmsg를 설정하지 않거나, 봇의 첫 메시지를 유지.
-                // 여기서는 메시지 중복을 피하기 위해 설정하지 않음.
             }
         }
         if (responseData.sampleAnswers === undefined) responseData.sampleAnswers = [];
@@ -1875,7 +1874,13 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             } else if (responseData.sampleAnswers && responseData.sampleAnswers.length > 0 && responseData.sampleAnswers.some(sa => sa.actionType !== 'info_disabled')) {
                 responseData.disableChatInput = true; 
             } else { 
-                responseData.disableChatInput = true; 
+                // 초기 앱 시작 시 ("안녕하세요! 루비입니다...") 또는
+                // 초기 안내 버튼("info_initial_prompt")을 (어떤 이유로든) 받은 경우, 입력을 막음.
+                if (userMessageText === initialBotMessage.text || userMessageText === "info_initial_prompt" || (buttonData && buttonData.value === "info_initial_prompt")) {
+                    responseData.disableChatInput = true;
+                } else {
+                    responseData.disableChatInput = false; // 일반적인 경우엔 false로 두어 setUIInteractions에서 isProcessing으로 제어
+                }
             }
         }
 
@@ -1883,8 +1888,8 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
 
         console.log(`[BotResponse] 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
         resolve(responseData);
-    }); 
-} 
+    }); // Promise 종료
+} // simulateBotResponse 함수 종료
 function setUIInteractions(isProcessing, shouldFocusInput = false, forceDisableInput = false) {
     console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}, forceDisableInput=${forceDisableInput}`);
     
@@ -2989,35 +2994,28 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
 
-    // --- Phase 4.5/5.5: 외부 프롬프트 파일 로드 ---
     try {
-        // 모든 프롬프트 파일을 병렬로 로드
         const promptsToLoad = [
             loadPromptFromFile('prompts/synctypetest.ini'),
             loadPromptFromFile('prompts/tarotchoice.ini'),
             loadPromptFromFile('prompts/tarottrans.ini'),
             loadPromptFromFile('prompts/tarotadvice.ini'),
-            // loadDataFromFile('data/matching_criteria.json') // MATCHING_CRITERIA도 외부화한다면 추가
         ];
         const loadedContents = await Promise.all(promptsToLoad);
         LOADED_PROMPT_SYNC_TYPE_TEST = loadedContents[0];
         LOADED_PROMPT_TAROT_CHOICE = loadedContents[1];
         LOADED_PROMPT_TAROT_TRANS = loadedContents[2];
         LOADED_PROMPT_TAROT_ADVICE = loadedContents[3];
-        // LOADED_MATCHING_CRITERIA = loadedContents[4]; // 외부화 시 할당
-
         console.log("[App] 모든 프롬프트 파일 로드 완료.");
 
     } catch (error) {
         console.error("[App] 프롬프트 파일 로딩 중 치명적 오류 발생. 앱 초기화 중단.", error);
         await addMessage("시스템 설정 파일을 불러오는 중 오류가 발생했습니다. 앱을 사용할 수 없습니다.", 'system');
-        // 필수 파일 로드 실패 시 더 이상 진행하지 않도록 처리 가능
         if(messageInput) messageInput.disabled = true;
         if(sendBtn) sendBtn.disabled = true;
         if(moreOptionsBtn) moreOptionsBtn.disabled = true;
         return; 
     }
-    // --- 외부 프롬프트 파일 로드 끝 ---
 
     initializeUserProfile(); 
 
@@ -3038,58 +3036,43 @@ async function initializeChat() {
 
     adjustTextareaHeight();
     if(sendBtn) sendBtn.disabled = true;
-    if(messageInput) messageInput.disabled = true;
+    if(messageInput) messageInput.disabled = true; 
     if(moreOptionsBtn) moreOptionsBtn.disabled = true;
     requestAnimationFrame(adjustChatMessagesPadding);
 
-    if (tarotSelectionConfirmBtn) {
-        tarotSelectionConfirmBtn.addEventListener('click', handleTarotSelectionConfirm);
-    } else {
-        console.error("[App] tarotSelectionConfirmBtn 요소를 찾을 수 없습니다.");
-    }
-    if (tarotClearSelectionBtn) {
-        tarotClearSelectionBtn.addEventListener('click', handleClearTarotSelection);
-    } else {
-        console.error("[App] tarotClearSelectionBtn 요소를 찾을 수 없습니다.");
-    }
-    if (tarotRandomSelectBtn) {
-        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection);
-    } else {
-        console.error("[App] tarotRandomSelectBtn 요소를 찾을 수 없습니다.");
-    }
-
+    if (tarotSelectionConfirmBtn) tarotSelectionConfirmBtn.addEventListener('click', handleTarotSelectionConfirm);
+    if (tarotClearSelectionBtn) tarotClearSelectionBtn.addEventListener('click', handleClearTarotSelection);
+    if (tarotRandomSelectBtn) tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection);
+    
     isLoadingBotResponse = true;
-    setUIInteractions(true, false);
+    setUIInteractions(true, false, true); 
 
-    if (typeof initialBotMessage === 'undefined' || !initialBotMessage.text || !initialBotMessage.sampleAnswers) {
-        console.error("[App] initialBotMessage가 올바르게 정의되지 않았습니다. 초기화 중단.");
-        await addMessage("초기 메시지를 불러올 수 없습니다. 관리자에게 문의하세요.", 'system');
-        isLoadingBotResponse = false;
-        setUIInteractions(false, false);
-        if(messageInput) messageInput.disabled = false;
-        if(moreOptionsBtn) moreOptionsBtn.disabled = false;
-        return;
-    }
+    // initialBotMessage는 전역에 이미 올바르게 정의되어 있음
+    // const initialGreeting = { ... }; 이 부분은 불필요
 
     try {
-        await addMessage(initialBotMessage.text, 'bot');
-        const initialSampleAnswerObjects = initialBotMessage.sampleAnswers.map(answerText => ({
-            text: answerText, 
-            value: answerText, 
-            actionType: 'message' 
-        }));
-        updateSampleAnswers(initialSampleAnswerObjects, 'low', false, null);
+        await addMessage(initialBotMessage.text, 'bot'); // 봇의 첫 마디 표시
+        // 첫 마디 후, 봇의 첫 응답을 simulateBotResponse를 통해 가져와서 표시 (일관성 유지)
+        // 이렇게 하면 simulateBotResponse의 초기 메시지 처리 로직이 사용됨
+        const firstBotResponse = await simulateBotResponse(initialBotMessage.text);
+        updateSampleAnswers(firstBotResponse.sampleAnswers || [], firstBotResponse.importance || 'low', false, null);
+        if (messageInput && sendBtn && firstBotResponse.disableChatInput !== undefined) {
+             setUIInteractions(isLoadingBotResponse, false, firstBotResponse.disableChatInput);
+        }
+
+
     } catch (error) {
         console.error("[App] 초기 메시지 표시 중 오류:", error);
         await addMessage("초기 메시지를 표시하는 중 오류가 발생했습니다.", "system");
     }
 
     isLoadingBotResponse = false;
-    setUIInteractions(false, false);
-    if(messageInput) {
-        messageInput.disabled = false;
-        sendBtn.disabled = messageInput.value.trim() === '';
-    }
+    // 초기화 완료 후 UI 상태 최종 설정 (봇 응답 결과에 따라)
+    // simulateBotResponse의 결과에 따라 disableChatInput이 결정되므로, processMessageExchange의 finally와 유사하게 처리
+    const finalDisableInput = !userProfile.isInDeepAdviceMode && userProfile.현재테스트종류 !== 'subjective' && !(initialBotMessage.text === "안녕하세요! 루비입니다. 무엇을 도와드릴까요?" && userProfile.메뉴단계 === 1 ); // 초기 메뉴선택 유도시에는 비활성화
+    setUIInteractions(false, false, finalDisableInput); 
+
+
     if(moreOptionsBtn) {
         moreOptionsBtn.disabled = false;
         if (moreOptionsBtn && !moreOptionsPanel.classList.contains('active')) {
@@ -3097,7 +3080,6 @@ async function initializeChat() {
             moreOptionsBtn.click();
         }
     }
-
     console.log("[App] 초기화 완료.");
 }
     initializeChat();
