@@ -49,6 +49,14 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollLeftStart: 0
     };
 
+    // --- 로드될 프롬프트 및 데이터 변수 ---
+    let LOADED_PROMPT_SYNC_TYPE_TEST = "";
+    let LOADED_PROMPT_TAROT_CHOICE = "";
+    let LOADED_PROMPT_TAROT_TRANS = "";
+    let LOADED_PROMPT_TAROT_ADVICE = "";
+    // MATCHING_CRITERIA도 외부 파일로 옮긴다면 여기에 변수 선언
+    // let LOADED_MATCHING_CRITERIA = {}; 
+
         // --- API 관련 상수 ---
     const API_KEY = 'AIzaSyDSAA6rbNdD3tV1W_u0nIll0XyTe63rU_k'; // 실제 키로 교체 필요
     const MODEL_NAME = 'gemini-2.5-flash-preview-04-17'; // 또는 사용자가 명시한 모델
@@ -125,6 +133,42 @@ document.addEventListener('DOMContentLoaded', () => {
             // ... 기타 싱크타입들
         ]
     };
+
+
+    async function loadPromptFromFile(filePath) {
+        try {
+            const response = await fetch(filePath);
+            if (!response.ok) {
+                throw new Error(`Failed to load prompt file: ${filePath} - ${response.status} ${response.statusText}`);
+            }
+            let text = await response.text();
+            // .ini 파일의 주석 (세미콜론 또는 #으로 시작하는 줄) 제거
+            text = text.split('\n').filter(line => !line.trim().startsWith(';') && !line.trim().startsWith('#')).join('\n');
+            console.log(`[FileLoad] 프롬프트 파일 로드 성공: ${filePath}`);
+            return text.trim();
+        } catch (error) {
+            console.error(`[FileLoad] 프롬프트 파일 로드 오류 (${filePath}):`, error);
+            // 기본 프롬프트 제공 또는 오류 처리를 위한 대체 문자열 반환 가능
+            // 여기서는 오류를 다시 throw하여 초기화 과정에서 인지하도록 함
+            throw error; 
+        }
+    }
+
+    // MATCHING_CRITERIA를 외부 JSON 파일로 관리한다면 유사한 로드 함수 필요
+    // async function loadDataFromFile(filePath) {
+    //     try {
+    //         const response = await fetch(filePath);
+    //         if (!response.ok) {
+    //             throw new Error(`Failed to load data file: ${filePath} - ${response.status} ${response.statusText}`);
+    //         }
+    //         const data = await response.json();
+    //         console.log(`[FileLoad] 데이터 파일 로드 성공: ${filePath}`);
+    //         return data;
+    //     } catch (error) {
+    //         console.error(`[FileLoad] 데이터 파일 로드 오류 (${filePath}):`, error);
+    //         throw error;
+    //     }
+    // }
 
     const initialBotMessage = {
         text: "안녕하세요! 루비입니다. 무엇을 도와드릴까요?", // 초기 메시지 변경
@@ -1121,7 +1165,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작. buttonData:`, buttonData);
     return new Promise(async (resolve) => { // Promise 시작
 
-        let responseData = {};
+        let responseData = {}; // responseData를 함수 초기에 선언
         const lowerUserMessage = userMessageText.toLowerCase();
 
         const tarotInitiationMessages = [
@@ -1131,6 +1175,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             "그 사람의 마음을 알고 싶어"
         ];
 
+        // Phase 4: 싱크타입 테스트 결과 제출
         if (userMessageText === "action_submit_sync_test") {
             showFullScreenLoader("싱크타입 분석 중입니다. 잠시만 기다려주세요...");
             let testAnswersContent = "주관식 답변:\n";
@@ -1143,7 +1188,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                  const questionText = QUESTIONS_DATA.objective.find(q => q.id === qId)?.questionText || qId;
                 testAnswersContent += `- ${questionText}: ${userProfile.싱크테스트답변.objective_scores[qId]}점\n`;
             }
-            const fullPrompt = PROMPT_SYNC_TYPE_TEST + testAnswersContent;
+            const fullPrompt = LOADED_PROMPT_SYNC_TYPE_TEST + "\n" + testAnswersContent; 
             
             try {
                 const apiResponseObj = await callChatAPI(fullPrompt); 
@@ -1203,6 +1248,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 hideFullScreenLoader(); 
             }
         }
+        // Phase 3: 싱크타입 테스트 진행
         else if (userProfile.현재테스트종류 === 'subjective' && 
             userProfile.현재질문ID && 
             userMessageText !== "action_start_sync_type_test" && 
@@ -1316,7 +1362,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                  }
             };
         }
-        // 이하는 기존의 타로 관련 및 일반 메시지 처리 로직
+        // Phase 1 & 2 로직 (타로 시작, 카드 선택, 싱크타입 제안 등)
         else { 
             let selectedTarotTopicName = null;
             if (userProfile.시나리오 && userProfile.시나리오.startsWith("tarot_topic_")) {
@@ -1567,7 +1613,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 console.log(`[BotResponse] ${진행메시지} 시나리오: ${userProfile.시나리오}`);
                 
                 showFullScreenLoader("타로 해석을 준비 중입니다..."); 
-                let tarotChoicePrompt = PROMPT_TAROT_CHOICE;
+                let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE; 
                 tarotChoicePrompt += `\n사용자 애칭: ${userProfile.사용자애칭}`;
                 tarotChoicePrompt += `\n싱크타입: ${userProfile.결정된싱크타입 || '미결정'}`;
                 tarotChoicePrompt += `\n선택된 카드: ${userProfile.선택된타로카드들.join(', ')}`;
@@ -1584,7 +1630,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     if (userProfile.tarotResult && userProfile.tarotResult.overallAdvice) {
                          simpleChatHistory.push({role: "model", parts: [{text: `선택하신 카드에 대한 간략한 정보입니다: ${userProfile.tarotResult.overallAdvice}`}]});
                     }
-                    const transPrompt = PROMPT_TAROT_TRANS + `\n## 이전 대화 요약 (카드 선택 결과):\n${JSON.stringify(userProfile.tarotResult, null, 2)}\n## 사용자 질문:\n타로 해석을 부탁드려요.`;
+                    const transPrompt = LOADED_PROMPT_TAROT_TRANS + `\n## 이전 대화 요약 (카드 선택 결과):\n${JSON.stringify(userProfile.tarotResult, null, 2)}\n## 사용자 질문:\n타로 해석을 부탁드려요.`;
                     const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory);
                     const finalInterpretationText = await transApiResponseObj.text();
                     
@@ -1721,7 +1767,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     saveUserProfileToLocalStorage(userProfile);
                     
                     showFullScreenLoader("깊은 조언을 준비 중입니다...");
-                    let deepAdvicePrompt = PROMPT_TAROT_ADVICE;
+                    let deepAdvicePrompt = LOADED_PROMPT_TAROT_ADVICE; 
                     deepAdvicePrompt += `\n\n[사용자 정보]\n애칭: ${userProfile.사용자애칭}\n싱크타입: ${userProfile.결정된싱크타입 || '미결정'}\n성운: ${userProfile.사용자소속성운 || '미결정'}\n최근 고민: ${userProfile.사용자의고민 || '특정 고민 없음'}\n`;
                     if(userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
                         deepAdvicePrompt += `\n[이전 타로 해석 요약]\n`;
@@ -1776,10 +1822,20 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         sampleAnswers: [ { text: "괜찮아요", value: "괜찮습니다", actionType: 'message' }, { text: "뼈다귀는 어떻게 얻나요?", value: "뼈다귀 얻는법", actionType: 'message' } ],
                         user_profile_update: {}
                     };
-                } else { responseData = botKnowledgeBase["기본"]; }
+                } else { 
+                    responseData = botKnowledgeBase["기본"] ? { ...botKnowledgeBase["기본"] } : 
+                                   { assistantmsg: "죄송해요, 요청을 처리할 수 없습니다.", sampleAnswers: [], importance: 'low', disableChatInput: false, user_profile_update: {} };
+                    if(botKnowledgeBase["기본"] && botKnowledgeBase["기본"].sampleAnswers && Array.isArray(botKnowledgeBase["기본"].sampleAnswers) && botKnowledgeBase["기본"].sampleAnswers.every(sa => typeof sa === 'string')) {
+                         responseData.sampleAnswers = botKnowledgeBase["기본"].sampleAnswers.map(sa => ({text: sa, value: sa, actionType: 'message'}));
+                    } else if (botKnowledgeBase["기본"] && botKnowledgeBase["기본"].sampleAnswers) {
+                        responseData.sampleAnswers = botKnowledgeBase["기본"].sampleAnswers;
+                    } else {
+                        responseData.sampleAnswers = [];
+                    }
+                }
             }
 
-            else { 
+            else { // 일반 텍스트 메시지 또는 정의되지 않은 액션
                 if (userMessageText === "placeholder_disabled" && userProfile.현재테스트종류 === 'subjective') {
                      responseData = {
                         assistantmsg: `네, ${QUESTIONS_DATA.subjective.find(q => q.id === userProfile.현재질문ID)?.questionText || '현재 질문에 대해 채팅으로 답변해주세요.'}`,
@@ -1802,15 +1858,17 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     }
                     if (!baseResponse) baseResponse = botKnowledgeBase["기본"];
                     
-                    responseData = {
-                        assistantmsg: baseResponse.response,
-                        tarocardview: false,
-                        cards_to_select: null,
-                        sampleAnswers: (baseResponse.sampleAnswers || []).map(sa => ({ text: sa, value: sa, actionType: 'message' })),
-                        importance: 'low',
-                        disableChatInput: false, 
-                        user_profile_update: {}
-                    };
+                    responseData = baseResponse ? { ...baseResponse } : 
+                                   { assistantmsg: "죄송해요, 잘 이해하지 못했어요.", sampleAnswers: [], importance: 'low', disableChatInput: false, user_profile_update: {} };
+                    
+                    if (responseData.sampleAnswers && responseData.sampleAnswers.every(sa => typeof sa === 'string')) {
+                        responseData.sampleAnswers = responseData.sampleAnswers.map(sa => ({ text: sa, value: sa, actionType: 'message' }));
+                    }
+                     if (responseData.assistantmsg === undefined) responseData.assistantmsg = "죄송해요, 잘 이해하지 못했어요.";
+                     if (responseData.sampleAnswers === undefined) responseData.sampleAnswers = [];
+                     if (responseData.importance === undefined) responseData.importance = 'low';
+                     if (responseData.disableChatInput === undefined) responseData.disableChatInput = false;
+                     if (responseData.user_profile_update === undefined) responseData.user_profile_update = {};
                 }
             }
         }
@@ -1824,6 +1882,10 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         resolve(responseData);
     }); // Promise 종료
 } // simulateBotResponse 함수 종료
+
+
+
+
 
 
 function setUIInteractions(isProcessing, shouldFocusInput = false, forceDisableInput = false) {
@@ -2914,13 +2976,45 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
 
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
+
+    // --- Phase 4.5/5.5: 외부 프롬프트 파일 로드 ---
+    try {
+        // 모든 프롬프트 파일을 병렬로 로드
+        const promptsToLoad = [
+            loadPromptFromFile('prompts/synctypetest.ini'),
+            loadPromptFromFile('prompts/tarotchoice.ini'),
+            loadPromptFromFile('prompts/tarottrans.ini'),
+            loadPromptFromFile('prompts/tarotadvice.ini'),
+            // loadDataFromFile('data/matching_criteria.json') // MATCHING_CRITERIA도 외부화한다면 추가
+        ];
+        const loadedContents = await Promise.all(promptsToLoad);
+        LOADED_PROMPT_SYNC_TYPE_TEST = loadedContents[0];
+        LOADED_PROMPT_TAROT_CHOICE = loadedContents[1];
+        LOADED_PROMPT_TAROT_TRANS = loadedContents[2];
+        LOADED_PROMPT_TAROT_ADVICE = loadedContents[3];
+        // LOADED_MATCHING_CRITERIA = loadedContents[4]; // 외부화 시 할당
+
+        console.log("[App] 모든 프롬프트 파일 로드 완료.");
+
+    } catch (error) {
+        console.error("[App] 프롬프트 파일 로딩 중 치명적 오류 발생. 앱 초기화 중단.", error);
+        await addMessage("시스템 설정 파일을 불러오는 중 오류가 발생했습니다. 앱을 사용할 수 없습니다.", 'system');
+        // 필수 파일 로드 실패 시 더 이상 진행하지 않도록 처리 가능
+        if(messageInput) messageInput.disabled = true;
+        if(sendBtn) sendBtn.disabled = true;
+        if(moreOptionsBtn) moreOptionsBtn.disabled = true;
+        return; 
+    }
+    // --- 외부 프롬프트 파일 로드 끝 ---
+
     initializeUserProfile(); 
 
-    if (typeof ALL_SYNC_TYPES === 'undefined' || typeof ALL_NEBULAS === 'undefined' || typeof TAROT_CARD_DATA === 'undefined') {
+    if (typeof ALL_SYNC_TYPES === 'undefined' || typeof ALL_NEBULAS === 'undefined' || typeof TAROT_CARD_DATA === 'undefined' || typeof QUESTIONS_DATA === 'undefined') {
         const missingData = [
             typeof ALL_SYNC_TYPES === 'undefined' ? 'ALL_SYNC_TYPES (syncTypes.js)' : null,
             typeof ALL_NEBULAS === 'undefined' ? 'ALL_NEBULAS (nebulas.js)' : null,
             typeof TAROT_CARD_DATA === 'undefined' ? 'TAROT_CARD_DATA (tarotData.js)' : null,
+            typeof QUESTIONS_DATA === 'undefined' ? 'QUESTIONS_DATA (questions.js)' : null,
         ].filter(Boolean).join(', ');
 
         console.error(`[App] 필수 데이터(${missingData})가 로드되지 않았습니다. HTML에서 해당 스크립트 파일들을 확인해주세요.`);
@@ -2986,7 +3080,6 @@ async function initializeChat() {
     }
     if(moreOptionsBtn) {
         moreOptionsBtn.disabled = false;
-        // Phase 1: 초기화 완료 후 더보기 패널 자동 클릭
         if (moreOptionsBtn && !moreOptionsPanel.classList.contains('active')) {
             console.log("[App] 초기화 후 더보기 메뉴 자동 펼침 시도.");
             moreOptionsBtn.click();
