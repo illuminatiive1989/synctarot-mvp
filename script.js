@@ -1440,7 +1440,7 @@ async function handleTarotCardSelectionCompleteActions(userMessageText, buttonDa
                 user_profile_update: { "시나리오": userProfile.시나리오 }
             };
         } else {
-            // 싱크타입 이미 결정됨 -> 바로 타로 해석 진행 요청
+            // 싱크타입 이미 결정됨 -> 바로 타로 해석 진행 요청 (내부 액션 사용)
             return { internalAction: "action_proceed_tarot_interpretation" }; 
         }
     } else if (userMessageText === "action_start_sync_type_test") {
@@ -1455,13 +1455,14 @@ async function handleTarotCardSelectionCompleteActions(userMessageText, buttonDa
             importance: 'low', disableChatInput: false,
             user_profile_update: { "시나리오": userProfile.시나리오, "현재테스트종류": userProfile.현재테스트종류, "현재질문ID": userProfile.현재질문ID, "싱크테스트답변": userProfile.싱크테스트답변 }
         };
-    } else if (userMessageText === "action_skip_sync_type_test" || userMessageText === "action_proceed_tarot_interpretation_after_sync" || userMessageText === "action_proceed_tarot_interpretation") {
-        // 이 액션들은 handleTarotInterpretationActions에서 처리
-        return { internalAction: userMessageText };
+    } else if (userMessageText === "action_skip_sync_type_test") {
+        // "아니오, 다음에 할게요" 선택 시, 바로 타로 해석 진행 요청 (내부 액션 사용)
+        console.log("[BotResponse] 'action_skip_sync_type_test' 수신. 타로 해석으로 진행.");
+        return { internalAction: "action_proceed_tarot_interpretation" };
     }
+    // action_proceed_tarot_interpretation_after_sync는 handleTarotInterpretationActions에서 직접 처리
     return responseData;
 }
-
 async function handleTarotInterpretationActions(userMessageText, buttonData, selectedTarotTopicName) {
     let responseData = {};
     let 진행메시지 = "";
@@ -3047,19 +3048,12 @@ async function initializeChat() {
     isLoadingBotResponse = true;
     setUIInteractions(true, false, true); 
 
-    // initialBotMessage는 전역에 이미 올바르게 정의되어 있음
-    // const initialGreeting = { ... }; 이 부분은 불필요
-
     try {
-        await addMessage(initialBotMessage.text, 'bot'); // 봇의 첫 마디 표시
-        // 첫 마디 후, 봇의 첫 응답을 simulateBotResponse를 통해 가져와서 표시 (일관성 유지)
-        // 이렇게 하면 simulateBotResponse의 초기 메시지 처리 로직이 사용됨
-        const firstBotResponse = await simulateBotResponse(initialBotMessage.text);
-        updateSampleAnswers(firstBotResponse.sampleAnswers || [], firstBotResponse.importance || 'low', false, null);
-        if (messageInput && sendBtn && firstBotResponse.disableChatInput !== undefined) {
-             setUIInteractions(isLoadingBotResponse, false, firstBotResponse.disableChatInput);
-        }
-
+        await addMessage(initialBotMessage.text, 'bot'); 
+        // 초기 샘플 답변은 initialBotMessage에 정의된 것을 직접 사용
+        updateSampleAnswers(initialBotMessage.sampleAnswers, 'low', false, null);
+        // 초기에는 채팅 입력 비활성화 유지 (메뉴 선택 유도)
+        setUIInteractions(isLoadingBotResponse, false, true); 
 
     } catch (error) {
         console.error("[App] 초기 메시지 표시 중 오류:", error);
@@ -3067,9 +3061,8 @@ async function initializeChat() {
     }
 
     isLoadingBotResponse = false;
-    // 초기화 완료 후 UI 상태 최종 설정 (봇 응답 결과에 따라)
-    // simulateBotResponse의 결과에 따라 disableChatInput이 결정되므로, processMessageExchange의 finally와 유사하게 처리
-    const finalDisableInput = !userProfile.isInDeepAdviceMode && userProfile.현재테스트종류 !== 'subjective' && !(initialBotMessage.text === "안녕하세요! 루비입니다. 무엇을 도와드릴까요?" && userProfile.메뉴단계 === 1 ); // 초기 메뉴선택 유도시에는 비활성화
+    // 초기화 완료 후 UI 상태 최종 설정
+    const finalDisableInput = !userProfile.isInDeepAdviceMode && userProfile.현재테스트종류 !== 'subjective';
     setUIInteractions(false, false, finalDisableInput); 
 
 
