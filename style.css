@@ -316,6 +316,18 @@ html, body {
     background-color: #f0f0f0;
 }
 
+.sample-answer-btn.info-disabled-btn {
+    opacity: 0.6 !important; /* 기존 :disabled 보다 좀 더 명확한 비활성 표시 */
+    background-color: #e9ecef !important; /* 배경색 변경 */
+    color: #adb5bd !important; /* 글자색 변경 */
+    border-color: #ced4da !important; /* 테두리색 변경 */
+    cursor: default !important; /* 커서 모양 변경 */
+    pointer-events: none; /* 확실한 클릭 방지 */
+}
+
+.sample-answer-btn.info-disabled-btn:hover {
+    background-color: #e9ecef !important; /* 호버 시에도 비활성 스타일 유지 */
+}
 
 .chat-input-area {
     display: flex;
