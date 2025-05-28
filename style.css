@@ -848,7 +848,7 @@ html, body {
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     cursor: grab;
-    scrollbar-width: none; /* Firefox */
+    scrollbar-width: none; /* 파이어폭스 */
     -ms-overflow-style: none;  /* IE and Edge */
 }
 .tarot-card-carousel::-webkit-scrollbar { /* Chrome, Safari, Opera */
