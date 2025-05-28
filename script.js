@@ -1122,7 +1122,6 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         let responseData = {};
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // tarotInitiationMessages를 함수 최상단에 정의합니다.
         const tarotInitiationMessages = [
             "오늘의 운세 보여줘",
             "오늘 뭐 먹을지 추천해줘",
@@ -1131,8 +1130,12 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         ];
 
         // --- Phase 3: 싱크타입 테스트 진행 로직 ---
-        if (userProfile.현재테스트종류 === 'subjective' && userProfile.현재질문ID && userMessageText !== "action_start_sync_type_test" && !(buttonData && buttonData.actionType === 'info_disabled') && userMessageText !== "placeholder_disabled") {
-            // 주관식 답변 처리 (사용자가 채팅으로 입력한 경우)
+        if (userProfile.현재테스트종류 === 'subjective' && 
+            userProfile.현재질문ID && 
+            userMessageText !== "action_start_sync_type_test" && 
+            !(buttonData && buttonData.actionType === 'info_disabled') && 
+            userMessageText !== "placeholder_disabled") {
+            // 주관식 답변 처리
             const currentQuestionId = userProfile.현재질문ID;
             userProfile.싱크테스트답변.subjective_answers[currentQuestionId] = userMessageText;
             console.log(`[SyncTest] 주관식 답변 (${currentQuestionId}): ${userMessageText}`);
@@ -1141,7 +1144,6 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             const currentIndex = subjectiveQuestions.findIndex(q => q.id === currentQuestionId);
             
             if (currentIndex < subjectiveQuestions.length - 1) {
-                // 다음 주관식 질문이 있는 경우
                 const nextQuestion = subjectiveQuestions[currentIndex + 1];
                 userProfile.현재질문ID = nextQuestion.id;
                 saveUserProfileToLocalStorage(userProfile);
@@ -1149,10 +1151,10 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     assistantmsg: `<b>다음 질문입니다:</b><br>${nextQuestion.questionText}`,
                     sampleAnswers: [{ text: "채팅으로 답변해주세요", value: "placeholder_disabled", actionType: 'info_disabled', disabled: true }],
                     importance: 'low',
+                    disableChatInput: false, // 주관식은 채팅 입력 활성화
                     user_profile_update: { "현재질문ID": userProfile.현재질문ID, "싱크테스트답변": userProfile.싱크테스트답변 }
                 };
             } else {
-                // 모든 주관식 질문 완료 -> 객관식 질문 시작
                 userProfile.현재테스트종류 = 'objective';
                 userProfile.현재질문ID = QUESTIONS_DATA.objective[0].id; 
                 saveUserProfileToLocalStorage(userProfile);
@@ -1166,6 +1168,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         actionType: 'objective_answer'
                     })),
                     importance: 'low', 
+                    disableChatInput: true, // 객관식은 채팅 입력 비활성화
                     user_profile_update: { 
                         "현재테스트종류": userProfile.현재테스트종류, 
                         "현재질문ID": userProfile.현재질문ID,
@@ -1174,13 +1177,20 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 };
             }
         } else if (buttonData && buttonData.actionType === 'objective_answer' && userProfile.현재테스트종류 === 'objective') {
-            const [questionId, scoreStr] = userMessageText.split('_'); 
+            // 객관식 답변 처리 (버튼 클릭)
+            // userMessageText (buttonData.value)는 "질문ID_점수" 형식 (예: "obj_01_5")
+            const parts = userMessageText.split('_');
+            const questionIdFromButton = parts.slice(0, -1).join('_'); // 질문 ID (마지막 요소 제외하고 합침)
+            const scoreStr = parts.pop(); // 마지막 요소가 점수
             const score = parseInt(scoreStr, 10);
             const currentQuestionId = userProfile.현재질문ID;
 
-            if (questionId === currentQuestionId) { 
+            console.log(`[SyncTest] 객관식 버튼 클릭. value: "${userMessageText}", 파싱된 questionId: "${questionIdFromButton}", 파싱된 score: ${score}`);
+
+
+            if (questionIdFromButton === currentQuestionId) { 
                 userProfile.싱크테스트답변.objective_scores[currentQuestionId] = score;
-                console.log(`[SyncTest] 객관식 답변 (${currentQuestionId}): ${score}점`);
+                console.log(`[SyncTest] 객관식 답변 저장 (${currentQuestionId}): ${score}점`);
 
                 const objectiveQuestions = QUESTIONS_DATA.objective;
                 const currentIndex = objectiveQuestions.findIndex(q => q.id === currentQuestionId);
@@ -1197,6 +1207,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             actionType: 'objective_answer'
                         })),
                         importance: 'low',
+                        disableChatInput: true, // 객관식은 채팅 입력 비활성화
                         user_profile_update: { "현재질문ID": userProfile.현재질문ID, "싱크테스트답변": userProfile.싱크테스트답변 }
                     };
                 } else {
@@ -1209,10 +1220,12 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             { text: "결과 제출하기", value: "action_submit_sync_test", actionType: 'confirm_action', cost:0, displayCostIcon: true, iconType:'free' },
                             { text: "처음부터 다시하기", value: "action_restart_sync_test_full", actionType: 'cancel_action' }
                         ],
+                        disableChatInput: false, // 제출/다시하기 선택 후에는 채팅 입력 가능하게
                         user_profile_update: { "싱크테스트답변": userProfile.싱크테스트답변 } 
                     };
                 }
             } else {
+                // 이 경우는 발생하지 않아야 하지만, 방어적으로 현재 질문을 다시 안내
                 const currentQ = QUESTIONS_DATA.objective.find(q => q.id === currentQuestionId);
                  responseData = {
                     assistantmsg: `<b>현재 질문입니다:</b><br>${currentQ.questionText}`,
@@ -1222,9 +1235,10 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         actionType: 'objective_answer'
                     })),
                     importance: 'low',
+                    disableChatInput: true,
                     user_profile_update: {} 
                 };
-                console.warn(`[SyncTest] 객관식 답변의 질문 ID(${questionId})와 현재 질문 ID(${currentQuestionId}) 불일치.`);
+                console.warn(`[SyncTest] 객관식 답변의 질문 ID(${questionIdFromButton})와 현재 질문 ID(${currentQuestionId}) 불일치. 버튼 value: ${userMessageText}`);
             }
         } else if (userMessageText === "action_restart_sync_test_full") {
             userProfile.시나리오 = (userProfile.시나리오.split("_started")[0].split("_restarted")[0] || "sync_test") + "_restarted";
@@ -1237,6 +1251,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 assistantmsg: `알겠습니다. 싱크타입 테스트를 처음부터 다시 시작하겠습니다.<br><br><b>첫 번째 질문입니다:</b><br>${QUESTIONS_DATA.subjective[0].questionText}`,
                 sampleAnswers: [{ text: "채팅으로 답변해주세요", value: "placeholder_disabled", actionType: 'info_disabled', disabled: true }],
                 importance: 'low',
+                disableChatInput: false,
                 user_profile_update: { 
                     "시나리오": userProfile.시나리오,
                     "현재테스트종류": userProfile.현재테스트종류,
@@ -1245,10 +1260,9 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                  }
             };
         }
-        // --- 기존 로직 시작 (Phase 1, 2에서 추가된 내용) ---
-        // selectedTarotTopicName 계산 로직은 tarotInitiationMessages 체크 전에 위치해야 함
-        else { // 싱크타입 테스트 관련 액션이 아닌 경우, 기존 로직으로 분기
+        else { 
             let selectedTarotTopicName = null;
+            // ... (selectedTarotTopicName 계산 로직은 이전과 동일)
             if (userProfile.시나리오 && userProfile.시나리오.startsWith("tarot_topic_")) {
                 const topicKey = userProfile.시나리오.substring("tarot_topic_".length).split("_pick")[0].split("_propose_sync_test")[0].split("_started")[0].split("_skipped_sync_test")[0];
                  for (const menuKey in menuConfigurations) {
@@ -1286,7 +1300,6 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             if (tarotInitiationMessages.includes(userMessageText) && selectedTarotTopicName) {
                 userProfile.시나리오 = `tarot_topic_${userMessageText.replace(/\s+/g, '_')}`;
                 saveUserProfileToLocalStorage(userProfile);
-
                 responseData = {
                     assistantmsg: `네, <b>${selectedTarotTopicName}</b> 타로를 진행하겠습니다.<br>카드는 몇 장 뽑으시겠어요?`,
                     tarocardview: false,
@@ -1296,6 +1309,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "3장 뽑기", value: "action_select_three_cards_for_topic", actionType: 'choice', cost:2, displayCostIcon: true, iconType:'bone' }
                     ],
                     importance: 'low',
+                    disableChatInput: false, // 일반 선택 시 채팅 입력 가능
                     user_profile_update: { "시나리오": userProfile.시나리오 }
                 };
             } else if (userMessageText === "action_select_one_card_for_topic") {
@@ -1304,6 +1318,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     cards_to_select: 1,
                     sampleAnswers: [],
                     importance: 'low',
+                    disableChatInput: true, // 카드 선택 시 채팅 입력 비활성화
                     user_profile_update: { "시나리오": userProfile.시나리오 + "_single_pick" },
                     systemMessageOnConfirm: "1장을 선택하셨습니다. 카드를 골라주세요."
                 };
@@ -1316,6 +1331,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: `사용`, value: "action_confirm_three_cards_cost_for_topic", cost: 2, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
                         { text: "취소", value: "action_cancel_cost_confirmation_for_topic", actionType: 'cancel_cost' }
                     ],
+                    disableChatInput: false, // 비용 확인 시 채팅 입력 가능 (취소 등 다른 행동 위해)
                     user_profile_update: {}
                 };
             } else if (userMessageText === "action_confirm_three_cards_cost_for_topic") {
@@ -1328,15 +1344,17 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         cards_to_select: 3,
                         sampleAnswers: [],
                         importance: 'low',
+                        disableChatInput: true, // 카드 선택 시 채팅 입력 비활성화
                         user_profile_update: { "시나리오": userProfile.시나리오 + "_triple_pick", "bones": userProfile.bones },
                         systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
                     };
-                } else {
+                } else { // 뼈다귀 부족
                     responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)<br>1장만 무료로 보시겠어요?",
                         tarocardview: false,
                         cards_to_select: null,
                         importance: 'low',
+                        disableChatInput: false,
                         sampleAnswers: [
                             { text: "1장 뽑기 (무료)", value: "action_select_one_card_for_topic", cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' },
                             { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' }
@@ -1355,6 +1373,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "3장 뽑기", value: "action_select_three_cards_for_topic", actionType: 'choice', cost:2, displayCostIcon: true, iconType:'bone' }
                     ],
                     importance: 'low',
+                    disableChatInput: false,
                     user_profile_update: {}
                 };
             }
@@ -1368,6 +1387,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "3장", value: SELECT_THREE_CARDS_ACTION, cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }  
                     ],
                     importance: 'low',
+                    disableChatInput: false,
                     user_profile_update: {}
                 };
             } else if (userMessageText === SELECT_ONE_CARD_ACTION) { 
@@ -1376,6 +1396,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     cards_to_select: 1,
                     sampleAnswers: [],
                     importance: 'low',
+                    disableChatInput: true,
                     user_profile_update: { "시나리오": "tarot_single_pick_general" },
                     systemMessageOnConfirm: "1장을 선택하셨습니다. 카드를 골라주세요."
                 };
@@ -1388,6 +1409,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: `사용`, value: CONFIRM_THREE_CARDS_COST_ACTION, cost: 2, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' }, 
                         { text: "취소", value: CANCEL_COST_CONFIRMATION_ACTION, actionType: 'cancel_cost' } 
                     ],
+                    disableChatInput: false,
                     user_profile_update: {}
                 };
             } else if (userMessageText === CONFIRM_THREE_CARDS_COST_ACTION) { 
@@ -1400,15 +1422,17 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         cards_to_select: 3,
                         sampleAnswers: [],
                         importance: 'low',
+                        disableChatInput: true,
                         user_profile_update: { "시나리오": "tarot_triple_pick_general", "bones": userProfile.bones },
                         systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
                     };
-                } else {
+                } else { // 뼈다귀 부족
                      responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)<br>1장만 무료로 보시겠어요?",
                         tarocardview: false,
                         cards_to_select: null,
                         importance: 'low',
+                        disableChatInput: false,
                         sampleAnswers: [
                             { text: "1장", value: SELECT_ONE_CARD_ACTION, cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' }, 
                             { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' }
@@ -1426,6 +1450,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "3장", value: SELECT_THREE_CARDS_ACTION, cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }  
                     ],
                     importance: 'low',
+                    disableChatInput: false,
                     user_profile_update: {}
                 };
             }
@@ -1443,6 +1468,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             { text: "네, 테스트 할래요", value: "action_start_sync_type_test", actionType: 'confirm_action', cost:0, displayCostIcon: true, iconType:'free' },
                             { text: "아니오, 다음에 할게요", value: "action_skip_sync_type_test", actionType: 'cancel_action' }
                         ],
+                        disableChatInput: false, 
                         user_profile_update: { "시나리오": userProfile.시나리오 }
                     };
                 } else {
@@ -1461,6 +1487,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "채팅으로 답변해주세요", value: "placeholder_disabled", actionType: 'info_disabled', disabled: true }
                     ], 
                     importance: 'low',
+                    disableChatInput: false,
                     user_profile_update: { 
                         "시나리오": userProfile.시나리오,
                         "현재테스트종류": userProfile.현재테스트종류,
@@ -1510,6 +1537,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "깊은 상담 요청하기", value: "action_deep_advice_phase1", actionType: 'message', cost:1, displayCostIcon: true, iconType:'bone' }
                     ],
                     importance: 'low',
+                    disableChatInput: false,
                     user_profile_update: { "tarotResult": userProfile.tarotResult } 
                 };
             }
@@ -1523,6 +1551,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: `사용`, value: "action_confirm_add_two_cards_cost", cost: 2, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
                         { text: "취소", value: "action_cancel_cost_confirmation_for_add_cards", actionType: 'cancel_cost' }
                     ],
+                    disableChatInput: false,
                     user_profile_update: {}
                 };
             } else if (userMessageText === "action_confirm_add_two_cards_cost") {
@@ -1535,13 +1564,15 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         cards_to_select: 2,
                         sampleAnswers: [],
                         importance: 'low',
+                        disableChatInput: true,
                         user_profile_update: { "시나리오": (userProfile.시나리오 || "tarot_general") + "_add_two_pick", "bones": userProfile.bones },
                         systemMessageOnConfirm: "2장을 추가로 선택합니다. 카드를 골라주세요. (뼈다귀 -2)"
                     };
-                } else {
+                } else { // 뼈다귀 부족
                      responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)",
                         importance: 'low',
+                        disableChatInput: false,
                         sampleAnswers: [ { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' } ],
                         user_profile_update: {}
                     };
@@ -1555,6 +1586,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "다른 질문", value: "다른 질문 할래", actionType: 'message'}
                     ],
                     importance: 'low',
+                    disableChatInput: false,
                     user_profile_update: {}
                 };
             }
@@ -1575,6 +1607,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             { text: `사용`, value: confirmActionValue, cost: cost, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
                             { text: "취소", value: "action_cancel_cost_confirmation_for_deep_advice", actionType: 'cancel_cost' }
                         ],
+                        disableChatInput: false,
                         user_profile_update: {}
                     };
                 } else {
@@ -1582,6 +1615,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         assistantmsg: "깊은 상담을 진행하기 전에 먼저 타로를 선택하고 해석을 받아보세요.",
                         sampleAnswers: [ { text: "알겠습니다", value: "understood_tarot_first", actionType: 'message' } ],
                         importance: 'low',
+                        disableChatInput: false,
                         user_profile_update: {}
                      };
                 }
@@ -1600,13 +1634,15 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         tarocardview: false,
                         cards_to_select: null,
                         importance: 'low',
+                        disableChatInput: false,
                         sampleAnswers: [ { text: "정말 고마워요!", value: "고맙습니다", actionType: 'message'}, { text: "다른 질문 있어요", value: "다른 질문", actionType: 'message' } ],
                         user_profile_update: { "bones": userProfile.bones, "시나리오": (userProfile.시나리오 || "tarot_general") + "_deep_advice" },
                     };
-                } else if (requiredBones > 0) {
+                } else if (requiredBones > 0) { // 뼈다귀 부족
                      responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해서 더 깊은 조언을 듣기 어렵겠어요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)",
                         importance: 'low',
+                        disableChatInput: false,
                         sampleAnswers: [ { text: "괜찮아요", value: "괜찮습니다", actionType: 'message' }, { text: "뼈다귀는 어떻게 얻나요?", value: "뼈다귀 얻는법", actionType: 'message' } ],
                         user_profile_update: {}
                     };
@@ -1621,10 +1657,11 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             { text: "채팅으로 답변해주세요", value: "placeholder_disabled", actionType: 'info_disabled', disabled: true }
                         ],
                         importance: 'low',
+                        disableChatInput: false,
                         user_profile_update: {}
                     };
 
-                } else { // 일반적인 텍스트 입력 처리 (기존 botKnowledgeBase 로직)
+                } else { 
                     let baseResponse = botKnowledgeBase[userMessageText];
                     const lowerUserMsgForKnowledge = userMessageText.toLowerCase();
                     if (!baseResponse) {
@@ -1641,6 +1678,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         cards_to_select: null,
                         sampleAnswers: (baseResponse.sampleAnswers || []).map(sa => ({ text: sa, value: sa, actionType: 'message' })),
                         importance: 'low',
+                        disableChatInput: false, // 일반적인 경우 채팅 입력 가능
                         user_profile_update: {}
                     };
                 }
@@ -1685,7 +1723,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
     }
 
 async function processMessageExchange(messageText, source = 'input', options = {}) {
-    const { clearBeforeSend = false, menuItemData = null, buttonData: optionsButtonData = null } = options; // options에서 buttonData 추출
+    const { clearBeforeSend = false, menuItemData = null, buttonData: optionsButtonData = null } = options; 
 
     console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, options);
     if (isLoadingBotResponse && source !== 'system_internal_force') {
@@ -1693,7 +1731,6 @@ async function processMessageExchange(messageText, source = 'input', options = {
         return;
     }
 
-    // buttonData를 optionsButtonData로 명확히 구분
     const currentButtonData = (source === 'sample_button' && optionsButtonData) ? optionsButtonData : null;
 
     if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(currentButtonData && currentButtonData.actionType === 'confirm_cost')) {
@@ -1715,7 +1752,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
 
     isLoadingBotResponse = true;
     if(sendBtn) sendBtn.classList.add('loading');
-    setUIInteractions(true, false); 
+    // setUIInteractions는 botApiResponse.disableChatInput 값에 따라 달라지므로 아래로 이동
 
     if (moreOptionsPanel.classList.contains('active')) {
         console.log("[ProcessExchange] 더보기 패널 닫기.");
@@ -1727,7 +1764,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         source === 'input' || 
         source === 'panel_option' || 
         source === 'panel_option_topic_reset' ||
-        (source === 'sample_button' && currentButtonData && currentButtonData.actionType !== 'confirm_cost' && currentButtonData.actionType !== 'cancel_cost' && currentButtonData.actionType !== 'objective_answer' && currentButtonData.actionType !== 'info_disabled'); // objective_answer는 사용자 메시지로 표시 안 함
+        (source === 'sample_button' && currentButtonData && currentButtonData.actionType !== 'confirm_cost' && currentButtonData.actionType !== 'cancel_cost' && currentButtonData.actionType !== 'objective_answer' && currentButtonData.actionType !== 'info_disabled'); 
 
     if (shouldAddUserMessage && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
         const textForUserMessage = (source === 'sample_button' && currentButtonData && currentButtonData.text) ? currentButtonData.text : messageText;
@@ -1739,27 +1776,39 @@ async function processMessageExchange(messageText, source = 'input', options = {
         adjustTextareaHeight();
     }
 
-    // simulateBotResponse에 전달할 메시지 (버튼의 value 우선)
     const effectiveMessageForAPI = (source === 'sample_button' && currentButtonData && currentButtonData.value) ? currentButtonData.value : messageText;
 
     try {
-        // simulateBotResponse 호출 시 currentButtonData (즉, options.buttonData)를 두 번째 인자로 전달
         const botApiResponse = await simulateBotResponse(effectiveMessageForAPI, currentButtonData); 
         
+        // disableChatInput 플래그에 따라 UI 상호작용 설정
+        setUIInteractions(true, false); // 우선 로딩 중으로 설정
+        if (messageInput && sendBtn) {
+            if (botApiResponse.disableChatInput === true) {
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                console.log("[UIControls] 채팅 입력창 및 전송 버튼 비활성화 (봇 요청).");
+            } else if (botApiResponse.disableChatInput === false) {
+                // false로 명시된 경우에만 강제로 활성화 (isLoadingBotResponse 해제 시 어차피 활성화됨)
+                // messageInput.disabled = false; 
+                // sendBtn.disabled = messageInput.value.trim() === '';
+                // console.log("[UIControls] 채팅 입력창 및 전송 버튼 활성화 (봇 요청).");
+            }
+            // undefined인 경우는 isLoadingBotResponse 상태에 따름 (아래 finally에서 처리)
+        }
+
+
         if (botApiResponse.user_profile_update) {
              for (const key in botApiResponse.user_profile_update) {
-                if (key !== "bones") { // 뼈다귀는 이미 simulateBotResponse 내부에서 직접 userProfile 수정 및 저장됨
+                if (key !== "bones") { 
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
-                        // 선택된타로카드들 초기화 방지 (이미 simulateBotResponse에서 처리함)
                         if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
-                           // 이 경우 업데이트 건너뜀 (예: 카드 선택 UI 호출 전 초기화)
                         } else {
                             userProfile[key] = botApiResponse.user_profile_update[key];
                         }
                     }
                 }
             }
-            // user_profile_update에 bones 외 다른 키가 있을 때만 저장 (bones는 이미 내부에서 저장됨)
             if (Object.keys(botApiResponse.user_profile_update).some(k => k !== "bones")) {
                 saveUserProfileToLocalStorage(userProfile);
             }
@@ -1770,9 +1819,9 @@ async function processMessageExchange(messageText, source = 'input', options = {
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
         }
 
-        if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) { // 시스템 메시지가 있으면 assistantmsg는 프롬프트용일 수 있음
+        if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) { 
             await addMessage(botApiResponse.assistantmsg, 'bot');
-        } else if (botApiResponse.systemMessageOnConfirm) { // 시스템 메시지가 우선순위
+        } else if (botApiResponse.systemMessageOnConfirm) { 
              await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
         }
         
@@ -1787,18 +1836,17 @@ async function processMessageExchange(messageText, source = 'input', options = {
             if (messageInput && document.activeElement === messageInput) {
                 messageInput.blur();
             }
-            // 배경 이미지 결정 로직 (메뉴항목 데이터 -> 버튼 데이터 -> 프로필 순)
             let currentTarotBg = userProfile.tarotbg || 'default.png';
-            const bgSourceMenuItem = menuItemData; // 패널 메뉴에서 직접 넘어온 경우
-            const bgSourceButton = (source === 'sample_button' && currentButtonData) ? currentButtonData : null; // 샘플 버튼에서 tarotbg가 설정된 경우
+            const bgSourceMenuItem = menuItemData; 
+            const bgSourceButton = (source === 'sample_button' && currentButtonData) ? currentButtonData : null; 
 
             if (bgSourceMenuItem && bgSourceMenuItem.tarotbg) {
                 currentTarotBg = bgSourceMenuItem.tarotbg;
-            } else if (bgSourceButton && bgSourceButton.tarotbg) { // menuItemData가 없을 때 buttonData 확인
+            } else if (bgSourceButton && bgSourceButton.tarotbg) { 
                 currentTarotBg = bgSourceButton.tarotbg;
             }
             
-            if (currentTarotBg !== userProfile.tarotbg) { // 배경이 변경된 경우만 저장
+            if (currentTarotBg !== userProfile.tarotbg) { 
                  userProfile.tarotbg = currentTarotBg;
                  saveUserProfileToLocalStorage(userProfile);
             }
@@ -1817,8 +1865,20 @@ async function processMessageExchange(messageText, source = 'input', options = {
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
-        const shouldFocus = (source === 'input' && !isTarotSelectionActive);
-        setUIInteractions(false, shouldFocus);
+        // 여기서 UI 상호작용을 최종적으로 설정 (봇 응답의 disableChatInput 고려)
+        const botApiResponseForFinally = (typeof botApiResponse !== 'undefined') ? botApiResponse : {}; // try 블록에서 오류 시 botApiResponse가 없을 수 있음
+        const shouldDisableInputBasedOnBot = botApiResponseForFinally.disableChatInput === true;
+        const shouldEnableInputBasedOnBot = botApiResponseForFinally.disableChatInput === false;
+
+        if (shouldDisableInputBasedOnBot) {
+            setUIInteractions(false, false); // 로딩은 끝났지만 입력은 비활성화
+            if (messageInput) messageInput.disabled = true;
+            if (sendBtn) sendBtn.disabled = true;
+        } else if (shouldEnableInputBasedOnBot) {
+            setUIInteractions(false, (source === 'input' && !isTarotSelectionActive)); // 명시적으로 활성화
+        } else { // botApiResponse.disableChatInput이 undefined인 경우 (일반적인 경우)
+            setUIInteractions(false, (source === 'input' && !isTarotSelectionActive));
+        }
         console.log("[ProcessExchange] 완료.");
     }
 }
