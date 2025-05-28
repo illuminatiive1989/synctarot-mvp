@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initialBotMessage = {
         text: "안녕하세요! 루비입니다. 무엇을 도와드릴까요?", 
-        sampleAnswers: [ // 초기 샘플 답변 수정
+        sampleAnswers: [
             { text: "먼저 보고싶은 타로를 골라주세요", value: "info_initial_prompt", actionType: 'info_disabled', disabled: true }
         ] 
     };
@@ -1138,20 +1138,6 @@ function updateSampleAnswers(answers = [], importance = 'low', isConfirmationSta
     });
 }
 
-const botKnowledgeBase = {
-    "오늘의 운세 보여줘": { response: "오늘 당신의 운세는... <b>매우 긍정적</b>입니다! 새로운 시작을 하기에 좋은 날이에요. <br>자신감을 가지세요!", sampleAnswers: ["다른 운세", "고마워"] },
-    "오늘 뭐 먹을지 추천해줘": { response: "오늘은 <b>따뜻한 국물 요리</b> 어떠세요? 예를 들어, <b>김치찌개</b>나 <b>순두부찌개</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "다른 추천"] },
-    "썸인지 아닌지 알려줘": { response: "상대방의 행동과 말투를 자세히 알려주시면, 제가 분석해볼게요! <br>예를 들어, '그 사람은 나에게 자주 웃어줘요.' 처럼요.", sampleAnswers: ["카톡 대화 분석해줘", "데이트 신청해도 될까?"] },
-    "그 사람의 마음을 알고 싶어": { response: "마음을 읽는 것은 어렵지만, 몇 가지 질문을 통해 추측해볼 수 있어요.<br>그 사람과 어떤 관계인가요?", sampleAnswers: ["친구 관계예요", "직장 동료예요"] },
-    "오늘의 운세가 궁금해요.": { response: "오늘의 운세입니다:<br><b>희망찬 하루!</b> 작은 노력들이 결실을 맺을 거예요.<br>자신감을 갖고 나아가세요.", sampleAnswers: ["다른 운세 보기", "오늘 날씨는?", "고마워"] },
-    "추천 메뉴 알려주세요.": { response: "오늘은 특별한 날인가요? <b>스테이크</b> 어떠세요?<br>아니면 가볍게 <b>샐러드 파스타</b>도 좋아요!", sampleAnswers: ["스테이크 맛집", "파스타 레시피", "다른 추천"] },
-    "날씨 알려줘.": { response: "현재 계신 지역의 날씨를 알려드릴까요?<br>아니면 특정 도시의 날씨가 궁금하신가요?", sampleAnswers: ["서울 날씨", "부산 날씨", "내 위치 날씨"] },
-    "도움말 보여주세요.": { response: "무엇을 도와드릴까요?<br>저는 <b>운세 보기</b>, <b>메뉴 추천</b>, <b>날씨 정보</b> 등을 제공할 수 있어요.<br>궁금한 것을 말씀해주세요!", sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘"] },
-    "오늘의 운세": { response: "오늘의 운세입니다:<br><b>대박!</b> 원하는 모든 것을 이룰 수 있는 하루예요!<br>긍정적인 마음으로 도전해보세요.", sampleAnswers: ["추천 메뉴", "오늘 날씨 어때?", "고마워"] },
-    "추천 메뉴": { response: "점심 메뉴로는 <b>얼큰한 김치찌개</b> 어떠세요? 아니면 저녁으로 <b>부드러운 크림 파스타</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "파스타 맛집 추천", "다른 거 없어?"] },
-    "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
-    "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
-};
 
 
 
@@ -1718,89 +1704,65 @@ async function handleDeepAdviceActions(userMessageText, buttonData) {
 
 function handleGeneralKnowledgeActions(userMessageText, buttonData) {
     let responseData = {};
-    // placeholder_disabled는 info_disabled의 value이므로, actionType으로 먼저 거름
+    
+    // 비활성화된 정보 버튼 클릭은 여기서도 한 번 더 방어적으로 처리 (CSS가 우선)
     if (buttonData && buttonData.actionType === 'info_disabled') {
-        // 비활성화된 정보 버튼이 혹시 클릭된 경우, 아무것도 안 함 (또는 특정 로깅)
         console.log("[GeneralKnowledge] Info_disabled 버튼 클릭됨, 무시:", userMessageText);
-        // 빈 responseData를 반환하면 simulateBotResponse 마지막의 기본값 보장 로직이 채워줄 것임
-        // 또는 여기서 명시적으로 기본 에러 메시지나 현재 상태 유지 메시지를 반환할 수 있음
-        responseData = {
-            assistantmsg: userProfile.현재테스트종류 === 'subjective' ? 
-                          `네, ${QUESTIONS_DATA.subjective.find(q => q.id === userProfile.현재질문ID)?.questionText || '현재 질문에 대해 채팅으로 답변해주세요.'}` : 
-                          "현재 선택 가능한 액션이 없습니다.", // 더 적절한 메시지
-            sampleAnswers: userProfile.현재테스트종류 === 'subjective' ? 
-                           [{ text: "채팅으로 답변해주세요", value: "placeholder_disabled", actionType: 'info_disabled', disabled: true }] : 
-                           [], // 현재 상태에 맞는 샘플 답변
-            importance: 'low', 
-            disableChatInput: !userProfile.isInDeepAdviceMode && userProfile.현재테스트종류 !== 'subjective', 
-            user_profile_update: {}
-        };
-        return responseData;
+        // 이 경우, 특별한 메시지 없이 현재 상태를 유지하거나,
+        // 사용자가 다른 행동을 하도록 유도하는 매우 간단한 안내만 제공할 수 있습니다.
+        // 여기서는 기본적으로 아무런 추가 메시지나 샘플 답변을 제공하지 않는 것으로 처리.
+        // simulateBotResponse 마지막의 기본값 보장 로직이 최소한의 응답을 만들어줄 것임.
+        return { 
+            disableChatInput: !userProfile.isInDeepAdviceMode && userProfile.현재테스트종류 !== 'subjective' 
+            // disableChatInput은 현재 상태에 맞게 설정
+        }; 
     }
+
+    // botKnowledgeBase가 제거되었으므로, 모든 알 수 없는 입력은 동일한 메시지 처리
+    responseData = { 
+        assistantmsg: userProfile.isInDeepAdviceMode ? 
+                      "죄송해요, 잘 이해하지 못했어요. 깊은 상담 중이시니 편하게 다시 말씀해주시겠어요?" :
+                      "죄송해요, 잘 이해하지 못했어요. <br>더보기 메뉴를 통해 원하시는 기능을 선택해주세요.",
+        sampleAnswers: [], 
+        importance: 'low', 
+        disableChatInput: !userProfile.isInDeepAdviceMode && userProfile.현재테스트종류 !== 'subjective', 
+        user_profile_update: {} 
+    };
     
-    let baseResponse = botKnowledgeBase[userMessageText];
-    const lowerUserMsgForKnowledge = userMessageText.toLowerCase(); // userMessageText를 사용
-    if (!baseResponse) {
-        if (lowerUserMsgForKnowledge.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
-        else if (lowerUserMsgForKnowledge.includes("메뉴") || lowerUserMsgForKnowledge.includes("음식") || lowerUserMsgForKnowledge.includes("추천")) baseResponse = botKnowledgeBase["오늘 뭐 먹을지 추천해줘"];
-        else if (lowerUserMsgForKnowledge.includes("날씨")) baseResponse = botKnowledgeBase["날씨 알려줘."];
-        else if (lowerUserMsgForKnowledge.includes("도움") || lowerUserMsgForKnowledge.includes("help")) baseResponse = botKnowledgeBase["도움말 보여주세요."];
-    }
-    if (!baseResponse) baseResponse = botKnowledgeBase["기본"];
-    
-    // baseResponse가 객체인지 확인하고, 필요한 필드를 responseData에 명시적으로 할당
-    if (baseResponse) {
-        responseData.assistantmsg = baseResponse.response; // response 필드를 assistantmsg로 사용
-        if (baseResponse.sampleAnswers && Array.isArray(baseResponse.sampleAnswers)) {
-            responseData.sampleAnswers = baseResponse.sampleAnswers.map(sa => 
-                typeof sa === 'string' ? { text: sa, value: sa, actionType: 'message' } : sa
-            );
-        } else {
-            responseData.sampleAnswers = [];
-        }
-        // 기타 필요한 필드들을 baseResponse에서 가져오거나 기본값 설정
-        responseData.tarocardview = baseResponse.tarocardview || false;
-        responseData.cards_to_select = baseResponse.cards_to_select || null;
-        responseData.importance = baseResponse.importance || 'low';
-        // disableChatInput은 여기서 설정하지 않고, simulateBotResponse 마지막의 기본값 로직에 맡기거나,
-        // 명시적으로 false (일반 대화이므로 입력 가능)로 설정 가능
-        responseData.disableChatInput = false; 
-        responseData.user_profile_update = baseResponse.user_profile_update || {};
-    } else { 
-        // baseResponse가 없는 극단적인 경우 (botKnowledgeBase["기본"]도 없다면)
-        responseData = { 
-            assistantmsg: "죄송해요, 잘 이해하지 못했어요. (기본 응답)", 
-            sampleAnswers: [], 
-            importance: 'low', 
-            disableChatInput: false, 
-            user_profile_update: {} 
-        };
-    }
     return responseData;
 }
 // --- 헬퍼 함수들 끝 ---
 
 
 
-
 async function simulateBotResponse(userMessageText, buttonData = null) { 
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작. buttonData:`, buttonData);
-    return new Promise(async (resolve) => { // Promise 시작
+    return new Promise(async (resolve) => { 
 
         let responseData = {}; 
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // tarotInitiationMessages는 전역으로 이동했으므로 여기서 선언 안 함
+        // tarotInitiationMessages는 전역 상수
 
-        // 1. 싱크타입 테스트 관련 액션 처리
-        if (userMessageText === "action_submit_sync_test" || 
+        // --- 초기 메시지 응답 처리 ---
+        if (userMessageText === initialBotMessage.text) { // 챗봇의 첫 마디에 대한 응답
+            responseData = {
+                assistantmsg: initialBotMessage.text, // 이미 addMessage로 표시되었으므로 중복 방지 필요 시 로직 수정
+                sampleAnswers: initialBotMessage.sampleAnswers,
+                importance: 'low',
+                disableChatInput: true, // 초기에는 메뉴 선택 유도
+                user_profile_update: {}
+            };
+        }
+        // --- 싱크타입 테스트 관련 액션 ---
+        else if (userMessageText === "action_submit_sync_test" || 
             (userProfile.현재테스트종류 === 'subjective' && userProfile.현재질문ID && userMessageText !== "action_start_sync_type_test" && !(buttonData && buttonData.actionType === 'info_disabled') && userMessageText !== "placeholder_disabled") ||
             (buttonData && buttonData.actionType === 'objective_answer' && userProfile.현재테스트종류 === 'objective') ||
             userMessageText === "action_restart_sync_test_full") {
             responseData = await handleSyncTypeTestActions(userMessageText, buttonData);
         }
-        // 2. 타로 세션 시작/설정 관련 액션 처리
-        else { // 싱크타입 테스트 관련 액션이 아닌 경우, 기존 타로 및 일반 로직으로 분기
+        // --- 그 외의 경우, 기존 로직 실행 ---
+        else { 
             let selectedTarotTopicName = null;
             if (userProfile.시나리오 && userProfile.시나리오.startsWith("tarot_topic_")) {
                 const topicKey = userProfile.시나리오.substring("tarot_topic_".length).split("_pick")[0].split("_propose_sync_test")[0].split("_started")[0].split("_skipped_sync_test")[0];
@@ -1848,7 +1810,6 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                      userMessageText === CANCEL_COST_CONFIRMATION_ACTION) {
                 responseData = await handleTarotSetupActions(userMessageText, buttonData, selectedTarotTopicName, tarotInitiationMessages);
             }
-            // 3. "카드 선택 완료" 후 분기 처리
             else if (userMessageText === "카드 선택 완료" || userMessageText === "action_start_sync_type_test" || userMessageText === "action_skip_sync_type_test") {
                 const result = await handleTarotCardSelectionCompleteActions(userMessageText, buttonData);
                 if (result.internalAction) { 
@@ -1856,15 +1817,12 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 }
                 responseData = result;
             }
-            // 4. 타로 해석 진행 (싱크타입 테스트 후 또는 스킵 후)
             else if (userMessageText === "action_proceed_tarot_interpretation_after_sync" || userMessageText === "action_proceed_tarot_interpretation") {
                 responseData = await handleTarotInterpretationActions(userMessageText, buttonData, selectedTarotTopicName);
             }
-            // 5. "2장 더 뽑기" 관련 액션
             else if (userMessageText === "action_add_two_cards" || userMessageText === "action_add_two_cards_phase1" || userMessageText === "action_confirm_add_two_cards_cost" || userMessageText === "action_cancel_cost_confirmation_for_add_cards") {
                 responseData = await handleAddTwoCardsActions(userMessageText, buttonData);
             }
-            // 6. "깊은 상담" 관련 액션 (시작 및 진행)
             else if (userMessageText.startsWith("action_deep_analysis_") || userMessageText === "action_deep_advice_phase1" || (userMessageText.startsWith("action_confirm_deep_analysis_") && userMessageText.endsWith("_cost")) || (userProfile.isInDeepAdviceMode && !(buttonData && buttonData.actionType) && !["고맙습니다", "다른 질문", "괜찮습니다", "뼈다귀는 어떻게 얻나요?", "알겠습니다", "understood_tarot_first_for_deep_advice", "error_acknowledged_deep_advice", "error_acknowledged_tarot_interp"].includes(userMessageText) && !tarotInitiationMessages.includes(userMessageText) && !userMessageText.startsWith("action_") ) ) {
                  if(userMessageText === "action_cancel_cost_confirmation_for_deep_advice"){ 
                      let nextSampleAnswersAfterCancel = [];
@@ -1882,12 +1840,10 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     responseData = await handleDeepAdviceActions(userMessageText, buttonData);
                  }
             }
-            // 7. 일반 지식 기반 응답
-            else {
+            else { // 그 외 모든 경우 (이전에 botKnowledgeBase로 처리되던 부분)
                 responseData = handleGeneralKnowledgeActions(userMessageText, buttonData);
             }
         }
-
 
         if (responseData.sampleanswer && !responseData.sampleAnswers) {
             responseData.sampleAnswers = responseData.sampleanswer.split('|').map(s => ({ text: s.trim(), value: s.trim(), actionType: 'message' })).filter(s => s.text);
@@ -1895,31 +1851,29 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         }
 
         if (Object.keys(responseData).length === 0 && buttonData && buttonData.actionType === 'info_disabled') {
-            // info_disabled 버튼 클릭은 아무런 응답도 생성하지 않고, 입력창 상태도 변경하지 않음
-            // 이 경우, 다음 UI 업데이트가 없으므로 현재 UI 상태를 유지해야 함.
-            // processMessageExchange의 finally에서 UI를 다시 현재 상태로 돌려놓도록 해야함.
-            // 혹은 여기서 최소한의 responseData를 설정하여 다음 흐름을 타도록 함.
-            // 여기서는 빈 객체를 반환하면 아래 기본값 설정 로직에서 채워짐.
-            console.log("[BotResponse] Info_disabled 버튼 클릭 무시됨, 빈 responseData 반환.");
+            // 비활성화된 안내 버튼 클릭은 특별한 응답을 생성하지 않음.
+            // 이 경우, assistantmsg 등이 undefined로 남게 되므로 아래 기본값 설정이 중요.
         }
 
-
         if (responseData.assistantmsg === undefined && responseData.assistant_interpretation === undefined && responseData.systemMessageOnConfirm === undefined) {
-            if (!(buttonData && buttonData.actionType === 'info_disabled')) { // info_disabled가 아닌데 메시지가 없는 경우만 기본 오류
-                 responseData.assistantmsg = "죄송합니다. 요청을 처리하는 중 내부 오류가 발생했습니다.";
+            if (!(buttonData && buttonData.actionType === 'info_disabled')) { 
+                 responseData.assistantmsg = userProfile.isInDeepAdviceMode ? 
+                                             "죄송해요, 잘 이해하지 못했어요. 깊은 상담 중이시니 편하게 다시 말씀해주시겠어요?" :
+                                             "죄송해요, 잘 이해하지 못했어요. <br>더보기 메뉴를 통해 원하시는 기능을 선택해주세요.";
+            } else if (!responseData.assistantmsg) { // info_disabled인데 메시지가 아예 없는 경우
+                responseData.assistantmsg = " "; // 빈칸이라도 보내서 addMessage 오류 방지
             }
         }
         if (responseData.sampleAnswers === undefined) responseData.sampleAnswers = [];
         if (responseData.importance === undefined) responseData.importance = 'low';
         
-        // disableChatInput의 기본값 결정 로직 수정
         if (responseData.disableChatInput === undefined) { 
             if (userProfile.isInDeepAdviceMode || userProfile.현재테스트종류 === 'subjective') {
-                responseData.disableChatInput = false; // 깊은 상담 중이거나 주관식 테스트 중이면 입력 가능
+                responseData.disableChatInput = false; 
             } else if (responseData.sampleAnswers && responseData.sampleAnswers.length > 0 && responseData.sampleAnswers.some(sa => sa.actionType !== 'info_disabled')) {
-                responseData.disableChatInput = true; // 클릭 가능한 샘플 답변이 있으면 입력 비활성화
-            } else {
-                responseData.disableChatInput = false; // 그 외에는 입력 가능 (예: 초기 상태, 일반 대화)
+                responseData.disableChatInput = true; 
+            } else { // 초기 상태 포함
+                responseData.disableChatInput = true; 
             }
         }
 
@@ -1927,10 +1881,8 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
 
         console.log(`[BotResponse] 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
         resolve(responseData);
-    }); // Promise 종료
-} // simulateBotResponse 함수 종료
-
-
+    }); 
+} 
 function setUIInteractions(isProcessing, shouldFocusInput = false, forceDisableInput = false) {
     console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}, forceDisableInput=${forceDisableInput}`);
     
