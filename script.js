@@ -928,62 +928,71 @@ const botKnowledgeBase = {
 };
 async function simulateBotResponse(userMessageText, actionPayload = null) { // async로 변경, actionPayload 추가
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작. 페이로드:`, actionPayload);
-    // 실제로는 API 호출이 될 수 있으므로 Promise 반환 유지
-    return new Promise(async (resolve) => { // 내부 로직도 async/await 사용 가능하도록
-        // 약간의 지연 추가
+    return new Promise(async (resolve) => {
         await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
 
         let responseData = {};
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // actionPayload가 있으면 우선 처리 (주로 버튼 클릭 후 다음 단계 요청)
         if (actionPayload && actionPayload.action_id) {
-            if (actionPayload.action_id === 'REQUEST_CARD_COUNT_CONFIRM') {
-                const count = actionPayload.params.count;
-                let cost = 0;
-                if (count === 1) cost = 0; // 1장은 무료라고 가정
-                else if (count === 3) cost = 2; // 3장은 2개 소모 가정
-
-                // 사용자에게는 '3장 선택' 등으로 표시하지만, 내부적으로는 비용과 함께 전달
-                const confirmText = `${count}장 선택 (🦴-${cost})`;
-                const cancelText = "취소";
-                
-                responseData = {
-                    assistantmsg: `${count}장을 선택하시겠습니까? ${cost > 0 ? `뼈다귀 ${cost}개가 소모됩니다.` : '무료입니다.'}`,
-                    tarocardview: false,
-                    cards_to_select: null,
-                    sample_buttons: [ // sampleanswer 대신 sample_buttons 사용
-                        { type: 'action_confirm', text: confirmText, action_id: 'CONFIRM_CARD_SELECTION', params: { count: count, cost: cost }, importance: 'high_confirm' },
-                        { type: 'action_cancel', text: cancelText, action_id: 'CANCEL_CARD_SELECTION_COUNT', params: { original_request: "카드 뽑기" }, importance: 'high_cancel' }
-                    ],
-                    importance_level: 'high', // 컨테이너 전체 중요도
-                    user_profile_update: {}
-                };
-            } else if (actionPayload.action_id === 'CANCEL_CARD_SELECTION_COUNT') {
-                // 취소 시, 다시 "카드 뽑기" 초기 질문으로 돌아감
-                userMessageText = actionPayload.params.original_request || "카드 뽑기"; 
-                // Fall through to "카드 뽑기" logic below
-            }
-        }
-
-        // userMessageText 기반 분기 (actionPayload에 의해 이미 처리되지 않은 경우)
-        if (Object.keys(responseData).length === 0) { // responseData가 아직 비어있을 때만 아래 로직 실행
-            if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래") {
+            if (actionPayload.action_id === 'INITIATE_CARD_PICKING') { // 초기 "카드 뽑기" 버튼 클릭 시
                 responseData = {
                     assistantmsg: "카드를 몇 장 뽑으시겠어요?",
                     tarocardview: false,
                     cards_to_select: null,
                     sample_buttons: [
-                        { type: 'action_trigger', text: '한 장만', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 1 }, importance: 'low_trigger' }, // 중요도 low_trigger (일반 버튼처럼 보임)
-                        { type: 'action_trigger', text: '3장', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 3 }, importance: 'low_trigger' }  // 중요도 low_trigger
+                        { type: 'action_trigger', text: '한 장만', value: '한 장만', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 1 }, importance: 'low_trigger' },
+                        { type: 'action_trigger', text: '3장', value: '3장', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 3 }, importance: 'low_trigger' }
                     ],
-                    importance_level: 'low', // 컨테이너 중요도 낮음
+                    importance_level: 'low',
                     user_profile_update: {}
                 };
-            } else if (userMessageText === "카드 선택 완료") { // 이 메시지는 내부적으로 processMessageExchange에서 호출
+            } else if (actionPayload.action_id === 'REQUEST_CARD_COUNT_CONFIRM') {
+                const count = actionPayload.params.count;
+                let cost = 0;
+                if (count === 1) cost = 0;
+                else if (count === 3) cost = 2;
+                else if (count === 2 && actionPayload.params.add_on) cost = 2; // "2장 더 뽑을래" 시나리오 (3장과 동일 비용 가정)
+
+
+                const confirmButtonTextBase = `${count}장 선택`;
+                const confirmButtonTextWithCost = cost > 0 ? `${confirmButtonTextBase} (🦴-${cost})` : confirmButtonTextBase;
+                
+                responseData = {
+                    assistantmsg: `${count}장을 선택하시겠습니까? ${cost > 0 ? `뼈다귀 ${cost}개가 소모됩니다.` : '무료입니다.'}`,
+                    tarocardview: false,
+                    cards_to_select: null,
+                    sample_buttons: [
+                        { type: 'action_confirm', text: confirmButtonTextWithCost, value: confirmButtonTextWithCost, action_id: 'CONFIRM_CARD_SELECTION', params: { count: count, cost: cost, add_on: !!actionPayload.params.add_on }, importance: 'high_confirm' },
+                        { type: 'action_cancel', text: "취소", value: "취소", action_id: 'CANCEL_CARD_SELECTION_COUNT', params: { original_request: "카드 뽑기" }, importance: 'high_cancel' }
+                    ],
+                    importance_level: 'high',
+                    user_profile_update: {}
+                };
+            } else if (actionPayload.action_id === 'CANCEL_CARD_SELECTION_COUNT') {
+                // 취소 시, 다시 "카드 뽑기" 초기 질문으로 돌아가도록 INITIATE_CARD_PICKING에 대한 응답을 재생성
+                 responseData = {
+                    assistantmsg: "카드를 몇 장 뽑으시겠어요?",
+                    tarocardview: false,
+                    cards_to_select: null,
+                    sample_buttons: [
+                        { type: 'action_trigger', text: '한 장만', value: '한 장만', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 1 }, importance: 'low_trigger' },
+                        { type: 'action_trigger', text: '3장', value: '3장', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 3 }, importance: 'low_trigger' }
+                    ],
+                    importance_level: 'low',
+                    user_profile_update: {}
+                };
+            }
+        }
+
+        if (Object.keys(responseData).length === 0) {
+            if (userMessageText === "카드 선택 완료") {
                 let assistantInterpretationHTML = "";
                 let rubyCommentary = "";
-                let nextSampleButtons = []; // 버튼 객체 배열로 변경
+                let nextSampleButtons = [];
+                // actionPayload에서 cards_to_select를 참조해야 함 (이전 simulateBotResponse 호출 시 전달됨)
+                const actualCardsSelectedCount = (actionPayload && actionPayload.cards_to_select) ? actionPayload.cards_to_select : userProfile.선택된타로카드들.length;
+
 
                 if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
                     assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
@@ -1012,10 +1021,12 @@ async function simulateBotResponse(userMessageText, actionPayload = null) { // a
                     assistantInterpretationHTML += `</div>`;
 
                     rubyCommentary = `흠... 흥미로운 카드들이 나왔군요! ${userProfile.사용자애칭}님의 상황에 대해 좀 더 깊이 생각해볼 수 있겠어요.`;
-                    if (userProfile.선택된타로카드들.length === 1) {
+                    
+                    // actualCardsSelectedCount를 기준으로 다음 버튼 결정
+                    if (actualCardsSelectedCount === 1) {
                         rubyCommentary += ` 특히 첫 번째 카드는 현재 상황을 잘 보여주는 것 같네요.`;
                         nextSampleButtons = [
-                            { type: 'action_trigger', text: '2장 더 뽑을래', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 2, add_on: true }, importance: 'low_trigger' }, // 2장 추가 뽑기는 3장 뽑기와 유사하게 처리 (비용 등)
+                            { type: 'action_trigger', text: '2장 더 뽑을래', value: '2장 더 뽑을래', action_id: 'REQUEST_CARD_COUNT_CONFIRM', params: { count: 2, add_on: true }, importance: 'low_trigger' },
                             { type: 'message', text: '더 깊은 해석을 듣고싶어 (🦴-3)', value: '더 깊은 해석을 듣고싶어 (🦴-3)', importance: 'low' }
                         ];
                     } else { // 3장 또는 2장 추가 후 (총 3장)
@@ -1037,15 +1048,13 @@ async function simulateBotResponse(userMessageText, actionPayload = null) { // a
                 responseData = {
                     assistant_interpretation: assistantInterpretationHTML,
                     assistantmsg: rubyCommentary,
-                    tarocardview: false,
-                    cards_to_select: null,
+                    tarocardview: (actionPayload && actionPayload.current_scenario === 'tarot_pick_after_confirm') ? true : false, // UI를 띄울지 여부
+                    cards_to_select: (actionPayload && actionPayload.current_scenario === 'tarot_pick_after_confirm') ? actualCardsSelectedCount : null, // UI에 전달할 카드 수
                     sample_buttons: nextSampleButtons,
                     importance_level: 'low',
                     user_profile_update: {}
                 };
-            // '2장 더 뽑을래'와 같은 케이스는 action_id 'REQUEST_CARD_COUNT_CONFIRM'으로 통합하여 위에서 처리.
-            // '조금만 더 풀이해줘', '더 깊은 해석을 듣고싶어' 등은 일반 메시지로 처리.
-            } else { // 일반 메시지 처리 (기존 botKnowledgeBase 사용)
+            } else { 
                 let baseResponse = botKnowledgeBase[userMessageText];
                 if (!baseResponse) {
                     if (lowerUserMessage.includes("운세")) baseResponse = botKnowledgeBase["오늘의 운세 보여줘"];
@@ -2139,7 +2148,7 @@ async function initializeChat() {
         console.error("[App] tarotClearSelectionBtn 요소를 찾을 수 없습니다.");
     }
     if (tarotRandomSelectBtn) {
-        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection); // 수정된 부분
+        tarotRandomSelectBtn.addEventListener('click', handleRandomTarotSelection);
     } else {
         console.error("[App] tarotRandomSelectBtn 요소를 찾을 수 없습니다.");
     }
@@ -2147,8 +2156,24 @@ async function initializeChat() {
     isLoadingBotResponse = true;
     setUIInteractions(true, false);
 
-    if (typeof initialBotMessage === 'undefined' || !initialBotMessage.text || !initialBotMessage.sampleAnswers) {
-        console.error("[App] initialBotMessage가 올바르게 정의되지 않았습니다. 초기화 중단.");
+    // initialBotMessage의 sampleAnswers 구조를 새로운 버튼 객체 형식으로 수정
+    const initialBotMessageModified = {
+        text: "안녕하세요! 루비입니다. 무엇을 도와드릴까요?",
+        sample_buttons: [ // sampleAnswers 대신 sample_buttons 사용 및 객체 구조화
+            { type: 'message', text: "오늘의 운세", value: "오늘의 운세", importance: 'low' },
+            { type: 'action_trigger', text: "카드 뽑기", value: "카드 뽑기", action_id: 'INITIATE_CARD_PICKING', params: {}, importance: 'low_trigger' }
+        ],
+        importance_level: 'low' // 초기 버튼들의 컨테이너 중요도
+    };
+    
+    // simulateBotResponse에서 "카드 뽑기" (action_id: INITIATE_CARD_PICKING)를 처리하는 로직 추가 필요
+    // 기존 simulateBotResponse에서는 "카드 뽑기" 문자열을 직접 비교했었음.
+    // action_id를 사용하도록 simulateBotResponse 수정 필요. (다음 단계에서 진행 또는 현재 로직에서 해당 ID 처리)
+    // 우선, INITIATE_CARD_PICKING action_id를 받았을 때 "카드를 몇 장 뽑으시겠어요?" 와 버튼들을 반환하도록
+    // simulateBotResponse에 로직을 추가해야 함.
+
+    if (typeof initialBotMessageModified === 'undefined' || !initialBotMessageModified.text || !initialBotMessageModified.sample_buttons) {
+        console.error("[App] initialBotMessageModified가 올바르게 정의되지 않았습니다. 초기화 중단.");
         await addMessage("초기 메시지를 불러올 수 없습니다. 관리자에게 문의하세요.", 'system');
         isLoadingBotResponse = false;
         setUIInteractions(false, false);
@@ -2158,8 +2183,8 @@ async function initializeChat() {
     }
 
     try {
-        await addMessage(initialBotMessage.text, 'bot');
-        updateSampleAnswers(initialBotMessage.sampleAnswers);
+        await addMessage(initialBotMessageModified.text, 'bot');
+        updateSampleAnswers(initialBotMessageModified.sample_buttons, initialBotMessageModified.importance_level);
     } catch (error) {
         console.error("[App] 초기 메시지 표시 중 오류:", error);
         await addMessage("초기 메시지를 표시하는 중 오류가 발생했습니다.", "system");
