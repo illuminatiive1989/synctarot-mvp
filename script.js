@@ -112,47 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
 # 이전 대화 내용:
 `; // 실제 API 호출 시 이 뒤에 이전 대화, tarotResult, 사용자 프로필이 추가됨
 
-    // --- 데이터 상수 (data.ini 내용 대체) ---
-    const QUESTIONS_DATA = {
-        subjective: [
-            { id: "subj_01", questionText: "최근 당신의 삶에서 가장 중요하다고 생각하는 가치는 무엇인가요? 그리고 그 이유는 무엇인가요?" }
-        ],
-        objective: [
-            {
-                id: "obj_01",
-                questionText: "새로운 환경이나 변화에 빠르게 적응하는 편입니다.",
-                options: [
-                    { text: "전혀 그렇지 않다", score: 1 },
-                    { text: "그렇지 않다", score: 2 },
-                    { text: "보통이다", score: 3 },
-                    { text: "그렇다", score: 4 },
-                    { text: "매우 그렇다", score: 5 }
-                ]
-            },
-            {
-                id: "obj_02",
-                questionText: "혼자 시간을 보내는 것보다 다른 사람들과 함께 어울리는 것을 더 선호합니다.",
-                options: [
-                    { text: "전혀 그렇지 않다", score: 1 },
-                    { text: "그렇지 않다", score: 2 },
-                    { text: "보통이다", score: 3 },
-                    { text: "그렇다", score: 4 },
-                    { text: "매우 그렇다", score: 5 }
-                ]
-            },
-            {
-                id: "obj_03",
-                questionText: "결정을 내릴 때 감정보다는 논리적인 분석을 우선시하는 경향이 있습니다.",
-                options: [
-                    { text: "전혀 그렇지 않다", score: 1 },
-                    { text: "그렇지 않다", score: 2 },
-                    { text: "보통이다", score: 3 },
-                    { text: "그렇다", score: 4 },
-                    { text: "매우 그렇다", score: 5 }
-                ]
-            }
-        ]
-    };
 
     const MATCHING_CRITERIA = { // 예시 데이터, 실제 기준은 더 복잡할 수 있음
         NEBULAS: [ // 각 성운별 대표적인 성격 5요인 점수 (이상적인 값 또는 범위)
