@@ -36,6 +36,12 @@
             </button>
         </div>
         <div class="more-options-panel" id="moreOptionsPanel"></div>
+
+        <!-- 전체 화면 로더 추가 -->
+        <div class="full-screen-loader" id="fullScreenLoader" style="display: none;">
+            <div class="loader-spinner"></div>
+            <p class="loader-text">싱크타입 분석 중...</p>
+        </div>
     </div>
 
     <div id="syncTypeModal" class="modal">
@@ -45,20 +51,16 @@
                 <button class="close-modal-btn" onclick="closeModal('syncTypeModal')" aria-label="닫기">×</button>
             </div>
             <div class="modal-body sync-type-body">
-                <!-- 총평 탭 내용: 차트와 커스텀 범례를 위한 새 구조 -->
                 <div class="sync-type-overview-content" style="display: none;">
                     <div class="overview-chart-area">
                         <canvas id="combinedRadarChart"></canvas>
                     </div>
                     <div class="overview-custom-legend-area">
-                        <!-- JS로 범례 내용 동적 추가 -->
                     </div>
                 </div>
-                <!-- 기존 이미지 컨테이너 (성운, 싱크타입 탭에서 사용) -->
                 <div class="sync-type-image-container" style="display: none;">
                     <img id="syncTypeMainImage" src="img/sync_type/default.png" alt="싱크타입 대표 이미지">
                 </div>
-
                 <div class="sync-type-tabs">
                     <button class="sync-tab-btn active" data-tab="overview">총평</button>
                     <button class="sync-tab-btn" data-tab="nebula">성운</button>
@@ -86,7 +88,6 @@
                 </div>
                 <div class="tarot-card-grid-scroll-wrapper" id="tarotCardScrollWrapper">
                     <div id="tarotCardGrid" class="tarot-card-grid">
-                        <!-- 타로 카드는 여기에 JavaScript로 동적으로 추가됩니다 -->
                     </div>
                 </div>
             </div>
@@ -105,13 +106,11 @@
         </div>
     </div>
 
-    <!-- 타로 카드 선택 UI -->
     <div class="tarot-selection-overlay" id="tarotSelectionOverlay">
         <div class="tarot-selection-content">
             <div class="tarot-card-info" id="tarotCardInfo">카드를 선택해주세요.</div>
             <div class="tarot-card-carousel-container" id="tarotCardCarouselContainer">
                 <div class="tarot-card-carousel" id="tarotCardCarousel">
-                    <!-- 카드는 JS로 동적 생성 -->
                 </div>
             </div>
             <div class="tarot-selection-actions">
@@ -124,11 +123,10 @@
         </div>
     </div>
 
-    <!-- 외부 스크립트 로드 -->
     <script src="tarotData.js"></script>
     <script src="syncTypes.js"></script>
     <script src="nebulas.js"></script>
-    <script src="questions.js"></script> <!-- questions.js 추가 -->
+    <script src="questions.js"></script> 
     <script src="script.js"></script>
 </body>
 </html>

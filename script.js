@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPanelMenuKey = 'main';
     let menuNavigationHistory = [];
     let hasUserSentMessage = false;
-
+    const fullScreenLoader = document.getElementById('fullScreenLoader');
 
     // 타로 카드 선택 관련 변수
     let isTarotSelectionActive = false;
@@ -1117,7 +1117,8 @@ const botKnowledgeBase = {
 async function simulateBotResponse(userMessageText, buttonData = null) { 
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작. buttonData:`, buttonData);
     return new Promise(async (resolve) => {
-        await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+        // API 호출 또는 주요 로직 처리 전의 일반적인 지연은 제거하거나 callChatAPI 내부에서 관리
+        // await new Promise(r => setTimeout(r, 200 + Math.random() * 300)); 
 
         let responseData = {};
         const lowerUserMessage = userMessageText.toLowerCase();
@@ -1129,13 +1130,87 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             "그 사람의 마음을 알고 싶어"
         ];
 
-        // --- Phase 3: 싱크타입 테스트 진행 로직 ---
-        if (userProfile.현재테스트종류 === 'subjective' && 
+        if (userMessageText === "action_submit_sync_test") {
+            // Phase 4: 싱크타입 테스트 결과 제출 및 API 호출
+            showFullScreenLoader("싱크타입 분석 중입니다. 잠시만 기다려주세요...");
+            
+            let testAnswersContent = "주관식 답변:\n";
+            for (const qId in userProfile.싱크테스트답변.subjective_answers) {
+                const questionText = QUESTIONS_DATA.subjective.find(q => q.id === qId)?.questionText || qId;
+                testAnswersContent += `- ${questionText}: ${userProfile.싱크테스트답변.subjective_answers[qId]}\n`;
+            }
+            testAnswersContent += "\n객관식 답변 (점수):\n";
+            for (const qId in userProfile.싱크테스트답변.objective_scores) {
+                 const questionText = QUESTIONS_DATA.objective.find(q => q.id === qId)?.questionText || qId;
+                testAnswersContent += `- ${questionText}: ${userProfile.싱크테스트답변.objective_scores[qId]}점\n`;
+            }
+
+            const fullPrompt = PROMPT_SYNC_TYPE_TEST + testAnswersContent;
+            
+            try {
+                const apiResponse = await callChatAPI(fullPrompt); 
+                const responseJson = await apiResponse.json(); // API 응답이 JSON 객체라고 가정
+                const resultText = responseJson.candidates[0].content.parts[0].text;
+                const parsedResult = JSON.parse(resultText);
+
+                console.log("[SyncTestAPI] API 응답 파싱 결과:", parsedResult);
+
+                userProfile.결정된싱크타입 = parsedResult.결정된싱크타입 || userProfile.결정된싱크타입;
+                userProfile.사용자소속성운 = parsedResult.사용자소속성운 || userProfile.사용자소속성운;
+                userProfile.맞춤싱크타입이름 = parsedResult.맞춤싱크타입이름 || userProfile.맞춤싱크타입이름;
+                userProfile.overviewText = parsedResult.overviewText || userProfile.overviewText;
+                userProfile.DISC_D_점수 = parsedResult.DISC_D_점수 !== undefined ? parsedResult.DISC_D_점수 : userProfile.DISC_D_점수;
+                userProfile.DISC_I_점수 = parsedResult.DISC_I_점수 !== undefined ? parsedResult.DISC_I_점수 : userProfile.DISC_I_점수;
+                userProfile.DISC_S_점수 = parsedResult.DISC_S_점수 !== undefined ? parsedResult.DISC_S_점수 : userProfile.DISC_S_점수;
+                userProfile.DISC_C_점수 = parsedResult.DISC_C_점수 !== undefined ? parsedResult.DISC_C_점수 : userProfile.DISC_C_점수;
+                userProfile.신경성 = parsedResult.신경성 !== undefined ? parsedResult.신경성 : userProfile.신경성;
+                userProfile.외향성 = parsedResult.외향성 !== undefined ? parsedResult.외향성 : userProfile.외향성;
+                userProfile.개방성 = parsedResult.개방성 !== undefined ? parsedResult.개방성 : userProfile.개방성;
+                userProfile.우호성 = parsedResult.우호성 !== undefined ? parsedResult.우호성 : userProfile.우호성;
+                userProfile.성실성 = parsedResult.성실성 !== undefined ? parsedResult.성실성 : userProfile.성실성;
+                
+                userProfile.싱크타입단계 = "결정됨";
+                userProfile.현재테스트종류 = null; 
+                userProfile.현재질문ID = null;
+                
+                generateSyncTypeData(); 
+                saveUserProfileToLocalStorage(userProfile);
+                hideFullScreenLoader();
+
+                responseData = {
+                    assistantmsg: `${userProfile.사용자애칭}님의 싱크타입 분석이 완료되었습니다!<br>'더보기 > 싱크타입' 메뉴에서 자세한 결과를 확인해보세요.<br><br>이제 선택하신 타로에 대한 해석을 진행할게요.`,
+                    sampleAnswers: [
+                        { text: "네, 타로 해석 보여주세요", value: "action_proceed_tarot_interpretation_after_sync", actionType: 'message' }
+                    ],
+                    importance: 'low',
+                    disableChatInput: false,
+                    user_profile_update: { 
+                        "결정된싱크타입": userProfile.결정된싱크타입,
+                        "싱크타입단계": userProfile.싱크타입단계
+                    }
+                };
+
+            } catch (error) {
+                console.error("[SyncTestAPI] API 호출 또는 처리 중 오류:", error);
+                hideFullScreenLoader();
+                responseData = {
+                    assistantmsg: "싱크타입 분석 중 오류가 발생했어요. 다시 시도해주시겠어요?",
+                    sampleAnswers: [
+                        { text: "다시 분석 요청하기", value: "action_submit_sync_test", actionType: 'confirm_action' },
+                        { text: "나중에 할래요", value: "action_skip_sync_test_after_error", actionType: 'cancel_action' }
+                    ],
+                    importance: 'high',
+                    disableChatInput: false,
+                    isConfirmationStage: true,
+                    user_profile_update: {}
+                };
+            }
+        }
+        else if (userProfile.현재테스트종류 === 'subjective' && 
             userProfile.현재질문ID && 
             userMessageText !== "action_start_sync_type_test" && 
             !(buttonData && buttonData.actionType === 'info_disabled') && 
             userMessageText !== "placeholder_disabled") {
-            // 주관식 답변 처리
             const currentQuestionId = userProfile.현재질문ID;
             userProfile.싱크테스트답변.subjective_answers[currentQuestionId] = userMessageText;
             console.log(`[SyncTest] 주관식 답변 (${currentQuestionId}): ${userMessageText}`);
@@ -1146,18 +1221,16 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             if (currentIndex < subjectiveQuestions.length - 1) {
                 const nextQuestion = subjectiveQuestions[currentIndex + 1];
                 userProfile.현재질문ID = nextQuestion.id;
-                saveUserProfileToLocalStorage(userProfile);
                 responseData = {
                     assistantmsg: `<b>다음 질문입니다:</b><br>${nextQuestion.questionText}`,
                     sampleAnswers: [{ text: "채팅으로 답변해주세요", value: "placeholder_disabled", actionType: 'info_disabled', disabled: true }],
                     importance: 'low',
-                    disableChatInput: false, // 주관식은 채팅 입력 활성화
+                    disableChatInput: false, 
                     user_profile_update: { "현재질문ID": userProfile.현재질문ID, "싱크테스트답변": userProfile.싱크테스트답변 }
                 };
             } else {
                 userProfile.현재테스트종류 = 'objective';
                 userProfile.현재질문ID = QUESTIONS_DATA.objective[0].id; 
-                saveUserProfileToLocalStorage(userProfile);
                 
                 const firstObjectiveQuestion = QUESTIONS_DATA.objective.find(q => q.id === userProfile.현재질문ID);
                 responseData = {
@@ -1168,7 +1241,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         actionType: 'objective_answer'
                     })),
                     importance: 'low', 
-                    disableChatInput: true, // 객관식은 채팅 입력 비활성화
+                    disableChatInput: true, 
                     user_profile_update: { 
                         "현재테스트종류": userProfile.현재테스트종류, 
                         "현재질문ID": userProfile.현재질문ID,
@@ -1177,16 +1250,13 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 };
             }
         } else if (buttonData && buttonData.actionType === 'objective_answer' && userProfile.현재테스트종류 === 'objective') {
-            // 객관식 답변 처리 (버튼 클릭)
-            // userMessageText (buttonData.value)는 "질문ID_점수" 형식 (예: "obj_01_5")
             const parts = userMessageText.split('_');
-            const questionIdFromButton = parts.slice(0, -1).join('_'); // 질문 ID (마지막 요소 제외하고 합침)
-            const scoreStr = parts.pop(); // 마지막 요소가 점수
+            const questionIdFromButton = parts.slice(0, -1).join('_'); 
+            const scoreStr = parts.pop(); 
             const score = parseInt(scoreStr, 10);
             const currentQuestionId = userProfile.현재질문ID;
 
             console.log(`[SyncTest] 객관식 버튼 클릭. value: "${userMessageText}", 파싱된 questionId: "${questionIdFromButton}", 파싱된 score: ${score}`);
-
 
             if (questionIdFromButton === currentQuestionId) { 
                 userProfile.싱크테스트답변.objective_scores[currentQuestionId] = score;
@@ -1198,7 +1268,6 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 if (currentIndex < objectiveQuestions.length - 1) {
                     const nextQuestion = objectiveQuestions[currentIndex + 1];
                     userProfile.현재질문ID = nextQuestion.id;
-                    saveUserProfileToLocalStorage(userProfile);
                     responseData = {
                         assistantmsg: `<b>다음 객관식 질문입니다:</b><br>${nextQuestion.questionText}`,
                         sampleAnswers: nextQuestion.options.map(opt => ({
@@ -1207,11 +1276,10 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             actionType: 'objective_answer'
                         })),
                         importance: 'low',
-                        disableChatInput: true, // 객관식은 채팅 입력 비활성화
+                        disableChatInput: true, 
                         user_profile_update: { "현재질문ID": userProfile.현재질문ID, "싱크테스트답변": userProfile.싱크테스트답변 }
                     };
                 } else {
-                    saveUserProfileToLocalStorage(userProfile); 
                     responseData = {
                         assistantmsg: "모든 질문에 답변해주셔서 감사합니다!<br>싱크타입 분석 결과를 확인하시려면 '결과 제출하기' 버튼을 눌러주세요.<br>테스트를 다시 진행하고 싶으시면 '처음부터 다시하기'를 선택해주세요.",
                         importance: 'high',
@@ -1220,12 +1288,11 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                             { text: "결과 제출하기", value: "action_submit_sync_test", actionType: 'confirm_action', cost:0, displayCostIcon: true, iconType:'free' },
                             { text: "처음부터 다시하기", value: "action_restart_sync_test_full", actionType: 'cancel_action' }
                         ],
-                        disableChatInput: false, // 제출/다시하기 선택 후에는 채팅 입력 가능하게
+                        disableChatInput: false, 
                         user_profile_update: { "싱크테스트답변": userProfile.싱크테스트답변 } 
                     };
                 }
             } else {
-                // 이 경우는 발생하지 않아야 하지만, 방어적으로 현재 질문을 다시 안내
                 const currentQ = QUESTIONS_DATA.objective.find(q => q.id === currentQuestionId);
                  responseData = {
                     assistantmsg: `<b>현재 질문입니다:</b><br>${currentQ.questionText}`,
@@ -1245,7 +1312,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
             userProfile.현재테스트종류 = "subjective";
             userProfile.현재질문ID = QUESTIONS_DATA.subjective[0].id;
             userProfile.싱크테스트답변 = { subjective_answers: {}, objective_scores: {} }; 
-            saveUserProfileToLocalStorage(userProfile);
+            saveUserProfileToLocalStorage(userProfile); 
 
             responseData = {
                 assistantmsg: `알겠습니다. 싱크타입 테스트를 처음부터 다시 시작하겠습니다.<br><br><b>첫 번째 질문입니다:</b><br>${QUESTIONS_DATA.subjective[0].questionText}`,
@@ -1262,7 +1329,6 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         }
         else { 
             let selectedTarotTopicName = null;
-            // ... (selectedTarotTopicName 계산 로직은 이전과 동일)
             if (userProfile.시나리오 && userProfile.시나리오.startsWith("tarot_topic_")) {
                 const topicKey = userProfile.시나리오.substring("tarot_topic_".length).split("_pick")[0].split("_propose_sync_test")[0].split("_started")[0].split("_skipped_sync_test")[0];
                  for (const menuKey in menuConfigurations) {
@@ -1309,7 +1375,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: "3장 뽑기", value: "action_select_three_cards_for_topic", actionType: 'choice', cost:2, displayCostIcon: true, iconType:'bone' }
                     ],
                     importance: 'low',
-                    disableChatInput: false, // 일반 선택 시 채팅 입력 가능
+                    disableChatInput: false, 
                     user_profile_update: { "시나리오": userProfile.시나리오 }
                 };
             } else if (userMessageText === "action_select_one_card_for_topic") {
@@ -1318,7 +1384,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     cards_to_select: 1,
                     sampleAnswers: [],
                     importance: 'low',
-                    disableChatInput: true, // 카드 선택 시 채팅 입력 비활성화
+                    disableChatInput: true, 
                     user_profile_update: { "시나리오": userProfile.시나리오 + "_single_pick" },
                     systemMessageOnConfirm: "1장을 선택하셨습니다. 카드를 골라주세요."
                 };
@@ -1331,7 +1397,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         { text: `사용`, value: "action_confirm_three_cards_cost_for_topic", cost: 2, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
                         { text: "취소", value: "action_cancel_cost_confirmation_for_topic", actionType: 'cancel_cost' }
                     ],
-                    disableChatInput: false, // 비용 확인 시 채팅 입력 가능 (취소 등 다른 행동 위해)
+                    disableChatInput: false, 
                     user_profile_update: {}
                 };
             } else if (userMessageText === "action_confirm_three_cards_cost_for_topic") {
@@ -1344,11 +1410,11 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         cards_to_select: 3,
                         sampleAnswers: [],
                         importance: 'low',
-                        disableChatInput: true, // 카드 선택 시 채팅 입력 비활성화
+                        disableChatInput: true, 
                         user_profile_update: { "시나리오": userProfile.시나리오 + "_triple_pick", "bones": userProfile.bones },
                         systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
                     };
-                } else { // 뼈다귀 부족
+                } else { 
                     responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)<br>1장만 무료로 보시겠어요?",
                         tarocardview: false,
@@ -1426,7 +1492,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         user_profile_update: { "시나리오": "tarot_triple_pick_general", "bones": userProfile.bones },
                         systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
                     };
-                } else { // 뼈다귀 부족
+                } else { 
                      responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)<br>1장만 무료로 보시겠어요?",
                         tarocardview: false,
@@ -1495,41 +1561,54 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         "싱크테스트답변": userProfile.싱크테스트답변
                      }
                 };
-            } else if (userMessageText === "action_skip_sync_type_test" || userMessageText === "action_proceed_tarot_interpretation") {
-                console.log(`[BotResponse] 싱크타입 테스트 건너뛰기 또는 즉시 해석 진행. 시나리오: ${userProfile.시나리오}`);
+            } else if (userMessageText === "action_skip_sync_type_test" || userMessageText === "action_proceed_tarot_interpretation_after_sync" || userMessageText === "action_proceed_tarot_interpretation") {
+                let 진행메시지 = "";
                 if (userMessageText === "action_skip_sync_type_test") {
-                     userProfile.시나리오 = (userProfile.시나리오.replace("_propose_sync_test","") || "tarot_general") + "_skipped_sync_test";
-                     saveUserProfileToLocalStorage(userProfile);
+                    userProfile.시나리오 = (userProfile.시나리오.replace("_propose_sync_test","") || "tarot_general") + "_skipped_sync_test";
+                    진행메시지 = "싱크타입 테스트를 건너뛰고 타로 해석을 바로 진행합니다.";
+                } else if (userMessageText === "action_proceed_tarot_interpretation_after_sync") {
+                    userProfile.시나리오 = (userProfile.시나리오.replace("_started","").replace("_restarted","") || "tarot_general") + "_after_sync_test";
+                    진행메시지 = "싱크타입 분석 완료! 이제 타로 해석을 진행합니다.";
+                } else { 
+                     진행메시지 = "타로 해석을 진행합니다.";
                 }
-                userProfile.tarotResult = { 
+                saveUserProfileToLocalStorage(userProfile);
+                console.log(`[BotResponse] ${진행메시지} 시나리오: ${userProfile.시나리오}`);
+                
+                showFullScreenLoader("타로 해석을 준비 중입니다..."); 
+
+                await new Promise(r => setTimeout(r, 1000)); 
+                const tempTarotResult = { 
                     cardInterpretations: userProfile.선택된타로카드들.map(cardId => ({
                         cardId: cardId,
-                        keyword: "임시 키워드",
-                        briefMeaning: `${cardId.replace(/_/g, ' ')} 카드에 대한 임시 해석입니다.`
+                        keyword: "해석 키워드 (더미)",
+                        briefMeaning: `${cardId.replace(/_/g, ' ')} 카드에 대한 더미 해석입니다. ${userProfile.결정된싱크타입 ? '('+userProfile.결정된싱크타입+' 맞춤)' : ''}`
                     })),
-                    overallAdvice: "선택하신 카드들에 대한 임시 종합 조언입니다."
+                    overallAdvice: `선택하신 카드와 ${userProfile.사용자애칭}님의 성향을 종합적으로 고려한 조언입니다. (더미)`
                 };
+                userProfile.tarotResult = tempTarotResult; 
+                saveUserProfileToLocalStorage(userProfile); 
+                hideFullScreenLoader(); 
+
                 let assistantInterpretationHTML = "";
                 if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
                      assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
-                     assistantInterpretationHTML += `<div class="interpretation-text">선택하신 카드에 대한 풀이입니다 (Phase 3 더미):<br><br></div>`;
+                     assistantInterpretationHTML += `<div class="interpretation-text"><b>${selectedTarotTopicName || '선택하신 주제'}</b> 타로에 대한 풀이입니다:<br><br></div>`;
                      userProfile.tarotResult.cardInterpretations.forEach((interp, index) => {
                         let cardDisplayName = interp.cardId.replace(/_/g, ' ');
                         let imageNameForFile = interp.cardId.replace('_reversed', '_upright');
                         if (!imageNameForFile.endsWith('_upright')) imageNameForFile += '_upright';
-
                         const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
-
                         assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
                         assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${index + 1}. ${cardDisplayName}</b></div>`;
                         assistantInterpretationHTML += `<div class="interpretation-text">${interp.briefMeaning.replace(/\n/g, '<br>')}</div><br>`;
                      });
-                     assistantInterpretationHTML += `<div class="interpretation-text"><br>${userProfile.tarotResult.overallAdvice}</div>`;
+                     assistantInterpretationHTML += `<div class="interpretation-text"><br><b>종합 조언:</b> ${userProfile.tarotResult.overallAdvice}</div>`;
                      assistantInterpretationHTML += `</div>`;
                 }
                 responseData = {
                     assistant_interpretation: assistantInterpretationHTML,
-                    assistantmsg: `타로 카드 해석이 완료되었습니다. 위 내용을 확인해주세요. (Phase 3 더미 API 응답 - 싱크타입 테스트 스킵/완료)`,
+                    assistantmsg: `타로 카드 해석이 완료되었습니다. 위 내용을 확인해주세요.`,
                     tarocardview: false,
                     cards_to_select: null,
                     sampleAnswers: [
@@ -1568,7 +1647,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         user_profile_update: { "시나리오": (userProfile.시나리오 || "tarot_general") + "_add_two_pick", "bones": userProfile.bones },
                         systemMessageOnConfirm: "2장을 추가로 선택합니다. 카드를 골라주세요. (뼈다귀 -2)"
                     };
-                } else { // 뼈다귀 부족
+                } else { 
                      responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)",
                         importance: 'low',
@@ -1630,7 +1709,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     updateBoneCountDisplay();
                     saveUserProfileToLocalStorage(userProfile);
                     responseData = {
-                        assistantmsg: `${userProfile.사용자애칭}님을 위한 더 깊은 조언입니다... <br><br>...(API가 생성한 깊은 조언 내용 - Phase 3 더미)...<br><br>이 조언이 당신의 길을 밝히는 데 도움이 되길 바랍니다. (뼈다귀 -${requiredBones})`,
+                        assistantmsg: `${userProfile.사용자애칭}님을 위한 더 깊은 조언입니다... <br><br>...(API가 생성한 깊은 조언 내용 - Phase 4 더미)...<br><br>이 조언이 당신의 길을 밝히는 데 도움이 되길 바랍니다. (뼈다귀 -${requiredBones})`,
                         tarocardview: false,
                         cards_to_select: null,
                         importance: 'low',
@@ -1638,7 +1717,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         sampleAnswers: [ { text: "정말 고마워요!", value: "고맙습니다", actionType: 'message'}, { text: "다른 질문 있어요", value: "다른 질문", actionType: 'message' } ],
                         user_profile_update: { "bones": userProfile.bones, "시나리오": (userProfile.시나리오 || "tarot_general") + "_deep_advice" },
                     };
-                } else if (requiredBones > 0) { // 뼈다귀 부족
+                } else if (requiredBones > 0) { 
                      responseData = {
                         assistantmsg: "이런! 뼈다귀가 부족해서 더 깊은 조언을 듣기 어렵겠어요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)",
                         importance: 'low',
@@ -1649,7 +1728,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 } else { responseData = botKnowledgeBase["기본"]; }
             }
 
-            else { // 일반 텍스트 메시지 또는 정의되지 않은 액션
+            else { 
                 if (userMessageText === "placeholder_disabled" && userProfile.현재테스트종류 === 'subjective') {
                      responseData = {
                         assistantmsg: `네, ${QUESTIONS_DATA.subjective.find(q => q.id === userProfile.현재질문ID)?.questionText || '현재 질문에 대해 채팅으로 답변해주세요.'}`,
@@ -1678,7 +1757,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                         cards_to_select: null,
                         sampleAnswers: (baseResponse.sampleAnswers || []).map(sa => ({ text: sa, value: sa, actionType: 'message' })),
                         importance: 'low',
-                        disableChatInput: false, // 일반적인 경우 채팅 입력 가능
+                        disableChatInput: false, 
                         user_profile_update: {}
                     };
                 }
@@ -2689,43 +2768,104 @@ function handleRandomTarotSelection() {
             moreOptionsBtn.classList.remove('active');
         }
     }, true);
-    async function callChatAPI(promptContent, chatHistory = []) {
-        console.log("[API] 호출 시작. 프롬프트 길이:", promptContent.length, "히스토리 항목 수:", chatHistory.length);
-        // 실제 API 호출 로직은 여기에 구현됩니다. (Phase 1 이후 구체화)
-        // 지금은 테스트를 위해 더미 응답을 반환하거나, 간단한 에코 응답을 시도할 수 있습니다.
+async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) { // 재시도 횟수 파라미터 추가
+    console.log("[API] 호출 시작. 프롬프트 길이:", promptContent.length, "히스토리 항목 수:", chatHistory.length);
+    
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        try {
+            // 실제 Gemini API 요청 형식에 맞게 contents 구조화
+            const requestBody = {
+                contents: []
+            };
 
-        // 더미 응답 예시 (실제 구현 시에는 fetch 사용)
-        return new Promise(async (resolve, reject) => {
-            // 네트워크 지연 시뮬레이션
-            await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
-
-            // 성공/실패 더미 분기 (테스트용)
-            if (Math.random() > 0.1) { // 90% 성공 확률
-                let dummyResponseText = "API로부터 받은 더미 응답입니다. 프롬프트: " + promptContent.substring(0, 50) + "...";
-                // 프롬프트에 따라 다른 더미 JSON 응답을 만들어볼 수 있습니다.
-                if (promptContent.includes("출력 형식 (반드시 JSON 형식으로 반환)")) {
-                    if (promptContent.startsWith(PROMPT_SYNC_TYPE_TEST.trim())) {
-                        dummyResponseText = JSON.stringify({
-                            "결정된싱크타입": "임시_타입", "사용자소속성운": "임시_성운", "맞춤싱크타입이름": "임시_애칭",
-                            "overviewText": "API 테스트용 임시 분석 결과입니다.",
-                            "DISC_D_점수": 5, "DISC_I_점수": 6, "DISC_S_점수": 7, "DISC_C_점수": 4,
-                            "신경성": 3, "외향성": 8, "개방성": 7, "우호성": 6, "성실성": 5
-                        });
-                    } else if (promptContent.startsWith(PROMPT_TAROT_CHOICE.trim())) {
-                         dummyResponseText = JSON.stringify({
-                            "cardInterpretations": [ { "cardId": "major_00_fool_upright", "keyword": "새로운 시작", "briefMeaning": "더미 응답: 새로운 가능성이 열립니다." } ],
-                            "overallAdvice": "더미 응답: 긍정적인 마음으로 도전하세요."
-                        });
-                    }
-                }
-                console.log("[API] 더미 응답 성공:", dummyResponseText);
-                resolve({ text: () => Promise.resolve(dummyResponseText) }); // 실제 API 응답과 유사한 구조로 resolve
-            } else {
-                console.error("[API] 더미 응답 실패");
-                reject(new Error("API 호출 중 더미 오류 발생"));
+            // 이전 대화 기록(chatHistory)이 있다면 먼저 추가
+            if (chatHistory && chatHistory.length > 0) {
+                requestBody.contents.push(...chatHistory); // chatHistory는 [{role: "user", parts: [{text:"..."}]}, {role: "model", parts: [{text:"..."}]}] 형식이어야 함
             }
-        });
+            // 현재 프롬프트 추가 (항상 마지막 user 턴으로)
+            requestBody.contents.push({ role: "user", parts: [{ text: promptContent }] });
+            
+            console.log("[API] 요청 본문 (시도 " + (attempt + 1) + "):", JSON.stringify(requestBody, null, 2).substring(0, 300) + "...");
+
+
+            // 더미 응답 로직 (Phase 4에서는 실제 fetch로 교체 예정)
+            await new Promise(r => setTimeout(r, 1500 + Math.random() * 1500)); // API 호출 시간 시뮬레이션
+
+            if (Math.random() > 0.05 || attempt === maxRetries -1) { // 95% 성공 또는 마지막 시도 시 강제 성공 (테스트용)
+                let dummyResponseText = "API로부터 받은 일반 더미 응답입니다.";
+                if (promptContent.includes(PROMPT_SYNC_TYPE_TEST.split('\n')[1])) { // # 역할 부분으로 구분
+                    dummyResponseText = JSON.stringify({
+                        "결정된싱크타입": "창의적인 탐험가 (더미)",
+                        "사용자소속성운": "오리온 성운 (더미)",
+                        "맞춤싱크타입이름": "별을 노래하는 시인 (더미)",
+                        "overviewText": "당신은 호기심 많고 창의적인 영혼을 지녔으며, 세상을 탐험하는 것을 즐깁니다. (더미 데이터)",
+                        "DISC_D_점수": Math.floor(Math.random() * 8) + 2, 
+                        "DISC_I_점수": Math.floor(Math.random() * 8) + 2,
+                        "DISC_S_점수": Math.floor(Math.random() * 8) + 2,
+                        "DISC_C_점수": Math.floor(Math.random() * 8) + 2,
+                        "신경성": Math.floor(Math.random() * 8) + 1,
+                        "외향성": Math.floor(Math.random() * 8) + 1,
+                        "개방성": Math.floor(Math.random() * 8) + 2,
+                        "우호성": Math.floor(Math.random() * 8) + 1,
+                        "성실성": Math.floor(Math.random() * 8) + 2
+                    });
+                } else if (promptContent.includes(PROMPT_TAROT_CHOICE.split('\n')[1])) {
+                     dummyResponseText = JSON.stringify({
+                        "cardInterpretations": userProfile.선택된타로카드들.map(cardId => ({ 
+                            "cardId": cardId, 
+                            "keyword": "핵심 (더미)", 
+                            "briefMeaning": `${cardId.replace(/_/g," ")}에 대한 더미 해석입니다.` 
+                        })),
+                        "overallAdvice": "전반적으로 긍정적인 흐름이나, 신중함도 필요합니다. (더미 조언)"
+                    });
+                }
+                // ...PROMPT_TAROT_TRANS, PROMPT_TAROT_ADVICE에 대한 더미 응답도 필요시 추가...
+                else { // 일반 대화 또는 PROMPT_TAROT_TRANS, PROMPT_TAROT_ADVICE
+                    dummyResponseText = `루비의 더미 응답입니다: "${promptContent.substring(0,30)}..." 에 대해 더 자세히 이야기해주세요!`;
+                }
+
+
+                console.log("[API] 더미 응답 성공 (시도 " + (attempt + 1) + "):", dummyResponseText.substring(0,100) + "...");
+                // Gemini API 응답 구조 모방: response.candidates[0].content.parts[0].text
+                return { 
+                    json: () => Promise.resolve({ candidates: [{ content: { parts: [{ text: dummyResponseText }] } }] }),
+                    ok: true // fetch 응답과 유사하게
+                }; 
+            } else {
+                console.error("[API] 더미 응답 실패 (시도 " + (attempt + 1) + ")");
+                throw new Error("API 호출 중 더미 오류 발생 (시도 " + (attempt + 1) + ")");
+            }
+        } catch (error) {
+            console.error(`[API] 호출 시도 ${attempt + 1} 실패:`, error);
+            attempt++;
+            if (attempt >= maxRetries) {
+                console.error("[API] 최대 재시도 횟수 도달. 최종 실패.");
+                throw error; // 마지막 시도 실패 시 에러 throw
+            }
+            await new Promise(r => setTimeout(r, 1000 * attempt)); // 재시도 전 대기
+        }
     }
+}
+
+    function showFullScreenLoader(message = "처리 중...") {
+        if (fullScreenLoader) {
+            const loaderTextElement = fullScreenLoader.querySelector('.loader-text');
+            if (loaderTextElement) {
+                loaderTextElement.textContent = message;
+            }
+            fullScreenLoader.style.display = 'flex';
+            console.log(`[Loader] 전체 화면 로더 표시: ${message}`);
+        }
+    }
+
+    function hideFullScreenLoader() {
+        if (fullScreenLoader) {
+            fullScreenLoader.style.display = 'none';
+            console.log("[Loader] 전체 화면 로더 숨김.");
+        }
+    }
+
     let resizeTimeout;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
