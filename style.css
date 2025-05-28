@@ -256,18 +256,21 @@ html, body {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
-    align-items: center;
-    padding: 0px 10px;
-    background-color: var(--white-color);
+    align-items: center; /* 내부 아이템들을 수직 중앙 정렬 */
+    padding: 0px 10px; /* 상하 패딩은 내부 콘텐츠에 따라 유동적으로 */
+    background-color: var(--white-color); /* 기본 배경색 */
     border-top: 1px solid transparent;
     flex-shrink: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    height: var(--sample-answers-height);
-    min-height: var(--sample-answers-height);
+    overflow-x: auto; /* 가로 스크롤은 유지 */
+    overflow-y: hidden; /* 세로 스크롤은 기본적으로 숨김, 내용 많을 경우 대비는 JS에서 관리 */
+    min-height: var(--sample-answers-height); /* 최소 높이는 유지 */
+    height: auto; /* 높이를 내용에 맞게 자동 조절 */
     position: relative;
     z-index: 5;
-    transition: padding 0.25s ease-out, border-color 0.25s ease-out;
+    /* transition 속성 추가: background-color와 border-top-color 변경 시 애니메이션 */
+    transition: padding 0.25s ease-out, 
+                border-color 0.4s ease-in-out, /* 이전 값 유지 */
+                background-color 0.4s ease-in-out; /* 전환 시간 0.4초 */
 }
 .sample-answers.has-buttons {
     padding-top: 0px;
@@ -952,50 +955,111 @@ html, body {
     color: #adb5bd;
 }
 
-.sample-answers.important-action {
-    background-color: var(--emphasis-color); /* 강조색 배경 */
-    padding-top: 10px; /* 내부 여백 조정 */
-    padding-bottom: 10px;
-    border-top-color: var(--emphasis-color); /* 상단 경계선도 강조색 */
-    animation: backgroundFill 0.5s ease-out forwards;
-}
 
-@keyframes backgroundFill {
-    from {
-        background-color: var(--white-color); /* 시작은 원래 배경색 */
-    }
-    to {
-        background-color: var(--emphasis-color); /* 목표는 강조색 */
-    }
-}
 
-.sample-answers.important-action .sample-answer-btn {
+
+
+
+.sample-answers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center; /* 내부 아이템들을 수직 중앙 정렬 */
+    padding: 0px 10px; /* 상하 패딩은 내부 콘텐츠에 따라 유동적으로 */
     background-color: var(--white-color);
-    border-color: var(--emphasis-color); /* 테두리는 강조색 유지 또는 흰색에 맞게 조정 */
-    color: var(--emphasis-color); /* 글자색은 강조색 */
-    font-weight: 500;
-    animation-name: fadeInSampleAnswerBtnImportant; /* 다른 애니메이션 적용 가능 */
-    animation-duration: 0.3s; /* 애니메이션 시간 조정 */
-    animation-fill-mode: forwards;
-    animation-timing-function: ease-out;
-    opacity: 0; /* 애니메이션 시작 전 숨김 */
-    transform: translateY(10px); /* 애니메이션 시작 전 위치 */
+    border-top: 1px solid transparent;
+    flex-shrink: 0;
+    overflow-x: auto; /* 가로 스크롤은 유지 */
+    overflow-y: hidden; /* 세로 스크롤은 기본적으로 숨김, 내용 많을 경우 대비는 JS에서 관리 */
+    min-height: var(--sample-answers-height); /* 최소 높이는 유지 */
+    height: auto; /* 높이를 내용에 맞게 자동 조절 */
+    position: relative;
+    z-index: 5;
+    transition: padding 0.25s ease-out, border-color 0.25s ease-out, background-color 0.4s ease-in-out;
 }
 
-/* 중요 액션 버튼용 등장 애니메이션 (기존 것과 구분) */
-@keyframes fadeInSampleAnswerBtnImportant {
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+
+.sample-answers.high-importance {
+    background-color: var(--emphasis-color); /* 목표 배경색 */
+    border-top-color: var(--emphasis-color); /* 목표 테두리 색 */
+    justify-content: center;
 }
 
-.sample-answers.important-action .sample-answer-btn:hover:not(:disabled):not(.fade-out) {
-    background-color: #f0f4ff; /* 호버 시 배경색 변경 (흰색 계열) */
+
+
+
+/* (나머지 CSS 선택자들은 이전과 동일하게 유지) */
+/* 아래는 이전 CSS 코드에서 변경 없는 부분을 그대로 가져온 것입니다. */
+/* 이미 존재한다면 중복해서 붙여넣을 필요 없습니다. */
+
+.sample-answers.has-buttons {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.sample-answers.high-importance .sample-answer-btn {
+    background-color: var(--white-color);
+    color: var(--emphasis-color);
+    border: 1px solid var(--emphasis-color);
+}
+
+.sample-answers.high-importance .sample-answer-btn:hover:not(:disabled):not(:fade-out) {
+    background-color: #f0f4ff;
     border-color: color-mix(in srgb, var(--emphasis-color) 80%, black);
 }
 
-.sample-answers.important-action .sample-answer-btn.high-importance-btn {
-    /* 특별히 더 강조할 버튼 스타일 (이미 위에서 기본 스타일 지정됨, 필요시 추가) */
-    /* 예: box-shadow: 0 2px 4px rgba(0,0,0,0.15); */
+.sample-answers.high-importance .sample-answer-btn:disabled {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #adb5bd;
+    opacity: 0.6;
+}
+
+.sample-answer-btn .btn-content-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sample-answer-btn .cost-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 0;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+.sample-answer-btn .cost-icon.free-icon {
+}
+
+.sample-answer-btn .cost-text {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: var(--normal-text-color);
+    margin-left: 2px;
+}
+.sample-answers.high-importance .sample-answer-btn .cost-text {
+    color: var(--emphasis-color);
+}
+.sample-answer-btn .btn-text {
+}
+
+.sample-answer-prompt {
+    width: 100%;
+    text-align: center;
+    font-size: 0.9em;
+    color: var(--pale-text-color);
+    padding: 4px 10px 8px;
+    line-height: 1.4;
+    flex-basis: 100%;
+    order: -1;
+}
+.sample-answers.high-importance .sample-answer-prompt {
+    color: var(--white-color);
+}
+
+.inline-bone-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.15em;
+    margin: 0 2px;
 }
