@@ -1685,14 +1685,18 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
     }
 
 async function processMessageExchange(messageText, source = 'input', options = {}) {
-    const { clearBeforeSend = false, menuItemData = null, buttonData = null } = options;
+    const { clearBeforeSend = false, menuItemData = null, buttonData: optionsButtonData = null } = options; // options에서 buttonData 추출
 
     console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, options);
     if (isLoadingBotResponse && source !== 'system_internal_force') {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
     }
-    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && buttonData.actionType === 'confirm_cost')) {
+
+    // buttonData를 optionsButtonData로 명확히 구분
+    const currentButtonData = (source === 'sample_button' && optionsButtonData) ? optionsButtonData : null;
+
+    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(currentButtonData && currentButtonData.actionType === 'confirm_cost')) {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지).");
         return;
     }
@@ -1711,7 +1715,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
 
     isLoadingBotResponse = true;
     if(sendBtn) sendBtn.classList.add('loading');
-    setUIInteractions(true, false); // 여기서 setUIInteractions가 먼저 호출됨.
+    setUIInteractions(true, false); 
 
     if (moreOptionsPanel.classList.contains('active')) {
         console.log("[ProcessExchange] 더보기 패널 닫기.");
@@ -1723,10 +1727,10 @@ async function processMessageExchange(messageText, source = 'input', options = {
         source === 'input' || 
         source === 'panel_option' || 
         source === 'panel_option_topic_reset' ||
-        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost');
+        (source === 'sample_button' && currentButtonData && currentButtonData.actionType !== 'confirm_cost' && currentButtonData.actionType !== 'cancel_cost' && currentButtonData.actionType !== 'objective_answer' && currentButtonData.actionType !== 'info_disabled'); // objective_answer는 사용자 메시지로 표시 안 함
 
     if (shouldAddUserMessage && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
-        const textForUserMessage = (source === 'sample_button' && buttonData && buttonData.text) ? buttonData.text : messageText;
+        const textForUserMessage = (source === 'sample_button' && currentButtonData && currentButtonData.text) ? currentButtonData.text : messageText;
         await addMessage(textForUserMessage, 'user');
     }
 
@@ -1735,23 +1739,27 @@ async function processMessageExchange(messageText, source = 'input', options = {
         adjustTextareaHeight();
     }
 
-    const effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
+    // simulateBotResponse에 전달할 메시지 (버튼의 value 우선)
+    const effectiveMessageForAPI = (source === 'sample_button' && currentButtonData && currentButtonData.value) ? currentButtonData.value : messageText;
 
     try {
-        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI);
+        // simulateBotResponse 호출 시 currentButtonData (즉, options.buttonData)를 두 번째 인자로 전달
+        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI, currentButtonData); 
         
         if (botApiResponse.user_profile_update) {
-            // ... (프로필 업데이트 로직은 변경 없음) ...
              for (const key in botApiResponse.user_profile_update) {
-                if (key !== "bones") {
+                if (key !== "bones") { // 뼈다귀는 이미 simulateBotResponse 내부에서 직접 userProfile 수정 및 저장됨
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
+                        // 선택된타로카드들 초기화 방지 (이미 simulateBotResponse에서 처리함)
                         if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
+                           // 이 경우 업데이트 건너뜀 (예: 카드 선택 UI 호출 전 초기화)
                         } else {
                             userProfile[key] = botApiResponse.user_profile_update[key];
                         }
                     }
                 }
             }
+            // user_profile_update에 bones 외 다른 키가 있을 때만 저장 (bones는 이미 내부에서 저장됨)
             if (Object.keys(botApiResponse.user_profile_update).some(k => k !== "bones")) {
                 saveUserProfileToLocalStorage(userProfile);
             }
@@ -1762,13 +1770,12 @@ async function processMessageExchange(messageText, source = 'input', options = {
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
         }
 
-        if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) {
+        if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) { // 시스템 메시지가 있으면 assistantmsg는 프롬프트용일 수 있음
             await addMessage(botApiResponse.assistantmsg, 'bot');
-        } else if (botApiResponse.systemMessageOnConfirm) {
+        } else if (botApiResponse.systemMessageOnConfirm) { // 시스템 메시지가 우선순위
              await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
         }
         
-        // updateSampleAnswers 호출을 await 처리
         await updateSampleAnswers(
             botApiResponse.sampleAnswers || [], 
             botApiResponse.importance || 'low',
@@ -1777,17 +1784,25 @@ async function processMessageExchange(messageText, source = 'input', options = {
         );
 
         if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
-            // ... (타로 UI 표시 로직은 변경 없음) ...
             if (messageInput && document.activeElement === messageInput) {
                 messageInput.blur();
             }
+            // 배경 이미지 결정 로직 (메뉴항목 데이터 -> 버튼 데이터 -> 프로필 순)
             let currentTarotBg = userProfile.tarotbg || 'default.png';
-            const bgSource = menuItemData || (source === 'sample_button' && buttonData ? buttonData : null);
-            if (bgSource && bgSource.tarotbg) {
-                currentTarotBg = bgSource.tarotbg;
-                userProfile.tarotbg = currentTarotBg;
-                saveUserProfileToLocalStorage(userProfile);
+            const bgSourceMenuItem = menuItemData; // 패널 메뉴에서 직접 넘어온 경우
+            const bgSourceButton = (source === 'sample_button' && currentButtonData) ? currentButtonData : null; // 샘플 버튼에서 tarotbg가 설정된 경우
+
+            if (bgSourceMenuItem && bgSourceMenuItem.tarotbg) {
+                currentTarotBg = bgSourceMenuItem.tarotbg;
+            } else if (bgSourceButton && bgSourceButton.tarotbg) { // menuItemData가 없을 때 buttonData 확인
+                currentTarotBg = bgSourceButton.tarotbg;
             }
+            
+            if (currentTarotBg !== userProfile.tarotbg) { // 배경이 변경된 경우만 저장
+                 userProfile.tarotbg = currentTarotBg;
+                 saveUserProfileToLocalStorage(userProfile);
+            }
+
             console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
             showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
         }
@@ -1798,13 +1813,11 @@ async function processMessageExchange(messageText, source = 'input', options = {
         const fallbackSampleAnswers = (typeof initialBotMessage !== 'undefined' && initialBotMessage.sampleAnswers) 
             ? initialBotMessage.sampleAnswers.map(sa => ({text: sa, value: sa, actionType: 'message'}))
             : [{text: "도움말", value: "도움말", actionType: 'message'}];
-        await updateSampleAnswers(fallbackSampleAnswers); // 여기도 await
+        await updateSampleAnswers(fallbackSampleAnswers);
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
         const shouldFocus = (source === 'input' && !isTarotSelectionActive);
-        // setUIInteractions는 updateSampleAnswers가 완전히 끝난 후에 호출되어야 함
-        // Promise 화 했으므로, 이 finally 블록은 updateSampleAnswers가 resolve된 후 실행됨
         setUIInteractions(false, shouldFocus);
         console.log("[ProcessExchange] 완료.");
     }
