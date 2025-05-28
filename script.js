@@ -49,6 +49,119 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollLeftStart: 0
     };
 
+        // --- API 관련 상수 ---
+    const API_KEY = 'AIzaSyDSAA6rbNdD3tV1W_u0nIll0XyTe63rU_k'; // 실제 키로 교체 필요
+    const MODEL_NAME = 'gemini-2.5-flash-preview-04-17'; // 또는 사용자가 명시한 모델
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+
+    // --- 프롬프트 상수 (ini 파일 내용 대체) ---
+    const PROMPT_SYNC_TYPE_TEST = `
+# 역할: 당신은 사용자의 주관식 및 객관식 답변을 분석하여 MBTI와 유사한 성격 유형(DISC) 점수 및 5가지 주요 성격 요인(신경성, 외향성, 개방성, 우호성, 성실성) 점수를 추론하는 심리 분석가입니다.
+# 목표: 제공된 사용자의 답변들을 바탕으로 각 항목의 점수를 0점에서 10점 사이로 부여하고, 결정된 싱크타입명, 사용자 소속 성운명, 맞춤 싱크타입 애칭, 그리고 사용자의 성향에 대한 간략한 개요 텍스트를 생성해야 합니다.
+# 출력 형식 (반드시 JSON 형식으로 반환):
+{
+  "결정된싱크타입": "예시_싱크타입명 (예: 스텔라터틀)",
+  "사용자소속성운": "예시_성운명 (예: 루미네시아)",
+  "맞춤싱크타입이름": "예시_애칭 (예: 별을 사랑하는 탐험가)",
+  "overviewText": "사용자의 답변을 종합적으로 고려했을 때, 사용자는 [핵심 성향 키워드 1], [핵심 성향 키워드 2] 등의 특징을 보이는 경향이 있습니다. [간략한 추가 설명 및 긍정적 조언 한두 문장]",
+  "DISC_D_점수": 0, // 0-10점
+  "DISC_I_점수": 0, // 0-10점
+  "DISC_S_점수": 0, // 0-10점
+  "DISC_C_점수": 0, // 0-10점
+  "신경성": 0, // 0-10점 (Neuroticism)
+  "외향성": 0, // 0-10점 (Extraversion)
+  "개방성": 0, // 0-10점 (Openness to experience)
+  "우호성": 0, // 0-10점 (Agreeableness)
+  "성실성": 0 // 0-10점 (Conscientiousness)
+}
+# 사용자 답변:
+`; // 실제 API 호출 시 이 뒤에 사용자 답변이 추가됨
+
+    const PROMPT_TAROT_CHOICE = `
+# 역할: 당신은 사용자가 선택한 타로 카드와 사용자의 기본적인 성향 정보를 바탕으로, 해당 타로 카드가 현재 사용자에게 어떤 의미를 가질 수 있는지 간략하게 핵심 키워드 중심으로 풀이하는 타로 해석가입니다.
+# 목표: 제공된 사용자 정보와 선택된 타로 카드 목록을 보고, 각 카드에 대한 핵심 의미와 전체적인 상황에 대한 짧은 조언을 생성합니다. 결과는 JSON 형식으로 반환합니다.
+# 참고: 사용자의 싱크타입이나 성운 정보가 있다면 해석에 미묘한 뉘앙스를 추가할 수 있지만, 주된 해석은 타로 카드 자체에 집중합니다.
+# 출력 형식 (반드시 JSON 형식으로 반환):
+{
+  "cardInterpretations": [
+    { "cardId": "선택된_카드_ID_1", "keyword": "키워드1", "briefMeaning": "카드1에 대한 간략한 의미 또는 조언 (1-2문장)" },
+    { "cardId": "선택된_카드_ID_2", "keyword": "키워드2", "briefMeaning": "카드2에 대한 간략한 의미 또는 조언 (1-2문장)" }
+    // ... 카드 개수만큼 반복
+  ],
+  "overallAdvice": "선택된 카드들을 종합적으로 고려한 현재 상황에 대한 핵심 조언 (2-3문장)"
+}
+# 사용자 정보:
+`; // 실제 API 호출 시 이 뒤에 사용자 정보와 카드 목록이 추가됨
+
+    const PROMPT_TAROT_TRANS = `
+# 역할: 당신은 사용자의 타로 카드 선택 결과(tarotResult)와 이전 대화 내용을 바탕으로, 사용자에게 타로 점괘를 전달하고 관련된 대화를 자연스럽게 이어가는 친절한 타로 상담가 '루비'입니다.
+# 목표: 제공된 tarotResult 내용을 사용자에게 친절하게 설명하고, 사용자의 반응이나 질문에 맞춰 추가적인 대화를 이끌어냅니다. 당신의 답변은 일반적인 채팅 메시지 형식이어야 합니다.
+# 참고: tarotResult는 시스템이 생성한 분석 내용이며, 당신은 이를 사용자 친화적으로 각색하여 전달하는 역할입니다. 당신의 답변에는 tarotResult의 JSON 구조가 직접 노출되어서는 안 됩니다.
+# 이전 대화 내용:
+`; // 실제 API 호출 시 이 뒤에 이전 대화 내용과 tarotResult가 추가됨
+
+    const PROMPT_TAROT_ADVICE = `
+# 역할: 당신은 사용자의 타로 카드 선택 결과(tarotResult), 이전 대화 내용, 그리고 사용자의 프로필을 종합적으로 고려하여 깊이 있는 삶의 조언을 제공하는 현명한 타로 마스터 '루비'입니다.
+# 목표: 제공된 모든 정보를 바탕으로 사용자가 현재 직면한 상황이나 고민에 대해 구체적이고 실질적인 조언을 제공합니다. 당신의 답변은 사려 깊고 공감하는 채팅 메시지 형식이어야 합니다.
+# 참고: "깊은 상담"을 요청한 사용자에게 제공되는 내용입니다.
+# 이전 대화 내용:
+`; // 실제 API 호출 시 이 뒤에 이전 대화, tarotResult, 사용자 프로필이 추가됨
+
+    // --- 데이터 상수 (data.ini 내용 대체) ---
+    const QUESTIONS_DATA = {
+        subjective: [
+            { id: "subj_01", questionText: "최근 당신의 삶에서 가장 중요하다고 생각하는 가치는 무엇인가요? 그리고 그 이유는 무엇인가요?" }
+        ],
+        objective: [
+            {
+                id: "obj_01",
+                questionText: "새로운 환경이나 변화에 빠르게 적응하는 편입니다.",
+                options: [
+                    { text: "전혀 그렇지 않다", score: 1 },
+                    { text: "그렇지 않다", score: 2 },
+                    { text: "보통이다", score: 3 },
+                    { text: "그렇다", score: 4 },
+                    { text: "매우 그렇다", score: 5 }
+                ]
+            },
+            {
+                id: "obj_02",
+                questionText: "혼자 시간을 보내는 것보다 다른 사람들과 함께 어울리는 것을 더 선호합니다.",
+                options: [
+                    { text: "전혀 그렇지 않다", score: 1 },
+                    { text: "그렇지 않다", score: 2 },
+                    { text: "보통이다", score: 3 },
+                    { text: "그렇다", score: 4 },
+                    { text: "매우 그렇다", score: 5 }
+                ]
+            },
+            {
+                id: "obj_03",
+                questionText: "결정을 내릴 때 감정보다는 논리적인 분석을 우선시하는 경향이 있습니다.",
+                options: [
+                    { text: "전혀 그렇지 않다", score: 1 },
+                    { text: "그렇지 않다", score: 2 },
+                    { text: "보통이다", score: 3 },
+                    { text: "그렇다", score: 4 },
+                    { text: "매우 그렇다", score: 5 }
+                ]
+            }
+        ]
+    };
+
+    const MATCHING_CRITERIA = { // 예시 데이터, 실제 기준은 더 복잡할 수 있음
+        NEBULAS: [ // 각 성운별 대표적인 성격 5요인 점수 (이상적인 값 또는 범위)
+            { name: "루미네시아", Neuroticism: 3, Extraversion: 7, Openness: 8, Agreeableness: 6, Conscientiousness: 5 },
+            { name: "크레아티오", Neuroticism: 5, Extraversion: 5, Openness: 9, Agreeableness: 4, Conscientiousness: 7 },
+            // ... 기타 성운들
+        ],
+        SYNC_TYPES: [ // 각 싱크타입별 대표적인 DISC 점수
+            { name: "스텔라터틀", D: 3, I: 5, S: 8, C: 6 },
+            { name: "인터스텔라캣", D: 7, I: 8, S: 3, C: 4 },
+            // ... 기타 싱크타입들
+        ]
+    };
+
     const initialBotMessage = {
         text: "안녕하세요! 루비입니다. 무엇을 도와드릴까요?", // 초기 메시지 변경
         sampleAnswers: ["오늘의 운세", "카드 뽑기"] // "카드 뽑기" 옵션 제공
@@ -128,47 +241,87 @@ function initializeUserProfile() {
         "주관식질문5": null, "주관식답변5": null,
         "객관식질문과답변": [],
         "DISC_D_점수": 0, "DISC_I_점수": 0, "DISC_S_점수": 0, "DISC_C_점수": 0,
-        "결정된싱크타입": "스텔라터틀",
-        "사용자소속성운": "루미네시아",
+        "결정된싱크타입": null, // 초기값 null로 변경 (테스트 필요)
+        "사용자소속성운": null, // 초기값 null로 변경
         "사용자가성운에속한이유": "아직 알 수 없어요.",
-        "맞춤싱크타입이름": "별을 기다리는 자",
-        "overviewText": "당신은 복잡한 내면세계를 가진 존재입니다. 때로는 활기차고 외향적이다가도, 깊은 생각에 잠겨 혼자만의 시간을 즐기기도 합니다. 다양한 가능성을 탐색하는 것을 좋아하며, 정해진 틀에 얽매이는 것을 답답해할 수 있습니다. 당신의 강점은 뛰어난 직관력과 공감 능력이지만, 때로는 감정에 쉽게 휩쓸리거나 결정을 내리는 데 어려움을 겪을 수도 있습니다. 균형을 찾는 여정이 중요해 보입니다.",
+        "맞춤싱크타입이름": null, // 초기값 null로 변경
+        "overviewText": "당신의 성향을 파악하기 위한 분석이 아직 진행되지 않았습니다. 싱크타입 테스트를 통해 더 자세히 알아보세요.", // 초기 안내 문구 변경
         "사용자의감정상태": "평온",
         "선택된타로카드들": [],
         "지금까지수집된타로카드": [],
+        "tarotResult": null, // 타로 선택 결과 저장용 (신규)
         "시나리오": null,
         "메뉴단계": 1,
         "싱크타입단계": "미결정",
         "tarotbg": "default.png",
-        "bones": 10 // 기본 뼈다귀 개수 (예시)
+        "bones": 10,
+        // 싱크타입 테스트 관련 필드 (신규)
+        "신경성": 0,
+        "외향성": 0,
+        "개방성": 0,
+        "우호성": 0,
+        "성실성": 0,
+        "현재테스트종류": null, // 'subjective' 또는 'objective' (신규)
+        "현재질문ID": null, // 현재 진행 중인 질문의 ID (신규)
+        "싱크테스트답변": { // 싱크타입 테스트 답변 임시 저장 (신규)
+            subjective_answers: {}, // { subj_01: "답변 내용", ... }
+            objective_scores: {}  // { obj_01: 3, ... }
+        }
     };
 
     userProfile = { ...defaultProfile };
 
     if (loadedProfileData) {
-        // 기존 속성들 로드
+        // 기존 속성들 로드 (결정된싱크타입, 사용자소속성운 등은 null일 수 있으므로 조건부 로드 주의)
         if (loadedProfileData.결정된싱크타입) userProfile.결정된싱크타입 = loadedProfileData.결정된싱크타입;
+        else userProfile.결정된싱크타입 = null; // 로컬 데이터에 없으면 명시적으로 null
+
         if (loadedProfileData.사용자소속성운) userProfile.사용자소속성운 = loadedProfileData.사용자소속성운;
+        else userProfile.사용자소속성운 = null;
+
+        if (loadedProfileData.맞춤싱크타입이름) userProfile.맞춤싱크타입이름 = loadedProfileData.맞춤싱크타입이름;
+        else userProfile.맞춤싱크타입이름 = null;
+
+        if (loadedProfileData.overviewText) userProfile.overviewText = loadedProfileData.overviewText;
+        else userProfile.overviewText = defaultProfile.overviewText; // 로컬에 없으면 기본 초기 안내 문구
+
         if (loadedProfileData.사용자이름) userProfile.사용자이름 = loadedProfileData.사용자이름;
         if (loadedProfileData.사용자애칭) userProfile.사용자애칭 = loadedProfileData.사용자애칭;
         if (loadedProfileData.지금까지수집된타로카드) userProfile.지금까지수집된타로카드 = loadedProfileData.지금까지수집된타로카드;
-        if (loadedProfileData.overviewText) userProfile.overviewText = loadedProfileData.overviewText;
         if (loadedProfileData.tarotbg) userProfile.tarotbg = loadedProfileData.tarotbg;
-        if (typeof loadedProfileData.bones === 'number') userProfile.bones = loadedProfileData.bones; // 뼈다귀 개수 로드
+        if (typeof loadedProfileData.bones === 'number') userProfile.bones = loadedProfileData.bones;
+        
+        // 로드된 싱크타입 관련 점수들 (없으면 기본 0 유지)
+        if (typeof loadedProfileData.DISC_D_점수 === 'number') userProfile.DISC_D_점수 = loadedProfileData.DISC_D_점수;
+        if (typeof loadedProfileData.DISC_I_점수 === 'number') userProfile.DISC_I_점수 = loadedProfileData.DISC_I_점수;
+        if (typeof loadedProfileData.DISC_S_점수 === 'number') userProfile.DISC_S_점수 = loadedProfileData.DISC_S_점수;
+        if (typeof loadedProfileData.DISC_C_점수 === 'number') userProfile.DISC_C_점수 = loadedProfileData.DISC_C_점수;
+        if (typeof loadedProfileData.신경성 === 'number') userProfile.신경성 = loadedProfileData.신경성;
+        if (typeof loadedProfileData.외향성 === 'number') userProfile.외향성 = loadedProfileData.외향성;
+        if (typeof loadedProfileData.개방성 === 'number') userProfile.개방성 = loadedProfileData.개방성;
+        if (typeof loadedProfileData.우호성 === 'number') userProfile.우호성 = loadedProfileData.우호성;
+        if (typeof loadedProfileData.성실성 === 'number') userProfile.성실성 = loadedProfileData.성실성;
+        
+        // tarotResult도 로드 (신규)
+        if (loadedProfileData.tarotResult) userProfile.tarotResult = loadedProfileData.tarotResult;
+
 
         if (userProfile.결정된싱크타입 && userProfile.사용자소속성운) {
             userProfile.싱크타입단계 = "결정됨";
+        } else {
+            userProfile.싱크타입단계 = "미결정";
         }
         console.log("[UserProfile] 로컬 스토리지 데이터로 프로필 업데이트 완료.");
     } else {
         console.log("[UserProfile] 첫 방문 또는 로컬 데이터 없음. 기본값 사용 및 저장.");
-        userProfile.사용자이름 = "임시방문객";
-        userProfile.사용자애칭 = "별 탐험가";
-        userProfile.싱크타입단계 = "결정됨";
+        // 기본값은 이미 defaultProfile로 설정되어 있으므로 추가 할당 불필요
+        // userProfile.사용자이름 = "임시방문객"; // 기본값 사용
+        // userProfile.사용자애칭 = "별 탐험가"; // 기본값 사용
+        // userProfile.싱크타입단계 = "미결정"; // 기본값 사용
         saveUserProfileToLocalStorage(userProfile);
     }
 
-    updateBoneCountDisplay(); // 뼈다귀 UI 업데이트
+    updateBoneCountDisplay();
     console.log("[UserProfile] 최종 초기화 완료 (파생 데이터 설정 전):", JSON.parse(JSON.stringify(userProfile)));
 }
 function drawRadarChart(canvasId, labels, datasets) { // datasets는 배열 형태 [{label, data, backgroundColor, borderColor}, ...]
@@ -553,13 +706,26 @@ function saveUserProfileToLocalStorage(profile) {
     const dataToStore = {
         결정된싱크타입: profile.결정된싱크타입,
         사용자소속성운: profile.사용자소속성운,
+        맞춤싱크타입이름: profile.맞춤싱크타입이름,
+        overviewText: profile.overviewText,
+        DISC_D_점수: profile.DISC_D_점수,
+        DISC_I_점수: profile.DISC_I_점수,
+        DISC_S_점수: profile.DISC_S_점수,
+        DISC_C_점수: profile.DISC_C_점수,
+        신경성: profile.신경성,
+        외향성: profile.외향성,
+        개방성: profile.개방성,
+        우호성: profile.우호성,
+        성실성: profile.성실성,
         사용자애칭: profile.사용자애칭,
         사용자이름: profile.사용자이름,
         지금까지수집된타로카드: profile.지금까지수집된타로카드,
-        overviewText: profile.overviewText,
+        선택된타로카드들: profile.선택된타로카드들, // 선택된 타로카드도 저장 (중요)
+        tarotResult: profile.tarotResult, // tarotResult 저장 (신규)
         tarotbg: profile.tarotbg,
-        선택된타로카드들: profile.선택된타로카드들,
-        bones: profile.bones // 뼈다귀 개수 저장
+        bones: profile.bones
+        // 싱크테스트답변, 현재테스트종류, 현재질문ID 등은 휘발성으로 판단, 저장 안 함.
+        // 만약 테스트 중단 후 이어하기 기능을 원한다면 이들도 저장 필요.
     };
     try {
         localStorage.setItem('userSyncData', JSON.stringify(dataToStore));
@@ -2176,7 +2342,43 @@ function handleRandomTarotSelection() {
             moreOptionsBtn.classList.remove('active');
         }
     }, true);
+    async function callChatAPI(promptContent, chatHistory = []) {
+        console.log("[API] 호출 시작. 프롬프트 길이:", promptContent.length, "히스토리 항목 수:", chatHistory.length);
+        // 실제 API 호출 로직은 여기에 구현됩니다. (Phase 1 이후 구체화)
+        // 지금은 테스트를 위해 더미 응답을 반환하거나, 간단한 에코 응답을 시도할 수 있습니다.
 
+        // 더미 응답 예시 (실제 구현 시에는 fetch 사용)
+        return new Promise(async (resolve, reject) => {
+            // 네트워크 지연 시뮬레이션
+            await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+
+            // 성공/실패 더미 분기 (테스트용)
+            if (Math.random() > 0.1) { // 90% 성공 확률
+                let dummyResponseText = "API로부터 받은 더미 응답입니다. 프롬프트: " + promptContent.substring(0, 50) + "...";
+                // 프롬프트에 따라 다른 더미 JSON 응답을 만들어볼 수 있습니다.
+                if (promptContent.includes("출력 형식 (반드시 JSON 형식으로 반환)")) {
+                    if (promptContent.startsWith(PROMPT_SYNC_TYPE_TEST.trim())) {
+                        dummyResponseText = JSON.stringify({
+                            "결정된싱크타입": "임시_타입", "사용자소속성운": "임시_성운", "맞춤싱크타입이름": "임시_애칭",
+                            "overviewText": "API 테스트용 임시 분석 결과입니다.",
+                            "DISC_D_점수": 5, "DISC_I_점수": 6, "DISC_S_점수": 7, "DISC_C_점수": 4,
+                            "신경성": 3, "외향성": 8, "개방성": 7, "우호성": 6, "성실성": 5
+                        });
+                    } else if (promptContent.startsWith(PROMPT_TAROT_CHOICE.trim())) {
+                         dummyResponseText = JSON.stringify({
+                            "cardInterpretations": [ { "cardId": "major_00_fool_upright", "keyword": "새로운 시작", "briefMeaning": "더미 응답: 새로운 가능성이 열립니다." } ],
+                            "overallAdvice": "더미 응답: 긍정적인 마음으로 도전하세요."
+                        });
+                    }
+                }
+                console.log("[API] 더미 응답 성공:", dummyResponseText);
+                resolve({ text: () => Promise.resolve(dummyResponseText) }); // 실제 API 응답과 유사한 구조로 resolve
+            } else {
+                console.error("[API] 더미 응답 실패");
+                reject(new Error("API 호출 중 더미 오류 발생"));
+            }
+        });
+    }
     let resizeTimeout;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
