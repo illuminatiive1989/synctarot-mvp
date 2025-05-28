@@ -242,105 +242,77 @@ html, body {
     font-weight: 600;
 }
 
-/* 채팅 메시지 내 상호작용 버튼 컨테이너 */
-.chat-interaction-buttons-container {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 12px;
-    align-items: center; /* 버튼들을 가로 중앙 정렬 */
+.interaction-button-area {
+    display: none; /* 기본적으로 숨김, JS로 제어 */
+    flex-wrap: wrap; /* 버튼이 2개씩 배치되도록 */
+    justify-content: center; /* 버튼들을 중앙 정렬 */
+    gap: 10px; /* 버튼들 사이의 간격 */
+    padding: 10px 15px; /* 영역 내부 패딩 */
+    background-color: var(--white-color); /* 배경색은 일단 흰색, 필요시 변경 */
+    border-top: 1px solid var(--input-border-color); /* 위쪽 구분선 */
+    border-bottom: 1px solid var(--input-border-color); /* 아래쪽 구분선 (샘플 답변 영역과 구분) */
+    flex-shrink: 0; /* 내용이 많아도 줄어들지 않도록 */
+    order: -1; /* chatMessages 바로 다음에, sampleAnswers 보다 위에 오도록 flex order 조정 (chat-app-container가 flex일 경우) */
+                /* 만약 chat-app-container가 flex가 아니라면, HTML 순서대로 배치됨 */
 }
-
-/* 채팅 메시지 내 상호작용 버튼 기본 스타일 */
-.chat-internal-button {
-    background-color: var(--white-color);
-    border: 1px solid var(--emphasis-color);
-    color: var(--emphasis-color);
-    padding: 10px 15px;
-    border-radius: 20px;
-    font-size: 0.95rem;
+.interaction-button-area.active {
+    display: flex; /* 활성화 시 보이도록 */
+}
+.interaction-btn {
+    flex-basis: calc(50% - 5px); /* 한 줄에 2개씩, gap 고려 */
+    padding: 10px;
+    font-size: 0.9rem;
     font-weight: 500;
+    border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.15s ease-out;
     text-align: center;
-    width: 80%; /* 버튼 너비 조정 (예: 80%) */
-    max-width: 280px; /* 최대 너비 설정 */
     box-sizing: border-box;
-    position: relative; /* 툴팁을 위한 position context */
+    background-color: var(--input-bg-color); /* 기본 배경색 (입력창 배경과 유사) */
+    color: var(--normal-text-color); /* 기본 글자색 */
+    border: 1px solid var(--input-border-color); /* 기본 테두리 */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    position: relative; /* 2단계 클릭 효과 및 툴팁을 위함 */
+    overflow: hidden; /* 뒤집기 효과 시 내용 넘침 방지 */
+    min-height: 40px; /* 최소 높이 확보 */
+    display: flex; /* 내부 텍스트/아이콘 정렬용 */
+    align-items: center;
+    justify-content: center;
 }
-
-.chat-internal-button:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--emphasis-color) 10%, var(--white-color));
+.interaction-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--emphasis-color) 60%, white);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
 }
-
-.chat-internal-button:disabled {
-    background-color: #f0f0f0;
-    border-color: #d0d0d0;
-    color: #a0a0a0;
+.interaction-btn:disabled {
+    background-color: #f8f9fa;
+    border-color: #e9ecef;
+    color: #adb5bd;
     cursor: not-allowed;
-    opacity: 0.6;
+    box-shadow: none;
+    transform: translateY(0);
 }
-
-/* 채팅 메시지 내 유료 버튼 스타일 */
-.chat-internal-button.paid-action {
+.interaction-btn.paid-action {
     background-color: var(--emphasis-color);
     color: var(--white-color);
     border-color: var(--emphasis-color);
 }
-
-.chat-internal-button.paid-action:hover:not(:disabled) {
+.interaction-btn.paid-action:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
     border-color: color-mix(in srgb, var(--emphasis-color) 85%, black);
 }
 
-/* 채팅 메시지 내 무료 버튼 스타일 (별도 스타일링 제거, 기본 .chat-internal-button 따름) */
-/* .chat-internal-button.free-action 관련 스타일은 삭제 또는 주석 처리 */
-
-/* 유료 버튼 추천 툴팁 스타일 */
-.chat-internal-button .recommend-tooltip {
-    position: absolute;
-    top: -28px; /* 버튼 위로 살짝 이동 */
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: var(--normal-text-color);
-    color: var(--white-color);
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.75em;
-    white-space: nowrap;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s, visibility 0s linear 0.2s;
-    pointer-events: none; /* 툴팁이 클릭 방해하지 않도록 */
-}
-.chat-internal-button .recommend-tooltip::after { /* 말풍선 꼬리 */
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    margin-left: -5px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: var(--normal-text-color) transparent transparent transparent;
-}
-.chat-internal-button.paid-action:hover .recommend-tooltip {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0.3s, 0.3s; /* 호버 시 약간 늦게 나타나도록 */
-}
-
-
 /* 샘플 답변 영역 스타일 수정 */
 .sample-answers {
     display: flex;
-    flex-wrap: wrap; /* 여러 버튼이 있을 경우 줄바꿈 허용 */
-    justify-content: flex-start; /* 좌측 정렬 */
+    flex-wrap: wrap;
+    justify-content: flex-start;
     align-items: center;
     padding: 0px 10px;
     background-color: var(--white-color);
-    border-top: 1px solid transparent;
+    /* border-top: 1px solid transparent; /* 이 부분은 interaction-button-area의 border-bottom으로 대체될 수 있음 */
     flex-shrink: 0;
-    overflow-x: auto; /* 버튼이 많을 경우 가로 스크롤 (기존 유지) */
+    overflow-x: auto;
     overflow-y: hidden;
     height: var(--sample-answers-height);
     min-height: var(--sample-answers-height);
@@ -351,7 +323,7 @@ html, body {
 .sample-answers.has-buttons {
     padding-top: 0px;
     padding-bottom: 0px;
-    border-top-color: var(--input-border-color);
+    border-top-color: var(--input-border-color); /* 샘플 답변이 있을 때만 상단선 표시 */
 }
 
 /* 샘플 답변 버튼 기본 스타일 (유료/무료 구분 스타일은 여기서 제거됨) */
