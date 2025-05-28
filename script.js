@@ -1742,15 +1742,14 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         let responseData = {}; 
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // tarotInitiationMessages는 전역 상수
-
-        // --- 초기 메시지 응답 처리 ---
-        if (userMessageText === initialBotMessage.text) { // 챗봇의 첫 마디에 대한 응답
+        // --- 초기 안내 버튼("info_initial_prompt") 클릭 또는 초기 챗봇 메시지에 대한 응답 처리 ---
+        if (userMessageText === "info_initial_prompt" || (buttonData && buttonData.value === "info_initial_prompt") || userMessageText === initialBotMessage.text) {
+            console.log("[BotResponse] 초기 안내 프롬프트 또는 초기 메시지 인식.");
             responseData = {
-                assistantmsg: initialBotMessage.text, // 이미 addMessage로 표시되었으므로 중복 방지 필요 시 로직 수정
-                sampleAnswers: initialBotMessage.sampleAnswers,
+                // assistantmsg: initialBotMessage.text, // 이미 채팅창에 표시된 첫 메시지이므로, 중복 표시 안 함
+                sampleAnswers: initialBotMessage.sampleAnswers, // "먼저 보고싶은 타로를 골라주세요" 버튼을 다시 표시
                 importance: 'low',
-                disableChatInput: true, // 초기에는 메뉴 선택 유도
+                disableChatInput: true, // 메뉴 선택 유도
                 user_profile_update: {}
             };
         }
@@ -1840,7 +1839,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                     responseData = await handleDeepAdviceActions(userMessageText, buttonData);
                  }
             }
-            else { // 그 외 모든 경우 (이전에 botKnowledgeBase로 처리되던 부분)
+            else { 
                 responseData = handleGeneralKnowledgeActions(userMessageText, buttonData);
             }
         }
@@ -1851,17 +1850,20 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
         }
 
         if (Object.keys(responseData).length === 0 && buttonData && buttonData.actionType === 'info_disabled') {
-            // 비활성화된 안내 버튼 클릭은 특별한 응답을 생성하지 않음.
-            // 이 경우, assistantmsg 등이 undefined로 남게 되므로 아래 기본값 설정이 중요.
+            // 이 경우는 위에서 이미 처리했거나, handleGeneralKnowledgeActions에서 처리됨.
+            // 만약 여기까지 왔다면, 최소한의 응답을 보장.
+            console.log("[BotResponse] Info_disabled 버튼으로 responseData가 비었음. 기본값 설정 시도.");
         }
 
         if (responseData.assistantmsg === undefined && responseData.assistant_interpretation === undefined && responseData.systemMessageOnConfirm === undefined) {
-            if (!(buttonData && buttonData.actionType === 'info_disabled')) { 
+             // 초기 안내 버튼 클릭("info_initial_prompt") 시에는 assistantmsg를 다시 보낼 필요 없음.
+            if (userMessageText !== "info_initial_prompt" && !(buttonData && buttonData.value === "info_initial_prompt")) {
                  responseData.assistantmsg = userProfile.isInDeepAdviceMode ? 
                                              "죄송해요, 잘 이해하지 못했어요. 깊은 상담 중이시니 편하게 다시 말씀해주시겠어요?" :
                                              "죄송해요, 잘 이해하지 못했어요. <br>더보기 메뉴를 통해 원하시는 기능을 선택해주세요.";
-            } else if (!responseData.assistantmsg) { // info_disabled인데 메시지가 아예 없는 경우
-                responseData.assistantmsg = " "; // 빈칸이라도 보내서 addMessage 오류 방지
+            } else if (!responseData.assistantmsg && (userMessageText === "info_initial_prompt" || (buttonData && buttonData.value === "info_initial_prompt"))) {
+                // 초기 안내 버튼 클릭 시에는 assistantmsg를 설정하지 않거나, 봇의 첫 메시지를 유지.
+                // 여기서는 메시지 중복을 피하기 위해 설정하지 않음.
             }
         }
         if (responseData.sampleAnswers === undefined) responseData.sampleAnswers = [];
@@ -1872,7 +1874,7 @@ async function simulateBotResponse(userMessageText, buttonData = null) {
                 responseData.disableChatInput = false; 
             } else if (responseData.sampleAnswers && responseData.sampleAnswers.length > 0 && responseData.sampleAnswers.some(sa => sa.actionType !== 'info_disabled')) {
                 responseData.disableChatInput = true; 
-            } else { // 초기 상태 포함
+            } else { 
                 responseData.disableChatInput = true; 
             }
         }
@@ -2844,23 +2846,30 @@ function handleRandomTarotSelection() {
     sampleAnswersContainer.addEventListener('click', async (e) => {
         const targetButton = e.target.closest('.sample-answer-btn');
         if (targetButton && !targetButton.disabled && !isLoadingBotResponse) {
-            const buttonValue = targetButton.dataset.value; // API로 보낼 값
+            const buttonValue = targetButton.dataset.value; 
             const buttonActionType = targetButton.dataset.actionType || 'message';
+            
+            // --- 중요: info_disabled 버튼 클릭 시 처리 중단 ---
+            if (buttonActionType === 'info_disabled') {
+                console.log("[SampleAnswersClick] info_disabled 버튼 클릭됨, 처리하지 않음.");
+                return; 
+            }
+            // --- 중요: info_disabled 버튼 클릭 시 처리 중단 끝 ---
+
             const buttonCost = targetButton.dataset.cost ? parseInt(targetButton.dataset.cost, 10) : undefined;
             
             const btnTextElement = targetButton.querySelector('.btn-text');
             const buttonText = btnTextElement ? btnTextElement.textContent : targetButton.textContent.trim();
 
-
             const buttonDataForExchange = {
-                value: buttonValue, // simulateBotResponse로 전달될 값 (중요)
-                text: buttonText, // 사용자 메시지로 표시될 텍스트
+                value: buttonValue, 
+                text: buttonText, 
                 actionType: buttonActionType,
                 cost: buttonCost
+                // 여기에 isTarotRelated, tarotbg 등 버튼 데이터 속성 추가 가능 (필요시)
             };
             
-            // processMessageExchange의 첫 번째 인자는 buttonValue (API 호출용 메시지)
-            // buttonData 객체를 통해 추가 정보 전달
+            // 첫 번째 인자로 buttonValue (API로 보낼 값 또는 내부 액션 값)를 명확히 전달
             await processMessageExchange(buttonValue, 'sample_button', { buttonData: buttonDataForExchange });
         }
     });

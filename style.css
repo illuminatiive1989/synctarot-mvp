@@ -319,16 +319,15 @@ html, body {
 .sample-answer-btn.info-disabled-btn {
     opacity: 0.6 !important; 
     background-color: #e9ecef !important; 
-    color: #adb5bd !important; 
+    color: #6c757d !important; /* 좀 더 진한 회색으로 변경하여 가독성 확보 */
     border-color: #ced4da !important; 
     cursor: default !important; 
-    pointer-events: none !important; /* 클릭 이벤트 방지 추가! */
+    pointer-events: none !important; 
 }
 
 .sample-answer-btn.info-disabled-btn:hover {
     background-color: #e9ecef !important; 
 }
-
 .chat-input-area {
     display: flex;
     align-items: center;
