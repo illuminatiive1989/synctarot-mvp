@@ -282,7 +282,9 @@ function initializeUserProfile() {
             subjective_answers: {}, 
             objective_scores: {}  
         },
-        "hasUsedAddTwoCards": false // "2장 더 뽑기" 사용 여부 플래그 추가
+        "hasUsedAddTwoCards": false, // 점진적 제거 또는 tarotConsultationStage로 대체 예정
+        "tarotConsultationStage": null, // 예: 'INITIAL_ONE', 'ADDED_TWO_AFTER_ONE', 'INITIAL_THREE'
+        "initialCardCount": 0 // "2장 더 뽑기" 이전의 카드 수
     };
 
     userProfile = { ...defaultProfile };
@@ -311,7 +313,10 @@ function initializeUserProfile() {
         if (typeof loadedProfileData.우호성 === 'number') userProfile.우호성 = loadedProfileData.우호성;
         if (typeof loadedProfileData.성실성 === 'number') userProfile.성실성 = loadedProfileData.성실성;
         if (loadedProfileData.tarotResult) userProfile.tarotResult = loadedProfileData.tarotResult;
-        if (typeof loadedProfileData.hasUsedAddTwoCards === 'boolean') userProfile.hasUsedAddTwoCards = loadedProfileData.hasUsedAddTwoCards; // 플래그 로드
+        if (typeof loadedProfileData.hasUsedAddTwoCards === 'boolean') userProfile.hasUsedAddTwoCards = loadedProfileData.hasUsedAddTwoCards;
+        if (loadedProfileData.tarotConsultationStage) userProfile.tarotConsultationStage = loadedProfileData.tarotConsultationStage; // 추가
+        if (typeof loadedProfileData.initialCardCount === 'number') userProfile.initialCardCount = loadedProfileData.initialCardCount; // 추가
+
 
         if (userProfile.결정된싱크타입 && userProfile.사용자소속성운) {
             userProfile.싱크타입단계 = "결정됨";
@@ -727,7 +732,9 @@ function saveUserProfileToLocalStorage(profile) {
         tarotResult: profile.tarotResult, 
         tarotbg: profile.tarotbg,
         bones: profile.bones,
-        hasUsedAddTwoCards: profile.hasUsedAddTwoCards // 플래그 저장
+        hasUsedAddTwoCards: profile.hasUsedAddTwoCards,
+        tarotConsultationStage: profile.tarotConsultationStage, // 추가
+        initialCardCount: profile.initialCardCount // 추가
     };
     try {
         localStorage.setItem('userSyncData', JSON.stringify(dataToStore));
@@ -1297,7 +1304,10 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
     let responseData = {};
     if (tarotInitiationMessages.includes(userMessageText) && selectedTarotTopicName) {
         userProfile.시나리오 = `tarot_topic_${userMessageText.replace(/\s+/g, '_')}`;
-        userProfile.hasUsedAddTwoCards = false; 
+        // userProfile.hasUsedAddTwoCards = false; // tarotConsultationStage로 관리하므로 이 줄은 제거 가능
+        userProfile.tarotConsultationStage = 'TOPIC_SELECTED'; // 주제만 선택된 상태
+        userProfile.initialCardCount = 0;
+        userProfile.선택된타로카드들 = []; // 새 주제 시작 시 이전 카드 선택 초기화
         saveUserProfileToLocalStorage(userProfile);
         responseData = {
             assistantmsg: `네, <b>${selectedTarotTopicName}</b> 타로를 진행하겠습니다.<br>카드는 몇 장 뽑으시겠어요?`,
@@ -1307,16 +1317,29 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
                 { text: "3장 뽑기", value: "action_select_three_cards_for_topic", actionType: 'choice', cost:2, displayCostIcon: true, iconType:'bone' }
             ],
             importance: 'low', disableChatInput: true, 
-            user_profile_update: { "시나리오": userProfile.시나리오, "hasUsedAddTwoCards": false }
+            user_profile_update: { 
+                "시나리오": userProfile.시나리오, 
+                "tarotConsultationStage": userProfile.tarotConsultationStage,
+                "initialCardCount": userProfile.initialCardCount,
+                "선택된타로카드들": userProfile.선택된타로카드들
+            }
         };
     } else if (userMessageText === "action_select_one_card_for_topic") {
+        userProfile.tarotConsultationStage = 'INITIAL_ONE';
+        userProfile.initialCardCount = 1;
+        saveUserProfileToLocalStorage(userProfile);
         responseData = {
             tarocardview: true, cards_to_select: 1, sampleAnswers: [],
             importance: 'low', disableChatInput: true, 
-            user_profile_update: { "시나리오": userProfile.시나리오 + "_single_pick" },
+            user_profile_update: { 
+                "시나리오": userProfile.시나리오 + "_single_pick",
+                "tarotConsultationStage": userProfile.tarotConsultationStage,
+                "initialCardCount": userProfile.initialCardCount
+            },
             systemMessageOnConfirm: "1장을 선택하셨습니다. 카드를 골라주세요."
         };
     } else if (userMessageText === "action_select_three_cards_for_topic") {
+         // 비용 확인 단계이므로 아직 stage 변경 안 함
          responseData = {
             assistantmsg: `<b>3장 뽑기</b> 시 <img src="img/icon/bone_inline.png" alt="뼈다귀" class="inline-bone-icon"><b>2개</b>가 사용됩니다. 진행하시겠어요?`,
             importance: 'high', isConfirmationStage: true,
@@ -1330,11 +1353,18 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
         if (userProfile.bones >= 2) {
             userProfile.bones -= 2;
             updateBoneCountDisplay();
+            userProfile.tarotConsultationStage = 'INITIAL_THREE';
+            userProfile.initialCardCount = 3;
             saveUserProfileToLocalStorage(userProfile);
             responseData = {
                 tarocardview: true, cards_to_select: 3, sampleAnswers: [],
                 importance: 'low', disableChatInput: true, 
-                user_profile_update: { "시나리오": userProfile.시나리오 + "_triple_pick", "bones": userProfile.bones },
+                user_profile_update: { 
+                    "시나리오": userProfile.시나리오 + "_triple_pick", 
+                    "bones": userProfile.bones,
+                    "tarotConsultationStage": userProfile.tarotConsultationStage,
+                    "initialCardCount": userProfile.initialCardCount
+                },
                 systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
             };
         } else { 
@@ -1343,7 +1373,7 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
                 tarocardview: false, cards_to_select: null, importance: 'low', disableChatInput: true, 
                 sampleAnswers: [
                     { text: "1장 뽑기 (무료)", value: "action_select_one_card_for_topic", cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' },
-                    { text: "🦴충전하기 (+10)", value: "action_recharge_for_select_three_cards_topic", actionType: 'message' }, // 충전 버튼 추가
+                    { text: "🦴충전하기 (+10)", value: "action_recharge_for_select_three_cards_topic", actionType: 'message' },
                     { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' }
                 ], user_profile_update: {}
             };
@@ -1360,7 +1390,10 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
             importance: 'low', disableChatInput: true, user_profile_update: {}
         };
     } else if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래") {
-         userProfile.hasUsedAddTwoCards = false; 
+        //  userProfile.hasUsedAddTwoCards = false; // tarotConsultationStage로 관리
+         userProfile.tarotConsultationStage = 'GENERAL_CHOICE'; // 일반적인 카드 뽑기 선택 상태
+         userProfile.initialCardCount = 0;
+         userProfile.선택된타로카드들 = [];
          saveUserProfileToLocalStorage(userProfile);
         responseData = {
             assistantmsg: "카드를 몇 장 뽑으시겠어요?",
@@ -1369,13 +1402,25 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
                 { text: "1장", value: SELECT_ONE_CARD_ACTION, cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' }, 
                 { text: "3장", value: SELECT_THREE_CARDS_ACTION, cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }  
             ],
-            importance: 'low', disableChatInput: true, user_profile_update: { "hasUsedAddTwoCards": false }
+            importance: 'low', disableChatInput: true, 
+            user_profile_update: { 
+                "tarotConsultationStage": userProfile.tarotConsultationStage,
+                "initialCardCount": userProfile.initialCardCount,
+                "선택된타로카드들": userProfile.선택된타로카드들
+            }
         };
     } else if (userMessageText === SELECT_ONE_CARD_ACTION) { 
+        userProfile.tarotConsultationStage = 'INITIAL_ONE'; // 일반 1장 뽑기
+        userProfile.initialCardCount = 1;
+        saveUserProfileToLocalStorage(userProfile);
         responseData = {
             tarocardview: true, cards_to_select: 1, sampleAnswers: [],
             importance: 'low', disableChatInput: true,
-            user_profile_update: { "시나리오": "tarot_single_pick_general" },
+            user_profile_update: { 
+                "시나리오": "tarot_single_pick_general",
+                "tarotConsultationStage": userProfile.tarotConsultationStage,
+                "initialCardCount": userProfile.initialCardCount
+            },
             systemMessageOnConfirm: "1장을 선택하셨습니다. 카드를 골라주세요."
         };
     } else if (userMessageText === SELECT_THREE_CARDS_ACTION) { 
@@ -1392,11 +1437,18 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
         if (userProfile.bones >= 2) {
             userProfile.bones -= 2;
             updateBoneCountDisplay();
+            userProfile.tarotConsultationStage = 'INITIAL_THREE'; // 일반 3장 뽑기
+            userProfile.initialCardCount = 3;
             saveUserProfileToLocalStorage(userProfile);
             responseData = {
                 tarocardview: true, cards_to_select: 3, sampleAnswers: [],
                 importance: 'low', disableChatInput: true,
-                user_profile_update: { "시나리오": "tarot_triple_pick_general", "bones": userProfile.bones },
+                user_profile_update: { 
+                    "시나리오": "tarot_triple_pick_general", 
+                    "bones": userProfile.bones,
+                    "tarotConsultationStage": userProfile.tarotConsultationStage,
+                    "initialCardCount": userProfile.initialCardCount 
+                },
                 systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
             };
         } else { 
@@ -1405,7 +1457,7 @@ async function handleTarotSetupActions(userMessageText, buttonData, selectedTaro
                 tarocardview: false, cards_to_select: null, importance: 'low', disableChatInput: true,
                 sampleAnswers: [
                     { text: "1장", value: SELECT_ONE_CARD_ACTION, cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' }, 
-                    { text: "🦴충전하기 (+10)", value: "action_recharge_for_select_three_cards_general", actionType: 'message' }, // 충전 버튼 추가
+                    { text: "🦴충전하기 (+10)", value: "action_recharge_for_select_three_cards_general", actionType: 'message' },
                     { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' }
                 ], user_profile_update: {}
             };
@@ -1467,34 +1519,38 @@ async function handleTarotCardSelectionCompleteActions(userMessageText, buttonDa
 async function handleTarotInterpretationActions(userMessageText, buttonData, selectedTarotTopicName) {
     let responseData = {};
     let 진행메시지 = "";
-    let currentScenario = userProfile.시나리오 || "tarot_general";
+    let currentScenario = userProfile.시나리오 || "tarot_general"; // 시나리오 문자열은 보조적으로 사용 가능
+    let currentConsultationStage = userProfile.tarotConsultationStage;
 
     if (userMessageText === "action_skip_sync_type_test") {
-        currentScenario = currentScenario.replace("_propose_sync_test","") + "_skipped_sync_test";
         진행메시지 = "싱크타입 테스트를 건너뛰고 타로 해석을 바로 진행합니다.";
     } else if (userMessageText === "action_proceed_tarot_interpretation_after_sync") {
-        currentScenario = currentScenario.replace("_started","").replace("_restarted","").replace("_propose_sync_test","") + "_after_sync_test";
         진행메시지 = "싱크타입 분석 완료! 이제 타로 해석을 진행합니다.";
     } else if (userMessageText === "action_proceed_tarot_interpretation") { 
          진행메시지 = "타로 해석을 진행합니다.";
     } else {
-        return {}; // 이 함수에서 처리할 액션이 아님
+        return {}; 
     }
-    userProfile.시나리오 = currentScenario;
+    // userProfile.시나리오 = currentScenario; // 시나리오는 이미 이전 단계에서 업데이트됨
     saveUserProfileToLocalStorage(userProfile); 
-    console.log(`[BotResponse] ${진행메시지} 시나리오: ${userProfile.시나리오}`);
+    console.log(`[BotResponse] ${진행메시지} 상담 단계: ${currentConsultationStage}, 시나리오: ${currentScenario}`);
     
     showFullScreenLoader("타로 해석을 준비 중입니다..."); 
     
-    let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE;
-    // selectedTarotTopicName이 simulateBotResponse에서 userMessageText로부터 결정됨.
-    // 만약 이 시점에서 selectedTarotTopicName이 null이거나 undefined이면, 
-    // userProfile.시나리오에서 추출하거나 기본값을 사용해야 함.
     const actualTarotTopic = selectedTarotTopicName || 
                              (userProfile.시나리오 ? userProfile.시나리오.split("_pick")[0].replace("tarot_topic_", "").replace(/_/g, " ") : '선택하신 주제');
 
+    let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE;
     tarotChoicePrompt += `\n타로 상담 주제: ${actualTarotTopic}`; 
     tarotChoicePrompt += `\n선택된 카드: ${userProfile.선택된타로카드들.join(', ')}`;
+    // 상담 단계 정보 추가 (API 프롬프트에서 활용 가능하도록)
+    tarotChoicePrompt += `\n상담 단계: ${currentConsultationStage}`;
+    if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
+        tarotChoicePrompt += `\n이전 카드 수: ${userProfile.initialCardCount}`;
+        const previousCards = userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount);
+        tarotChoicePrompt += `\n이전 선택 카드: ${previousCards.join(', ')}`;
+    }
+
 
     try {
         const choiceApiResponseObj = await callChatAPI(tarotChoicePrompt);
@@ -1510,19 +1566,22 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         let simpleChatHistory = [];
 
         const transPrompt = LOADED_PROMPT_TAROT_TRANS + `\n## 이전 대화 요약 (카드 선택 결과):\n${JSON.stringify(userProfile.tarotResult, null, 2)}\n## 사용자 질문:\n타로 해석을 부탁드려요.`;
+        // 여기에 추가로 상담 단계(currentConsultationStage)나 이전 카드 정보를 transPrompt에 전달할 수 있음
+        // 예: transPrompt += `\n[상담진행정보]\n현재단계: ${currentConsultationStage}\n...`
+
         const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory);
         const finalInterpretationText = await transApiResponseObj.text();
         
         let assistantInterpretationHTML = "";
         if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
             let titleCardTypeText = "";
-            const displayTopicName = selectedTarotTopicName || '타로'; // 기본값 '타로'
+            const displayTopicName = actualTarotTopic;
 
-            if (currentScenario.includes("_add_two_pick")) { 
+            if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') { 
                  titleCardTypeText = "추가 타로 해석";
-            } else if (userProfile.선택된타로카드들.length === 1 || currentScenario.includes("_single_pick")) { 
+            } else if (currentConsultationStage === 'INITIAL_ONE') { 
                 titleCardTypeText = "싱글 타로 해석";
-            } else if (userProfile.선택된타로카드들.length === 3 || currentScenario.includes("_triple_pick")) { 
+            } else if (currentConsultationStage === 'INITIAL_THREE') { 
                 titleCardTypeText = "트리플 타로 해석";
             } else if (userProfile.선택된타로카드들.length > 0) { 
                  titleCardTypeText = `(${userProfile.선택된타로카드들.length}장) 타로 해석`; 
@@ -1530,10 +1589,13 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                 titleCardTypeText = "타로 해석"; 
             }
 
-
             assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
-            // 제목 형식 변경: "'타로 주제명' 싱글/추가/트리플 타로 해석"
             assistantInterpretationHTML += `<div class="interpretation-title-text"><b>'${displayTopicName}' ${titleCardTypeText}</b></div><br>`;
+            
+            // ADDED_TWO_AFTER_ONE 일 경우, 새로 추가된 카드들만 해석 결과에 표시할지, 아니면 전체를 표시할지 결정 필요.
+            // 현재는 tarotResult.cardInterpretations (API에서 받은 모든 카드 해석)를 순회함.
+            // 만약 추가된 카드만 보여주고 싶다면, cardInterpretations 배열을 필터링해야 함.
+            // (예: interp.cardId가 userProfile.선택된타로카드들.slice(userProfile.initialCardCount)에 포함되는 경우만)
             userProfile.tarotResult.cardInterpretations.forEach((interp, index) => {
                 let cardDisplayName = `카드 정보 없음 (${interp.cardId})`; 
                 if (TAROT_CARD_DATA && TAROT_CARD_DATA[interp.cardId] && TAROT_CARD_DATA[interp.cardId].name) {
@@ -1560,16 +1622,27 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                 if (!imageNameForFile.endsWith('_upright')) imageNameForFile += '_upright';
                 const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
                 
+                // 카드 번호 표시: 전체 카드 중 몇 번째인지, 아니면 현재 단계에서 몇 번째인지.
+                // 여기서는 전체 카드 리스트에서의 인덱스를 사용 (index + 1)
+                let displayCardNumber = index + 1;
+                if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE' && index >= userProfile.initialCardCount) {
+                    // 추가된 카드의 경우, (이전 카드 수 + 1) 부터 시작하도록 조정 가능
+                    // displayCardNumber = (index - userProfile.initialCardCount) + 1; // 이렇게 하면 추가된 카드들만 1번부터 시작
+                    // 또는 전체 카드 번호 그대로 사용:
+                    displayCardNumber = index + 1; 
+                }
+
+
                 assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
-                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${index + 1}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
+                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${displayCardNumber}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
                 assistantInterpretationHTML += `<div class="interpretation-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
             });
             assistantInterpretationHTML += `</div>`;
         }
         
         let nextSampleAnswers = [];
-        // "2장 더 뽑기" 버튼은 최초 1장 선택 후 & 아직 "2장 더 뽑기"를 사용하지 않았을 때만 표시
-        if (userProfile.선택된타로카드들.length === 1 && !userProfile.hasUsedAddTwoCards && !currentScenario.includes("_add_two_pick")) { 
+        // "2장 더 뽑기" 버튼 표시 조건: 현재 상담 단계가 INITIAL_ONE일 때만
+        if (userProfile.tarotConsultationStage === 'INITIAL_ONE') { 
             nextSampleAnswers.push({ text: "2장 더 뽑기", value: "action_add_two_cards_phase1", actionType: 'message', cost:2, displayCostIcon: true, iconType:'bone' });
         }
         nextSampleAnswers.push({ text: "깊은 상담 요청하기", value: "action_deep_advice_phase1", actionType: 'message', cost:1, displayCostIcon: true, iconType:'bone' });
@@ -1597,6 +1670,7 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
 async function handleAddTwoCardsActions(userMessageText, buttonData) {
     let responseData = {};
     if (userMessageText === "action_add_two_cards" || userMessageText === "action_add_two_cards_phase1") {
+        // 비용 확인 단계이므로 아직 stage 변경 안 함
         responseData = {
             assistantmsg: `<b>2장 더 뽑기</b> 시 <img src="img/icon/bone_inline.png" alt="뼈다귀" class="inline-bone-icon"><b>2개</b>가 사용됩니다. 진행하시겠어요?`,
             importance: 'high', isConfirmationStage: true,
@@ -1609,13 +1683,20 @@ async function handleAddTwoCardsActions(userMessageText, buttonData) {
     } else if (userMessageText === "action_confirm_add_two_cards_cost") {
         if (userProfile.bones >= 2) {
             userProfile.bones -= 2;
-            userProfile.hasUsedAddTwoCards = true; 
+            // userProfile.hasUsedAddTwoCards = true; // tarotConsultationStage로 대체
+            userProfile.tarotConsultationStage = 'ADDED_TWO_AFTER_ONE'; // 1장 이후 2장 추가 상태
+            // initialCardCount는 이전 값(1)을 유지해야 함. 여기서 변경하지 않음.
             updateBoneCountDisplay();
             saveUserProfileToLocalStorage(userProfile);
             responseData = {
-                tarocardview: true, cards_to_select: 2, sampleAnswers: [],
+                tarocardview: true, cards_to_select: 2, sampleAnswers: [], // UI에서는 2장만 새로 선택하도록 함
                 importance: 'low', disableChatInput: true,
-                user_profile_update: { "시나리오": (userProfile.시나리오 || "tarot_general") + "_add_two_pick", "bones": userProfile.bones, "hasUsedAddTwoCards": true },
+                user_profile_update: { 
+                    "시나리오": (userProfile.시나리오 || "tarot_general") + "_add_two_pick", 
+                    "bones": userProfile.bones,
+                    "tarotConsultationStage": userProfile.tarotConsultationStage
+                    // "hasUsedAddTwoCards": true // 제거 또는 tarotConsultationStage로 대체
+                },
                 systemMessageOnConfirm: "2장을 추가로 선택합니다. 카드를 골라주세요. (뼈다귀 -2)"
             };
         } else { 
@@ -1623,7 +1704,7 @@ async function handleAddTwoCardsActions(userMessageText, buttonData) {
                 assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)<br>뼈다귀를 충전하시겠어요?",
                 importance: 'low', disableChatInput: true,
                 sampleAnswers: [ 
-                    { text: "🦴충전하기 (+10)", value: "action_recharge_for_add_two_cards", actionType: 'message' }, // 충전 버튼 추가
+                    { text: "🦴충전하기 (+10)", value: "action_recharge_for_add_two_cards", actionType: 'message' }, 
                     { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' } 
                 ],
                 user_profile_update: {}
@@ -2542,64 +2623,72 @@ function updateSyncTypeModal(tabId = 'overview') {
         tarotCardInfo.textContent = `${selectedTarotCardIndices.length}장 선택됨 / 총 ${cardsToSelectCount}장 선택하세요`;
     }
 
-    async function handleTarotSelectionConfirm() {
-        if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
+async function handleTarotCardSelectionConfirm() {
+    if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
 
-        console.log("[TarotSelection] 선택 완료. 사용자가 고른 'UI 위치' 인덱스:", selectedTarotCardIndices);
+    console.log("[TarotSelection] 선택 완료. 사용자가 고른 'UI 위치' 인덱스:", selectedTarotCardIndices);
 
-        // 실제 타로 카드 ID를 할당하는 로직
-        const availableCardIds = [...ALL_TAROT_CARD_IDS];
-        let newlyChosenCardIds = []; // 이번 선택 단계에서 새로 뽑힌 카드 ID들
+    const availableCardIds = [...ALL_TAROT_CARD_IDS];
+    let newlyChosenCardIds = []; 
 
-        // 사용자가 UI에서 선택한 '위치'에 해당하는 카드들에게 실제 카드 ID를 랜덤 배정
-        for (let i = 0; i < cardsToSelectCount; i++) {
-            if (availableCardIds.length === 0) break; 
-            // 중복 방지를 위해 userProfile.선택된타로카드들 (이미 뽑힌 카드)과 availableCardIds에서 제외
-            let currentDeck = [...availableCardIds];
-            if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
-                currentDeck = currentDeck.filter(id => !userProfile.선택된타로카드들.includes(id));
-            }
-             if (currentDeck.length === 0) { // 뽑을 수 있는 유니크한 카드가 없다면
-                console.warn("[TarotSelection] 더 이상 뽑을 유니크한 카드가 없습니다. 이미 뽑은 카드 중에서 중복될 수 있습니다.");
-                // 이 경우, availableCardIds (전체 덱)에서 다시 뽑도록 하거나, 에러 처리
-                currentDeck = [...availableCardIds]; // 중복 허용으로 전환 (임시)
-                if (currentDeck.length === 0) break; // 그래도 없으면 중단
-            }
-
-            const randomIndex = Math.floor(Math.random() * currentDeck.length);
-            const chosenId = currentDeck.splice(randomIndex, 1)[0]; // currentDeck에서 제거하며 선택
-            newlyChosenCardIds.push(chosenId);
-
-            // availableCardIds에서도 제거 (다음 카드 선택 시 중복 방지 위함 - currentDeck에서 이미 처리했지만, 명시적)
-            const indexInAvailable = availableCardIds.indexOf(chosenId);
-            if (indexInAvailable > -1) availableCardIds.splice(indexInAvailable, 1);
-        }
+    for (let i = 0; i < cardsToSelectCount; i++) {
+        if (availableCardIds.length === 0) break; 
+        let currentDeck = [...availableCardIds];
+        // 이미 userProfile.선택된타로카드들 에 있는 카드(이전 단계에서 뽑은 카드 포함)는 제외하지 않음.
+        // 이번 선택에서 뽑을 카드들과, userProfile.선택된타로카드들에 있는 모든 카드를 합쳐서 중복되지 않도록 해야 함.
+        // 그러나, "2장 더 뽑기" 시에는 이전에 뽑은 1장을 제외하고 새로 2장을 뽑아야 함.
+        // 즉, availableCardIds에서 userProfile.선택된타로카드들 중 userProfile.initialCardCount 이전 카드들은 제외해야 함.
         
-        // 시나리오에 따라 카드 ID 목록 처리
-        if (userProfile.시나리오 === "tarot_add_two_pick" && userProfile.선택된타로카드들) {
-            // "2장 더 뽑을래" 시나리오: 기존 카드에 새로 뽑은 카드 추가
-            userProfile.선택된타로카드들.push(...newlyChosenCardIds);
-            console.log("[UserProfile] 추가로 2장 선택. 총 선택된 타로 카드 ID:", userProfile.선택된타로카드들);
-        } else {
-            // "한 장만" 또는 "3장" (최초 선택) 시나리오: 새로 뽑은 카드로 덮어쓰기
-            userProfile.선택된타로카드들 = newlyChosenCardIds;
-            console.log("[UserProfile] 최초 선택. 실제 선택된 타로 카드 ID 저장:", userProfile.선택된타로카드들);
+        let cardsToExcludeFromDeck = [];
+        if (userProfile.tarotConsultationStage === 'ADDED_TWO_AFTER_ONE' && userProfile.initialCardCount > 0) {
+            // 이전 단계에서 뽑은 카드(들)은 제외 (initialCardCount 만큼)
+            cardsToExcludeFromDeck = userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount);
+        } else if (userProfile.tarotConsultationStage !== 'INITIAL_ONE' && userProfile.tarotConsultationStage !== 'INITIAL_THREE') {
+            // 새로운 주제/일반 뽑기 시작 시에는 기존 선택된 카드들 모두 제외 (선택사항, 이전 카드와 완전 별개로 뽑으려면)
+            // cardsToExcludeFromDeck = [...userProfile.선택된타로카드들];
+            // 여기서는 이전 카드들을 제외하지 않고, 덱 전체에서 랜덤으로 뽑도록 함.
+            // 만약 완전히 새로운 덱에서 뽑는 것처럼 하려면 위 주석 해제 또는 userProfile.선택된타로카드들 초기화 필요
         }
+
+
+        currentDeck = currentDeck.filter(id => !cardsToExcludeFromDeck.includes(id));
         
-        // userProfile.지금까지수집된타로카드에도 새로 뽑은 카드 추가 (중복 없이)
-        newlyChosenCardIds.forEach(cardId => {
-            if (!userProfile.지금까지수집된타로카드.includes(cardId)) {
-                userProfile.지금까지수집된타로카드.push(cardId);
-            }
-        });
+        if (currentDeck.length === 0) { 
+            console.warn("[TarotSelection] 더 이상 뽑을 유니크한 카드가 없습니다. (제외 카드 고려 후)");
+            currentDeck = [...availableCardIds]; // 최후의 수단: 전체 덱에서 다시 시도 (중복 가능성)
+            if (currentDeck.length === 0) break; 
+        }
 
-        saveUserProfileToLocalStorage(userProfile); // 변경된 카드 목록과 수집 목록 저장
+        const randomIndex = Math.floor(Math.random() * currentDeck.length);
+        const chosenId = currentDeck.splice(randomIndex, 1)[0]; 
+        newlyChosenCardIds.push(chosenId);
 
-        hideTarotSelectionUI();
-        // "카드 선택 완료" 메시지는 시스템 내부적으로 처리하여 사용자에게 보이지 않게 할 수 있음
-        // source를 'system_internal_no_user_echo' 등으로 하여 사용자 메시지 추가 생략
-        await processMessageExchange("카드 선택 완료", 'system_internal_no_user_echo');
+        const indexInAvailable = availableCardIds.indexOf(chosenId);
+        if (indexInAvailable > -1) availableCardIds.splice(indexInAvailable, 1);
     }
+    
+    if (userProfile.tarotConsultationStage === 'ADDED_TWO_AFTER_ONE') {
+        // "2장 더 뽑기" 시나리오: 기존 카드(initialCardCount 만큼)에 새로 뽑은 카드 추가
+        const previousCards = userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount);
+        userProfile.선택된타로카드들 = [...previousCards, ...newlyChosenCardIds];
+        console.log("[UserProfile] 추가로 카드 선택. 총 선택된 타로 카드 ID:", userProfile.선택된타로카드들);
+    } else {
+        // "한 장만" 또는 "3장" (최초 선택) 시나리오: 새로 뽑은 카드로 덮어쓰기
+        userProfile.선택된타로카드들 = newlyChosenCardIds;
+        console.log("[UserProfile] 최초 선택. 실제 선택된 타로 카드 ID 저장:", userProfile.선택된타로카드들);
+    }
+    
+    newlyChosenCardIds.forEach(cardId => {
+        if (!userProfile.지금까지수집된타로카드.includes(cardId)) {
+            userProfile.지금까지수집된타로카드.push(cardId);
+        }
+    });
+
+    saveUserProfileToLocalStorage(userProfile); 
+
+    hideTarotSelectionUI();
+    await processMessageExchange("카드 선택 완료", 'system_internal_no_user_echo');
+}
     function handleClearTarotSelection() {
         if (isLoadingBotResponse || !tarotCardCarousel) return;
         console.log("[TarotSelection] 모든 선택 취소.");
