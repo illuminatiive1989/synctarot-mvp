@@ -1585,7 +1585,18 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
 
         let simpleChatHistory = [];
 
-        let transPromptContext = `\n## 이전 대화 요약 (카드 선택 결과):\n`;
+        let transPromptContext = `\n## 사용자 프로필 정보:\n`;
+        transPromptContext += `애칭: ${userProfile.사용자애칭 || '방문객'}\n`;
+        transPromptContext += `결정된 싱크타입: ${userProfile.결정된싱크타입 || '미결정'}\n`;
+        transPromptContext += `사용자 소속 성운: ${userProfile.사용자소속성운 || '미결정'}\n`;
+        transPromptContext += `DISC 점수: D(${userProfile.DISC_D_점수 || 0}), I(${userProfile.DISC_I_점수 || 0}), S(${userProfile.DISC_S_점수 || 0}), C(${userProfile.DISC_C_점수 || 0})\n`;
+        // 감정 상태는 "사용자의감정상태" 필드를 사용 (만약 Big5 점수를 감정 점수로 본다면 해당 필드 사용)
+        transPromptContext += `사용자 감정 상태: ${userProfile.사용자의감정상태 || '알 수 없음'}\n`; 
+        // 만약 5대 성격 요인 점수를 보내고 싶다면:
+        // transPromptContext += `5대 성격 특성: 신경성(${userProfile.신경성||0}), 외향성(${userProfile.외향성||0}), 개방성(${userProfile.개방성||0}), 우호성(${userProfile.우호성||0}), 성실성(${userProfile.성실성||0})\n`;
+        
+        transPromptContext += `\n## 이전 대화 요약 (카드 선택 결과):\n`;
+        transPromptContext += `타로 상담 주제: ${actualTarotTopic}\n`; // 타로 주제도 명시적으로 전달
         transPromptContext += `상담 단계: ${currentConsultationStage}\n`;
         transPromptContext += `전체 선택 카드: ${userProfile.선택된타로카드들.join(', ')}\n`;
         if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
@@ -1648,13 +1659,8 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                 
                 let displayCardNumberInHtml;
                 if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
-                    // 추가된 카드는 전체 카드 목록에서 (initialCardCount)번째부터 시작함.
-                    // API는 추가된 카드만 해석하므로, interp는 추가된 카드 목록의 요소임.
-                    // index는 0 (추가된 첫번째 카드), 1 (추가된 두번째 카드)이 됨.
-                    // 따라서 전체 카드 목록 기준으로 번호를 매기려면 initialCardCount를 더해줘야 함.
                     displayCardNumberInHtml = userProfile.initialCardCount + index + 1;
                 } else {
-                    // INITIAL_ONE 또는 INITIAL_THREE의 경우, API가 반환한 순서대로 1번부터 시작.
                     displayCardNumberInHtml = index + 1;
                 }
 
