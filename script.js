@@ -1484,9 +1484,9 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
     console.log(`[BotResponse] ${진행메시지} 시나리오: ${userProfile.시나리오}`);
     
     showFullScreenLoader("타로 해석을 준비 중입니다..."); 
+    
     let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE;
-    // 다음 두 줄을 사용자의 요청대로 변경
-    tarotChoicePrompt += `\n타로 상담 주제: ${selectedTarotTopicName || '알 수 없음'}`; // selectedTarotTopicName이 없을 경우를 대비한 기본값 추가
+    tarotChoicePrompt += `\n타로 상담 주제: ${selectedTarotTopicName || '알 수 없음'}`; 
     tarotChoicePrompt += `\n선택된 카드: ${userProfile.선택된타로카드들.join(', ')}`;
 
     try {
@@ -1508,17 +1508,39 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         let assistantInterpretationHTML = "";
         if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
              assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
-             assistantInterpretationHTML += `<div class="interpretation-text"><b>${selectedTarotTopicName || '선택하신 주제'}</b> 타로에 대한 시스템 분석입니다:<br><br></div>`;
+             assistantInterpretationHTML += `<div class="interpretation-text"><b>${selectedTarotTopicName || '선택하신 주제'} 타로 해석</b><br><br></div>`;
              userProfile.tarotResult.cardInterpretations.forEach((interp, index) => {
-                let cardDisplayName = interp.cardId.replace(/_/g, ' ');
+                let cardDisplayName = `카드 정보 없음 (${interp.cardId})`; // 기본값
+                if (TAROT_CARD_DATA && TAROT_CARD_DATA[interp.cardId] && TAROT_CARD_DATA[interp.cardId].name) {
+                    cardDisplayName = TAROT_CARD_DATA[interp.cardId].name;
+                } else {
+                    // TAROT_CARD_DATA에 해당 ID가 없거나 name 속성이 없을 경우, ID를 기반으로 임시 이름 생성
+                    const parts = interp.cardId.split('_');
+                    let tempName = "";
+                    if (parts.length >= 3) {
+                        if (parts[0] === "major") {
+                            tempName = `메이저 ${parts[1]}번 ${parts[2].charAt(0).toUpperCase() + parts[2].slice(1)}`;
+                        } else {
+                            tempName = `${parts[0].charAt(0).toUpperCase() + parts[0].slice(1)} ${parts[1]}번`;
+                        }
+                        if (parts.includes("reversed")) tempName += " (역방향)";
+                        else if (parts.includes("upright")) tempName += " (정방향)";
+                    } else {
+                        tempName = interp.cardId.replace(/_/g, " "); // 간단한 변환
+                    }
+                    cardDisplayName = tempName;
+                    console.warn(`[TarotInterpretation] TAROT_CARD_DATA에 ${interp.cardId}의 name 정보가 없어 임시 이름 사용: ${cardDisplayName}`);
+                }
+
                 let imageNameForFile = interp.cardId.replace('_reversed', '_upright');
-                if (!imageNameForFile.endsWith('_upright')) imageNameForFile += '_upright';
+                if (!imageNameForFile.endsWith('_upright')) imageNameForFile += '_upright'; //Ensure it always ends with _upright for image
                 const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
+                
                 assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
-                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${index + 1}. ${cardDisplayName}</b> (키워드: ${interp.keyword || '정보없음'})</div>`;
+                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${index + 1}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
                 assistantInterpretationHTML += `<div class="interpretation-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
              });
-             assistantInterpretationHTML += `<div class="interpretation-text"><br><b>시스템 종합 조언:</b> ${userProfile.tarotResult.overallAdvice || '종합 조언 준비 중'}</div>`;
+             assistantInterpretationHTML += `<div class="interpretation-text"><br>${userProfile.tarotResult.overallAdvice || '종합 조언 준비 중'}</div>`;
              assistantInterpretationHTML += `</div>`;
         }
         
@@ -1548,7 +1570,6 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
     }
     return responseData;
 }
-
 async function handleAddTwoCardsActions(userMessageText, buttonData) {
     let responseData = {};
     if (userMessageText === "action_add_two_cards" || userMessageText === "action_add_two_cards_phase1") {
