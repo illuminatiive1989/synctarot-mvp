@@ -250,6 +250,13 @@ html, body {
     color: var(--emphasis-color); /* 강조색 동일하게 적용 */
     font-weight: 600;
 }
+.assistant-interpretation-container .interpretation-title-text {
+    font-size: 1rem; /* 제목은 약간 더 크게 */
+    color: var(--normal-text-color);
+    text-align: center; /* 가운데 정렬 */
+    margin: 0 0 10px 0; /* 아래쪽 여백 추가 */
+    font-weight: bold;
+}
 
 
 .sample-answers {
