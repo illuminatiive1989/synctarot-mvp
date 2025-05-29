@@ -1484,9 +1484,9 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
     console.log(`[BotResponse] ${진행메시지} 시나리오: ${userProfile.시나리오}`);
     
     showFullScreenLoader("타로 해석을 준비 중입니다..."); 
-    let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE; 
-    tarotChoicePrompt += `\n사용자 애칭: ${userProfile.사용자애칭}`;
-    tarotChoicePrompt += `\n싱크타입: ${userProfile.결정된싱크타입 || '미결정'}`;
+    let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE;
+    // 다음 두 줄을 사용자의 요청대로 변경
+    tarotChoicePrompt += `\n타로 상담 주제: ${selectedTarotTopicName || '알 수 없음'}`; // selectedTarotTopicName이 없을 경우를 대비한 기본값 추가
     tarotChoicePrompt += `\n선택된 카드: ${userProfile.선택된타로카드들.join(', ')}`;
 
     try {
