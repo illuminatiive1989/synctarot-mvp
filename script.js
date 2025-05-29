@@ -49,10 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollLeftStart: 0
     };
 
-    const initialBotMessage = {
-        text: "안녕, 또왔네. 어떤 타로를 준비할까?",
-        sampleAnswers: ["좌측 메뉴에서 원하시는 타로를 선택해주세요"] // 초기 메시지 변경
-    };
+
 
     // 참고용 카드 파일명 목록 (실제 사용은 데이터 파일의 cardName 필드를 우선)
     const KNOWN_SYNC_TYPE_CARD_FILES = [
@@ -968,20 +965,20 @@ function updateSampleAnswers(answers = [], importance = 'low', isConfirmationSta
     });
 }
 
-const botKnowledgeBase = {
-    "오늘의 운세 보여줘": { response: "오늘 당신의 운세는... <b>매우 긍정적</b>입니다! 새로운 시작을 하기에 좋은 날이에요. <br>자신감을 가지세요!", sampleAnswers: ["다른 운세", "고마워"] },
-    "오늘 뭐 먹을지 추천해줘": { response: "오늘은 <b>따뜻한 국물 요리</b> 어떠세요? 예를 들어, <b>김치찌개</b>나 <b>순두부찌개</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "다른 추천"] },
-    "썸인지 아닌지 알려줘": { response: "상대방의 행동과 말투를 자세히 알려주시면, 제가 분석해볼게요! <br>예를 들어, '그 사람은 나에게 자주 웃어줘요.' 처럼요.", sampleAnswers: ["카톡 대화 분석해줘", "데이트 신청해도 될까?"] },
-    "그 사람의 마음을 알고 싶어": { response: "마음을 읽는 것은 어렵지만, 몇 가지 질문을 통해 추측해볼 수 있어요.<br>그 사람과 어떤 관계인가요?", sampleAnswers: ["친구 관계예요", "직장 동료예요"] },
-    "오늘의 운세가 궁금해요.": { response: "오늘의 운세입니다:<br><b>희망찬 하루!</b> 작은 노력들이 결실을 맺을 거예요.<br>자신감을 갖고 나아가세요.", sampleAnswers: ["다른 운세 보기", "오늘 날씨는?", "고마워"] },
-    "추천 메뉴 알려주세요.": { response: "오늘은 특별한 날인가요? <b>스테이크</b> 어떠세요?<br>아니면 가볍게 <b>샐러드 파스타</b>도 좋아요!", sampleAnswers: ["스테이크 맛집", "파스타 레시피", "다른 추천"] },
-    "날씨 알려줘.": { response: "현재 계신 지역의 날씨를 알려드릴까요?<br>아니면 특정 도시의 날씨가 궁금하신가요?", sampleAnswers: ["서울 날씨", "부산 날씨", "내 위치 날씨"] },
-    "도움말 보여주세요.": { response: "무엇을 도와드릴까요?<br>저는 <b>운세 보기</b>, <b>메뉴 추천</b>, <b>날씨 정보</b> 등을 제공할 수 있어요.<br>궁금한 것을 말씀해주세요!", sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘"] },
-    "오늘의 운세": { response: "오늘의 운세입니다:<br><b>대박!</b> 원하는 모든 것을 이룰 수 있는 하루예요!<br>긍정적인 마음으로 도전해보세요.", sampleAnswers: ["추천 메뉴", "오늘 날씨 어때?", "고마워"] },
-    "추천 메뉴": { response: "점심 메뉴로는 <b>얼큰한 김치찌개</b> 어떠세요? 아니면 저녁으로 <b>부드러운 크림 파스타</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "파스타 맛집 추천", "다른 거 없어?"] },
-    "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
-    "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
-};
+// const botKnowledgeBase = {
+//     "오늘의 운세 보여줘": { response: "오늘 당신의 운세는... <b>매우 긍정적</b>입니다! 새로운 시작을 하기에 좋은 날이에요. <br>자신감을 가지세요!", sampleAnswers: ["다른 운세", "고마워"] },
+//     "오늘 뭐 먹을지 추천해줘": { response: "오늘은 <b>따뜻한 국물 요리</b> 어떠세요? 예를 들어, <b>김치찌개</b>나 <b>순두부찌개</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "다른 추천"] },
+//     "썸인지 아닌지 알려줘": { response: "상대방의 행동과 말투를 자세히 알려주시면, 제가 분석해볼게요! <br>예를 들어, '그 사람은 나에게 자주 웃어줘요.' 처럼요.", sampleAnswers: ["카톡 대화 분석해줘", "데이트 신청해도 될까?"] },
+//     "그 사람의 마음을 알고 싶어": { response: "마음을 읽는 것은 어렵지만, 몇 가지 질문을 통해 추측해볼 수 있어요.<br>그 사람과 어떤 관계인가요?", sampleAnswers: ["친구 관계예요", "직장 동료예요"] },
+//     "오늘의 운세가 궁금해요.": { response: "오늘의 운세입니다:<br><b>희망찬 하루!</b> 작은 노력들이 결실을 맺을 거예요.<br>자신감을 갖고 나아가세요.", sampleAnswers: ["다른 운세 보기", "오늘 날씨는?", "고마워"] },
+//     "추천 메뉴 알려주세요.": { response: "오늘은 특별한 날인가요? <b>스테이크</b> 어떠세요?<br>아니면 가볍게 <b>샐러드 파스타</b>도 좋아요!", sampleAnswers: ["스테이크 맛집", "파스타 레시피", "다른 추천"] },
+//     "날씨 알려줘.": { response: "현재 계신 지역의 날씨를 알려드릴까요?<br>아니면 특정 도시의 날씨가 궁금하신가요?", sampleAnswers: ["서울 날씨", "부산 날씨", "내 위치 날씨"] },
+//     "도움말 보여주세요.": { response: "무엇을 도와드릴까요?<br>저는 <b>운세 보기</b>, <b>메뉴 추천</b>, <b>날씨 정보</b> 등을 제공할 수 있어요.<br>궁금한 것을 말씀해주세요!", sampleAnswers: ["오늘의 운세", "추천 메뉴", "날씨 알려줘"] },
+//     "오늘의 운세": { response: "오늘의 운세입니다:<br><b>대박!</b> 원하는 모든 것을 이룰 수 있는 하루예요!<br>긍정적인 마음으로 도전해보세요.", sampleAnswers: ["추천 메뉴", "오늘 날씨 어때?", "고마워"] },
+//     "추천 메뉴": { response: "점심 메뉴로는 <b>얼큰한 김치찌개</b> 어떠세요? 아니면 저녁으로 <b>부드러운 크림 파스타</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "파스타 맛집 추천", "다른 거 없어?"] },
+//     "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
+//     "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
+// };
 async function simulateBotResponse(userMessageText) { // as화 소모 등 비동기 작업 있을 수 있음)
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
     return new Promise(async (resolve) => {
@@ -990,62 +987,40 @@ async function simulateBotResponse(userMessageText) { // as화 소모 등 비동
         let responseData = {};
         const lowerUserMessage = userMessageText.toLowerCase();
 
-        // 사용자가 메뉴에서 타로 종류를 선택했을 때의 처리 (예: "OO타로 준비해줘")
-        if (userMessageText.endsWith("타로 준비해줘")) {
-            const tarotType = userMessageText.replace(" 준비해줘", ""); // "OO타로"
-            // userProfile에 선택된 타로 종류 저장 (필요 시)
-            // userProfile.시나리오 = `tarot_pick_${tarotType}`;
-            // saveUserProfileToLocalStorage(userProfile);
+        // 액션 상수 정의
+        const SELECT_ONE_CARD_ACTION = "action_select_one_card"; // 카드 1장 뽑기 UI 요청
+        const TAROT_MENU_PREFIX = "prepare_tarot_"; // 더보기 메뉴에서 타로 선택 시 접두사
 
+        if (userMessageText.startsWith(TAROT_MENU_PREFIX)) {
+            // "OO타로 준비해줘" 메시지 처리 (사용자가 메뉴에서 선택)
+            // userMessageText는 "prepare_tarot_오늘의 운세" 와 같은 형태가 될 것임
+            // 실제 타로 종류에 따른 분기는 여기서 필요 없음 (요청사항에 따라 단순 응답)
             responseData = {
                 assistantmsg: "그래 좋아, 그럼 바로 운명의 카드를 한장 뽑아줄래? 🤗",
                 tarocardview: true, // 카드 선택 UI 표시
-                cards_to_select: 1,  // 1장 선택
-                sampleAnswers: [], // 카드 선택 UI가 나오므로 샘플 답변은 비움
+                cards_to_select: 1, // 1장 선택
+                sampleAnswers: [], // 카드 선택 UI가 나오므로 샘플 답변 없음
                 importance: 'low',
-                user_profile_update: { "시나리오": `tarot_single_pick_${tarotType}` } // 시나리오 업데이트
+                user_profile_update: { "시나리오": "tarot_single_pick_from_menu" }, // 시나리오 업데이트
+                // systemMessageOnConfirm은 카드 선택 UI 표시 시 자동으로 처리될 수 있도록 processMessageExchange에서 처리
             };
-        }
-        // 사용자가 카드를 선택 완료했을 때의 처리
-        else if (userMessageText === "카드 선택 완료") {
-            // 이 부분은 기존 카드 선택 완료 로직을 유지하거나,
-            // API 호출 후 실제 해석을 받아오는 형태로 발전시킬 수 있습니다.
-            // 현재는 단순 시스템 메시지만 출력하도록 요청에 따라 수정합니다.
-
-            // 선택된 카드 ID는 userProfile.선택된타로카드들 에 저장되어 있음
-            // API 호출 로직이 들어갈 자리 (아직은 없음)
-
-            // 시스템 메시지로 "카드 1장 선택완료" 표시
-            // 이 메시지는 processMessageExchange에서 system 타입으로 addMessage를 호출하여 표시됩니다.
-            // 따라서 simulateBotResponse에서는 assistantmsg 대신 systemMessageOnConfirm을 사용합니다.
-            responseData = {
-                systemMessageOnConfirm: "카드 1장 선택완료", // 시스템 메시지로 표시될 텍스트
-                tarocardview: false, // 카드 선택 UI 숨김
-                cards_to_select: null,
-                sampleAnswers: [ // 다음 단계 샘플 답변 (예시)
-                    { text: "해석 보기", value: "action_show_interpretation", actionType: 'message' },
-                    { text: "다시 뽑기", value: "카드 뽑기", actionType: 'message' }
-                ],
-                importance: 'low',
-                user_profile_update: {} // 필요 시 프로필 업데이트
-            };
-        }
-        // 그 외의 경우 (예: 초기 상태 또는 정의되지 않은 메시지)
-        else {
-            // 초기 메시지 또는 기타 기본 응답은 initializeChat에서 처리하거나,
-            // 여기서는 특별한 응답을 하지 않도록 비워둘 수 있습니다.
-            // 사용자의 요청에 따라, 초기 메시지는 initializeChat에서 처리하고
-            // 여기서는 정의되지 않은 메시지에 대한 기본 응답만 남기거나 비웁니다.
-            // 현재 요청 흐름상, 이 부분은 거의 호출되지 않을 것으로 예상됩니다.
-            responseData = {
-                assistantmsg: "무엇을 도와드릴까요? 좌측 메뉴를 이용해보세요.",
-                sampleAnswers: [{ text: "도움말", value: "도움말", actionType: 'message' }],
-                importance: 'low',
+        } else if (userMessageText === "카드 선택 완료") { // 카드 UI에서 "선택 완료" 후 내부적으로 호출되는 메시지
+            // 이 부분은 기존 로직을 유지하되, 1장 선택 완료 시나리오에 맞게 단순화 가능
+            // 현재 요구사항에서는 API 호출 없이 시스템 메시지만 표시
+            // 실제 카드 데이터 처리나 해석은 추후 확장 가능
+             responseData = {
+                // assistantmsg는 필요 없음 (시스템 메시지로 대체)
                 tarocardview: false,
                 cards_to_select: null,
-                user_profile_update: {}
+                sampleAnswers: [{ text: "좌측 메뉴에서 원하시는 타로를 선택해주세요", value: "no_action_placeholder", actionType: 'placeholder', disabled: true }], // 초기 샘플 답변과 동일하게
+                importance: 'low',
+                user_profile_update: { "선택된타로카드들": [] }, // 선택된 카드 초기화 (예시)
+                // processMessageExchange에서 systemMessageOnConfirm 대신 직접 시스템 메시지를 보내도록 처리해야 함
+                // 또는, 여기서 systemMessage를 직접 반환하고 processMessageExchange에서 이를 처리
             };
         }
+        // 기타 다른 메시지나 액션에 대한 처리는 현재 요구사항에서 제외되었으므로 생략
+        // 필요시 기존 botKnowledgeBase와 유사한 구조로 확장 가능
 
         console.log(`[BotResponse] 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
         resolve(responseData);
@@ -1087,18 +1062,25 @@ async function processMessageExchange(messageText, source = 'input', options = {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
     }
-    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && buttonData.actionType === 'confirm_cost')) {
-        console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지).");
+    // "no_action_placeholder"는 버튼 비활성화를 위한 값이므로, 실제 메시지 처리에서는 무시
+    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && (buttonData.actionType === 'confirm_cost' || buttonData.value === "no_action_placeholder"))) {
+        console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지 또는 플레이스홀더 아님).");
         return;
     }
+    if (buttonData && buttonData.value === "no_action_placeholder") {
+        console.log("[ProcessExchange] 플레이스홀더 버튼 클릭, 아무 작업 안 함.");
+        return; // 플레이스홀더 버튼은 아무 동작도 하지 않음
+    }
+
 
     let shouldClearChat = clearBeforeSend;
-    if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset' && source !== 'system_init_skip_user_message') {
-        shouldClearChat = true;
-        hasUserSentMessage = true;
-        userProfile.메뉴단계 = 2;
-        console.log("[ProcessExchange] 사용자의 첫 상호작용. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
-    }
+    // 사용자의 첫 메시지 이후 채팅창 클리어 로직은 현재 시나리오에서는 불필요하므로 주석 처리 또는 삭제 가능
+    // if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset' && source !== 'system_init_skip_user_message') {
+    //     shouldClearChat = true;
+    //     hasUserSentMessage = true;
+    //     userProfile.메뉴단계 = 2;
+    //     console.log("[ProcessExchange] 사용자의 첫 상호작용. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
+    // }
 
     if (shouldClearChat) {
         clearChatMessages();
@@ -1106,7 +1088,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
 
     isLoadingBotResponse = true;
     if(sendBtn) sendBtn.classList.add('loading');
-    setUIInteractions(true, false); // 여기서 setUIInteractions가 먼저 호출됨.
+    setUIInteractions(true, false);
 
     if (moreOptionsPanel.classList.contains('active')) {
         console.log("[ProcessExchange] 더보기 패널 닫기.");
@@ -1114,29 +1096,40 @@ async function processMessageExchange(messageText, source = 'input', options = {
         moreOptionsBtn.classList.remove('active');
     }
 
-    const shouldAddUserMessage = 
-        source === 'input' || 
-        source === 'panel_option' || 
+    const shouldAddUserMessage =
+        source === 'input' ||
+        source === 'panel_option' ||
         source === 'panel_option_topic_reset' ||
-        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost');
+        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost' && buttonData.actionType !== 'placeholder');
+
 
     if (shouldAddUserMessage && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
-        const textForUserMessage = (source === 'sample_button' && buttonData && buttonData.text) ? buttonData.text : messageText;
+        let textForUserMessage = (source === 'sample_button' && buttonData && buttonData.text) ? buttonData.text : messageText;
+        // "더보기" 메뉴에서 선택 시, 사용자 메시지 텍스트를 "OO타로 준비해줘" 형태로 가공
+        if (source === 'panel_option' && menuItemData && menuItemData.text) {
+            textForUserMessage = `${menuItemData.text} 준비해줘`;
+        }
         await addMessage(textForUserMessage, 'user');
     }
+
 
     if (source === 'input' && messageInput) {
         messageInput.value = '';
         adjustTextareaHeight();
     }
 
-    const effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
+    // API로 보낼 메시지 가공 (더보기 메뉴 선택 시)
+    let effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
+    if (source === 'panel_option' && menuItemData && menuItemData.text) {
+        // simulateBotResponse가 "prepare_tarot_오늘의 운세" 같은 형태로 메시지를 받도록 함
+        effectiveMessageForAPI = `prepare_tarot_${menuItemData.text}`;
+    }
+
 
     try {
         const botApiResponse = await simulateBotResponse(effectiveMessageForAPI);
-        
+
         if (botApiResponse.user_profile_update) {
-            // ... (프로필 업데이트 로직은 변경 없음) ...
              for (const key in botApiResponse.user_profile_update) {
                 if (key !== "bones") {
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
@@ -1157,27 +1150,31 @@ async function processMessageExchange(messageText, source = 'input', options = {
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
         }
 
-        if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) {
+        // "카드 선택 완료" 시에는 assistantmsg 대신 시스템 메시지를 표시
+        if (effectiveMessageForAPI === "카드 선택 완료") {
+            await addMessage("카드 1장 선택완료", 'system');
+        } else if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) {
             await addMessage(botApiResponse.assistantmsg, 'bot');
-        } else if (botApiResponse.systemMessageOnConfirm) {
+        } else if (botApiResponse.systemMessageOnConfirm) { // 이 경우는 카드 선택 UI 직전 시스템 메시지
              await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
         }
-        
-        // updateSampleAnswers 호출을 await 처리
+
+
         await updateSampleAnswers(
-            botApiResponse.sampleAnswers || [], 
+            botApiResponse.sampleAnswers || [],
             botApiResponse.importance || 'low',
             botApiResponse.isConfirmationStage || false,
             botApiResponse.assistantmsg && botApiResponse.isConfirmationStage ? botApiResponse.assistantmsg : null
         );
 
         if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
-            // ... (타로 UI 표시 로직은 변경 없음) ...
             if (messageInput && document.activeElement === messageInput) {
                 messageInput.blur();
             }
             let currentTarotBg = userProfile.tarotbg || 'default.png';
-            const bgSource = menuItemData || (source === 'sample_button' && buttonData ? buttonData : null);
+            // 더보기 메뉴에서 tarotbg를 가져오도록 수정
+            const bgSource = (source === 'panel_option' && menuItemData) ? menuItemData : (source === 'sample_button' && buttonData ? buttonData : null);
+
             if (bgSource && bgSource.tarotbg) {
                 currentTarotBg = bgSource.tarotbg;
                 userProfile.tarotbg = currentTarotBg;
@@ -1190,16 +1187,13 @@ async function processMessageExchange(messageText, source = 'input', options = {
     } catch (error) {
         console.error("[ProcessExchange] 오류 발생:", error);
         await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
-        const fallbackSampleAnswers = (typeof initialBotMessage !== 'undefined' && initialBotMessage.sampleAnswers) 
-            ? initialBotMessage.sampleAnswers.map(sa => ({text: sa, value: sa, actionType: 'message'}))
-            : [{text: "도움말", value: "도움말", actionType: 'message'}];
-        await updateSampleAnswers(fallbackSampleAnswers); // 여기도 await
+        // 오류 발생 시 초기 샘플 답변으로 되돌림
+        const fallbackSampleAnswers = [{ text: "좌측 메뉴에서 원하시는 타로를 선택해주세요", value: "no_action_placeholder", actionType: 'placeholder', disabled: true }];
+        await updateSampleAnswers(fallbackSampleAnswers);
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
         const shouldFocus = (source === 'input' && !isTarotSelectionActive);
-        // setUIInteractions는 updateSampleAnswers가 완전히 끝난 후에 호출되어야 함
-        // Promise 화 했으므로, 이 finally 블록은 updateSampleAnswers가 resolve된 후 실행됨
         setUIInteractions(false, shouldFocus);
         console.log("[ProcessExchange] 완료.");
     }
@@ -1891,11 +1885,15 @@ function handleRandomTarotSelection() {
             e.stopPropagation();
 
             const actionType = targetOption.dataset.actionType;
-            const actionValue = targetOption.dataset.actionValue;
+            const actionValue = targetOption.dataset.actionValue; // CHAT_MESSAGE의 경우, 이 값은 실제 메시지 내용이 됨 (예: "오늘의 운세")
             const isTarotRelatedMenu = targetOption.dataset.isTarotRelated === 'true';
-            const tarotBgFromMenu = targetOption.dataset.tarotbg; // tarotbg 값 가져오기
+            const tarotBgFromMenu = targetOption.dataset.tarotbg;
 
-            console.log(`[Panel] 옵션 클릭: Text="${targetOption.textContent.trim()}", Type="${actionType}", Value="${actionValue}", isTarotRelated=${isTarotRelatedMenu}, tarotBg=${tarotBgFromMenu}`);
+            // panel-option의 텍스트 내용을 가져옴 (예: "오늘의 운세")
+            const optionTextContent = targetOption.textContent.trim().replace(/[^a-zA-Z0-9가-힣\s]/g, ''); // 아이콘 등 제거
+
+
+            console.log(`[Panel] 옵션 클릭: TextContent="${optionTextContent}", Type="${actionType}", Value="${actionValue}", isTarotRelated=${isTarotRelatedMenu}, tarotBg=${tarotBgFromMenu}`);
 
             switch (actionType) {
                 case 'SUB_MENU':
@@ -1907,24 +1905,18 @@ function handleRandomTarotSelection() {
                 case 'CHAT_MESSAGE':
                     moreOptionsPanel.classList.remove('active');
                     moreOptionsBtn.classList.remove('active');
-                    
-                    const messageOptions = {};
-                    if (tarotBgFromMenu) {
-                        messageOptions.menuItemData = { tarotbg: tarotBgFromMenu };
-                    }
 
-                    if (hasUserSentMessage && isTarotRelatedMenu) {
-                        const userConfirmation = confirm("현재 상담 주제가 변경됩니다. 새로운 주제로 진행할까요?");
-                        if (userConfirmation) {
-                            console.log("[Panel] 사용자가 새 주제 진행 확인.");
-                            await processMessageExchange(actionValue, 'panel_option_topic_reset', { ...messageOptions, clearBeforeSend: true });
-                        } else {
-                            console.log("[Panel] 사용자가 새 주제 진행 취소.");
-                            return;
+                    // menuItemData에 타로 배경 이미지와 함께, 사용자 메시지로 표시될 텍스트(optionTextContent)를 전달
+                    const messageOptions = {
+                        menuItemData: {
+                            text: optionTextContent, // "오늘의 운세" 등 버튼의 실제 텍스트
+                            tarotbg: tarotBgFromMenu
                         }
-                    } else {
-                        await processMessageExchange(actionValue, 'panel_option', messageOptions);
-                    }
+                    };
+
+                    // processMessageExchange 호출 시 첫 번째 인자는 actionValue (또는 optionTextContent)를 사용
+                    // source를 'panel_option'으로 하여 processMessageExchange 내부에서 메시지 가공
+                    await processMessageExchange(actionValue || optionTextContent, 'panel_option', messageOptions);
                     break;
                 case 'ALERT':
                     alert(actionValue);
@@ -1950,7 +1942,6 @@ function handleRandomTarotSelection() {
             }
         }
     });
-
     if (tarotCardScrollWrapper) {
         tarotCardScrollWrapper.addEventListener('scroll', () => {
             if (activeTooltip) {
@@ -2032,7 +2023,7 @@ function handleRandomTarotSelection() {
 
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
-    initializeUserProfile(); // 이 안에서 updateBoneCountDisplay가 호출됨
+    initializeUserProfile();
 
     if (typeof ALL_SYNC_TYPES === 'undefined' || typeof ALL_NEBULAS === 'undefined' || typeof TAROT_CARD_DATA === 'undefined') {
         const missingData = [
@@ -2071,52 +2062,34 @@ async function initializeChat() {
     }
 
     isLoadingBotResponse = true;
-    setUIInteractions(true, false); // 초기 UI 비활성화
+    setUIInteractions(true, false);
 
-    if (typeof initialBotMessage === 'undefined' || !initialBotMessage.text || !initialBotMessage.sampleAnswers) {
-        console.error("[App] initialBotMessage가 올바르게 정의되지 않았습니다. 초기화 중단.");
-        await addMessage("초기 메시지를 불러올 수 없습니다. 관리자에게 문의하세요.", 'system');
-        isLoadingBotResponse = false;
-        setUIInteractions(false, false);
-        if(messageInput) messageInput.disabled = false;
-        if(moreOptionsBtn) moreOptionsBtn.disabled = false;
-        return;
-    }
+    // 초기 메시지 및 샘플 답변 변경
+    const initialBotText = "안녕, 또왔네. 어떤 타로를 준비할까?";
+    const initialSampleAnswerObjects = [
+        {
+            text: "좌측 메뉴에서 원하시는 타로를 선택해주세요",
+            value: "no_action_placeholder", // 실제 액션이 없는 값
+            actionType: 'placeholder', // 버튼 비활성화 및 클릭 방지를 위한 타입
+            disabled: true // 명시적으로 비활성화
+        }
+    ];
 
     try {
-        await addMessage(initialBotMessage.text, 'bot');
-        // 초기 샘플 답변을 객체 형태로 변환하여 value와 actionType 명시
-        const initialSampleAnswerObjects = initialBotMessage.sampleAnswers.map(answerText => ({
-            text: answerText, // 사용자에게 보여지는 텍스트
-            value: answerText, // simulateBotResponse로 전달될 값 (사용되지 않음, 비활성화 상태이므로)
-            actionType: 'message' // 기본 액션 타입
-        }));
-        // updateSampleAnswers를 호출하여 버튼을 표시하되, 비활성화 상태로 만듭니다.
-        await updateSampleAnswers(initialSampleAnswerObjects, 'low', false, null);
-        // 샘플 답변 버튼들을 가져와서 disabled 처리
-        const sampleButtons = sampleAnswersContainer.querySelectorAll('.sample-answer-btn');
-        sampleButtons.forEach(btn => btn.disabled = true);
-
+        await addMessage(initialBotText, 'bot');
+        updateSampleAnswers(initialSampleAnswerObjects, 'low', false, null);
     } catch (error) {
         console.error("[App] 초기 메시지 표시 중 오류:", error);
         await addMessage("초기 메시지를 표시하는 중 오류가 발생했습니다.", "system");
     }
 
     isLoadingBotResponse = false;
-    // 초기화 완료 후, 입력창과 더보기 버튼은 사용 가능하도록 설정
-    // sendBtn은 입력 내용에 따라 활성화되므로 여기서는 직접 건드리지 않음
     setUIInteractions(false, false);
     if(messageInput) {
         messageInput.disabled = false;
+        sendBtn.disabled = messageInput.value.trim() === '';
     }
-    if(moreOptionsBtn) {
-        moreOptionsBtn.disabled = false;
-    }
-    // sendBtn은 messageInput의 내용에 따라 disabled 상태가 결정되므로,
-    // messageInput.value가 비어있다면 sendBtn.disabled는 true로 유지됩니다.
-    // 사용자가 입력을 시작하면 sendBtn이 활성화됩니다.
-    if(sendBtn && messageInput) sendBtn.disabled = messageInput.value.trim() === '';
-
+    if(moreOptionsBtn) moreOptionsBtn.disabled = false;
 
     console.log("[App] 초기화 완료.");
 }
