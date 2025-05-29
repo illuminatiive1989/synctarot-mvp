@@ -2078,15 +2078,14 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
 
     console.log("[API] Gemini API 호출 시작...");
     
-    // 선택된 타로 카드 정보 문자열 생성 (API 프롬프트용)
     let selectedCardsInfoForPrompt = "없음";
     if (userProfileData.선택된타로카드들 && userProfileData.선택된타로카드들.length > 0) {
         selectedCardsInfoForPrompt = userProfileData.선택된타로카드들.map((cardId, index) => {
             const cardName = TAROT_CARD_DATA[cardId] ? TAROT_CARD_DATA[cardId].name : cardId.replace(/_/g, " ");
-            return `${index + 1}. ${cardName} (${cardId})`; // 카드 이름과 ID 함께 전달
+            return `${index + 1}. ${cardName} (${cardId})`;
         }).join(', ');
     }
-    console.log("[API] 프롬프트용 선택된 카드 정보:", selectedCardsInfoForPrompt);
+    // console.log("[API] 프롬프트용 선택된 카드 정보:", selectedCardsInfoForPrompt); // 이 로그는 이전과 동일
 
 
     const systemPromptParts = [
@@ -2104,7 +2103,7 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             `- 소속 성운: ${userProfileData.사용자소속성운 || "미결정"}\n` +
             `- 맞춤 싱크타입 이름: ${userProfileData.맞춤싱크타입이름 || "정보 없음"}\n` +
             `- 현재 감정 상태: ${userProfileData.사용자의감정상태 || "알 수 없음"}\n` +
-            `- ⭐현재 선택된 타로 카드 (순서대로 명시, 이 카드들을 중심으로 해석): ${selectedCardsInfoForPrompt}\n` // API가 카드 정보를 명확히 알도록 수정
+            `- ⭐현재 선택된 타로 카드 (순서대로 명시, 이 카드들을 중심으로 해석): ${selectedCardsInfoForPrompt}\n`
         }
     ];
     
@@ -2117,15 +2116,13 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
     };
 
     const requestBody = {
-        contents: currentChatHistory,
+        contents: currentChatHistory, // 전달된 전체 대화 기록 사용
         systemInstruction: { parts: systemPromptParts },
         generationConfig: generationConfig
     };
 
     console.log("[API] 요청 URL:", API_URL);
-    // console.log("[API] 요청 본문 (Request Body):", JSON.stringify(requestBody, null, 2)); // 너무 길어서 일단 주석
-    console.log("[API] 요청 본문 (Contents만 일부 로깅):", JSON.stringify(requestBody.contents.slice(-2), null, 2)); // 마지막 2개 대화만 로깅
-    console.log("[API] 요청 본문 (SystemInstruction 일부 로깅): 사용자 프로필 부분만:", systemPromptParts.find(p => p.text.startsWith("\n## 사용자 프로필 정보")));
+    console.log("[API] 요청 본문 (전체 Request Body):", JSON.stringify(requestBody, null, 2)); // 전체 요청 본문 로깅으로 변경
 
 
     try {
@@ -2135,6 +2132,7 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             body: JSON.stringify(requestBody),
         });
 
+        // ... (이하 응답 처리 로직은 이전과 동일하게 유지) ...
         if (!response.ok) {
             const errorBodyText = await response.text();
             console.error(`[API] Gemini API 오류 응답: ${response.status} ${response.statusText}`, errorBodyText);
@@ -2146,10 +2144,9 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
         const responseData = await response.json();
         console.log("[API] Gemini API 응답 성공 (Raw Candidate[0]):", responseData.candidates ? JSON.stringify(responseData.candidates[0], null, 2) : "Candidates 없음");
 
-
         let assistantMessageText = "죄송합니다, AI 모델로부터 유효한 응답을 받지 못했습니다.";
         let parsedSampleAnswers = [];
-        let parsedTarotImg = null; // 파싱된 tarotImg 저장용
+        let parsedTarotImg = null;
 
         if (responseData.candidates && responseData.candidates.length > 0 && responseData.candidates[0].content && responseData.candidates[0].content.parts && responseData.candidates[0].content.parts.length > 0) {
             let rawText = responseData.candidates[0].content.parts[0].text;
@@ -2163,7 +2160,7 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
                     const parsedJson = JSON.parse(jsonMatch[1]);
                     assistantMessageText = parsedJson.msg || rawText.replace(jsonRegex, "").trim();
                     if (Array.isArray(parsedJson.sampleanswer)) parsedSampleAnswers = parsedJson.sampleanswer;
-                    if (parsedJson.tarotImg && typeof parsedJson.tarotImg === 'string') parsedTarotImg = parsedJson.tarotImg; // tarotImg 추출
+                    if (parsedJson.tarotImg && typeof parsedJson.tarotImg === 'string') parsedTarotImg = parsedJson.tarotImg;
 
                     console.log("[API] JSON 파싱 성공: msg=", assistantMessageText, "sampleanswer=", parsedSampleAnswers, "tarotImg=", parsedTarotImg);
                 } catch (e) {
@@ -2179,7 +2176,6 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             return { assistantmsg: assistantMessageText, parsedSampleAnswers: parsedSampleAnswers, tarotImg: parsedTarotImg };
 
         } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
-            // ... (기존 차단 처리 로직)
             console.warn("[API] Gemini API 요청 차단됨:", responseData.promptFeedback.blockReason, responseData.promptFeedback.safetyRatings);
             assistantMessageText = `죄송합니다. 요청이 안전 문제로 인해 차단되었습니다. (${responseData.promptFeedback.blockReason})`;
             if (responseData.promptFeedback.safetyRatings) {
@@ -2188,21 +2184,18 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
             return { assistantmsg: assistantMessageText, error: `Blocked: ${responseData.promptFeedback.blockReason}`, parsedSampleAnswers: [], tarotImg: null };
         } else {
-            // ... (기존 유효 콘텐츠 없음 처리 로직)
             console.warn("[API] Gemini API 응답에서 유효한 콘텐츠를 찾을 수 없음.");
             chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
             return { assistantmsg: assistantMessageText, error: "No valid content in API response", parsedSampleAnswers: [], tarotImg: null };
         }
 
     } catch (error) {
-        // ... (기존 예외 처리 로직)
         console.error("[API] Gemini API 호출 중 예외 발생:", error.message);
         const errorMessageForChat = `죄송합니다. AI 모델과 통신 중 오류가 발생했습니다: ${error.message}`;
         chatHistoryForAPI.push(formatChatHistoryForAPI(errorMessageForChat, 'model'));
         return { assistantmsg: errorMessageForChat, error: error.message, parsedSampleAnswers: [], tarotImg: null };
     }
 }
-
 // simulateBotResponse 관련 헬퍼 함수들
 async function handleInitialCardPickQuery(userMessageText) {
     // "카드 뽑기", "카드뽑을래", CANCEL_COST_CONFIRMATION_ACTION
