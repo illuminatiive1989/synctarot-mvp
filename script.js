@@ -1486,7 +1486,13 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
     showFullScreenLoader("타로 해석을 준비 중입니다..."); 
     
     let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE;
-    tarotChoicePrompt += `\n타로 상담 주제: ${selectedTarotTopicName || '알 수 없음'}`; 
+    // selectedTarotTopicName이 simulateBotResponse에서 userMessageText로부터 결정됨.
+    // 만약 이 시점에서 selectedTarotTopicName이 null이거나 undefined이면, 
+    // userProfile.시나리오에서 추출하거나 기본값을 사용해야 함.
+    const actualTarotTopic = selectedTarotTopicName || 
+                             (userProfile.시나리오 ? userProfile.시나리오.split("_pick")[0].replace("tarot_topic_", "").replace(/_/g, " ") : '선택하신 주제');
+
+    tarotChoicePrompt += `\n타로 상담 주제: ${actualTarotTopic}`; 
     tarotChoicePrompt += `\n선택된 카드: ${userProfile.선택된타로카드들.join(', ')}`;
 
     try {
@@ -1509,24 +1515,24 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         let assistantInterpretationHTML = "";
         if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
             let titleCardTypeText = "";
-            // userProfile.선택된타로카드들.length 로 현재 최종 선택된 카드 수를 알 수 있음
-            // userProfile.시나리오 를 통해 어떤 과정을 거쳤는지 파악
+            const displayTopicName = selectedTarotTopicName || '타로'; // 기본값 '타로'
 
-            if (currentScenario.includes("_add_two_pick")) { // "2장 더 뽑기" 시나리오 (최종 3장)
+            if (currentScenario.includes("_add_two_pick")) { 
                  titleCardTypeText = "추가 타로 해석";
-            } else if (userProfile.선택된타로카드들.length === 1 || currentScenario.includes("_single_pick")) { // 1장 선택 시
+            } else if (userProfile.선택된타로카드들.length === 1 || currentScenario.includes("_single_pick")) { 
                 titleCardTypeText = "싱글 타로 해석";
-            } else if (userProfile.선택된타로카드들.length === 3 || currentScenario.includes("_triple_pick")) { // 처음부터 3장 선택 시
+            } else if (userProfile.선택된타로카드들.length === 3 || currentScenario.includes("_triple_pick")) { 
                 titleCardTypeText = "트리플 타로 해석";
-            } else if (userProfile.선택된타로카드들.length > 0) { // 그 외의 경우 (예: cards_to_select 가 다른 값으로 설정된 경우)
-                 titleCardTypeText = `(${userProfile.선택된타로카드들.length}장) 타로 해석`; // 일반적인 장수 표시
+            } else if (userProfile.선택된타로카드들.length > 0) { 
+                 titleCardTypeText = `(${userProfile.선택된타로카드들.length}장) 타로 해석`; 
             } else {
-                titleCardTypeText = "타로 해석"; // 카드 정보가 없을 경우 기본
+                titleCardTypeText = "타로 해석"; 
             }
 
 
             assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
-            assistantInterpretationHTML += `<div class="interpretation-title-text"><b>'${selectedTarotTopicName || '선택하신 주제'}' ${titleCardTypeText}</b></div><br>`;
+            // 제목 형식 변경: "'타로 주제명' 싱글/추가/트리플 타로 해석"
+            assistantInterpretationHTML += `<div class="interpretation-title-text"><b>'${displayTopicName}' ${titleCardTypeText}</b></div><br>`;
             userProfile.tarotResult.cardInterpretations.forEach((interp, index) => {
                 let cardDisplayName = `카드 정보 없음 (${interp.cardId})`; 
                 if (TAROT_CARD_DATA && TAROT_CARD_DATA[interp.cardId] && TAROT_CARD_DATA[interp.cardId].name) {
@@ -1561,7 +1567,8 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         }
         
         let nextSampleAnswers = [];
-        if (userProfile.선택된타로카드들.length === 1 && !userProfile.hasUsedAddTwoCards) { 
+        // "2장 더 뽑기" 버튼은 최초 1장 선택 후 & 아직 "2장 더 뽑기"를 사용하지 않았을 때만 표시
+        if (userProfile.선택된타로카드들.length === 1 && !userProfile.hasUsedAddTwoCards && !currentScenario.includes("_add_two_pick")) { 
             nextSampleAnswers.push({ text: "2장 더 뽑기", value: "action_add_two_cards_phase1", actionType: 'message', cost:2, displayCostIcon: true, iconType:'bone' });
         }
         nextSampleAnswers.push({ text: "깊은 상담 요청하기", value: "action_deep_advice_phase1", actionType: 'message', cost:1, displayCostIcon: true, iconType:'bone' });
