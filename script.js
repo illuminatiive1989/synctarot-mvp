@@ -2062,27 +2062,16 @@ function formatChatHistoryForAPI(messageText, role = 'user') {
 async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistory, additionalSystemInstruction = null) {
     if (!API_KEY) {
         console.error("[API] Gemini API 키가 설정되지 않았습니다.");
-        return { error: "API 키가 없습니다.", assistantmsg: "API 통신 오류: API 키가 설정되지 않았습니다. 관리자에게 문의하세요." };
+        return { error: "API 키가 없습니다.", assistantmsg: "API 통신 오류: API 키가 설정되지 않았습니다. 관리자에게 문의하세요.", parsedSampleAnswers: [] };
     }
     if (!tarotIniContent) {
         console.error("[API] tarot.ini 프롬프트 내용이 없습니다.");
-        return { error: "tarot.ini 내용 없음", assistantmsg: "API 통신 오류: 타로 프롬프트 파일을 불러올 수 없습니다." };
+        return { error: "tarot.ini 내용 없음", assistantmsg: "API 통신 오류: 타로 프롬프트 파일을 불러올 수 없습니다.", parsedSampleAnswers: [] };
     }
-
-    // === 추가된 방어 코드: currentChatHistory가 비어있는지 확인 ===
     if (!currentChatHistory || currentChatHistory.length === 0) {
         console.error("[API] 호출 중단: currentChatHistory (contents)가 비어 있습니다.");
-        // chatHistoryForAPI에 마지막 사용자 입력이 누락된 경우를 대비해, 여기서라도 추가 시도 (임시방편)
-        // 근본적으로는 이 함수를 호출하기 전에 chatHistoryForAPI에 메시지가 포함되어야 함.
-        // 예: if (chatHistoryForAPI.length === 0 && /* 마지막 사용자 메시지가 있다면 */) {
-        //    currentChatHistory.push(formatChatHistoryForAPI(lastUserMessage, 'user'));
-        // }
-        // 그래도 비어있으면 오류 반환
-        if (!currentChatHistory || currentChatHistory.length === 0) {
-             return { error: "Contents 비어있음", assistantmsg: "API 통신 오류: 전달할 대화 내용이 없습니다." };
-        }
+        return { error: "Contents 비어있음", assistantmsg: "API 통신 오류: 전달할 대화 내용이 없습니다.", parsedSampleAnswers: [] };
     }
-    // ======================================================
 
     console.log("[API] Gemini API 호출 시작...");
 
@@ -2110,17 +2099,12 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
     }
     
     const generationConfig = {
-        "temperature": 0.7,
-        "topK": 40,
-        "topP": 0.95,
-        "maxOutputTokens": 2048,
+        "temperature": 0.7, "topK": 40, "topP": 0.95, "maxOutputTokens": 2048,
     };
 
     const requestBody = {
-        contents: currentChatHistory, // 수정: 이전에는 contentsPayload 였으나, currentChatHistory로 직접 사용
-        systemInstruction: {
-            parts: systemPromptParts
-        },
+        contents: currentChatHistory,
+        systemInstruction: { parts: systemPromptParts },
         generationConfig: generationConfig
     };
 
@@ -2130,59 +2114,75 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json', },
             body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
-            const errorBodyText = await response.text(); // 오류 내용을 텍스트로 먼저 받음
+            const errorBodyText = await response.text();
             console.error(`[API] Gemini API 오류 응답: ${response.status} ${response.statusText}`, errorBodyText);
-            // 여기서 errorBodyText를 파싱하여 message를 추출하거나, 그대로 사용
             let errorMessage = `API 오류: ${response.status}`;
             try {
                 const errorJson = JSON.parse(errorBodyText);
-                if (errorJson.error && errorJson.error.message) {
-                    errorMessage = errorJson.error.message;
-                } else {
-                    errorMessage = errorBodyText; // JSON 파싱 실패하거나 message 필드 없으면 원본 텍스트 사용
-                }
-            } catch (e) {
-                // JSON 파싱 실패 시 원본 텍스트 사용
-                errorMessage = errorBodyText;
-            }
+                if (errorJson.error && errorJson.error.message) errorMessage = errorJson.error.message;
+                else errorMessage = errorBodyText;
+            } catch (e) { errorMessage = errorBodyText; }
             throw new Error(errorMessage);
         }
 
         const responseData = await response.json();
         console.log("[API] Gemini API 응답 성공 (Raw):", JSON.stringify(responseData, null, 2));
 
+        let assistantMessageText = "죄송합니다, AI 모델로부터 유효한 응답을 받지 못했습니다.";
+        let parsedSampleAnswers = []; // 파싱된 샘플 답변 저장용
+
         if (responseData.candidates && responseData.candidates.length > 0 && responseData.candidates[0].content && responseData.candidates[0].content.parts && responseData.candidates[0].content.parts.length > 0) {
-            const assistantMessage = responseData.candidates[0].content.parts[0].text;
-            console.log("[API] 추출된 Assistant 응답:", assistantMessage);
-            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessage, 'model')); // 모델 응답 기록
-            return { assistantmsg: assistantMessage };
+            let rawText = responseData.candidates[0].content.parts[0].text;
+            console.log("[API] 추출된 Raw 응답 텍스트:", rawText);
+
+            // JSON 블록 추출 및 파싱 시도
+            const jsonRegex = /```json\s*([\s\S]*?)\s*```/; // ```json ... ``` 패턴
+            const jsonMatch = rawText.match(jsonRegex);
+
+            if (jsonMatch && jsonMatch[1]) {
+                try {
+                    const parsedJson = JSON.parse(jsonMatch[1]);
+                    assistantMessageText = parsedJson.msg || rawText.replace(jsonRegex, "").trim(); // JSON의 msg 사용, 없으면 JSON 제거한 텍스트
+                    if (Array.isArray(parsedJson.sampleanswer)) {
+                        parsedSampleAnswers = parsedJson.sampleanswer;
+                    }
+                    console.log("[API] JSON 파싱 성공: msg=", assistantMessageText, "sampleanswer=", parsedSampleAnswers);
+                } catch (e) {
+                    console.warn("[API] 응답 내 JSON 파싱 실패, 전체 텍스트를 assistantmsg로 사용:", e);
+                    assistantMessageText = rawText; // 파싱 실패 시 원본 텍스트 사용
+                }
+            } else {
+                assistantMessageText = rawText; // JSON 블록 없음
+                console.log("[API] JSON 블록 없음, 전체 텍스트를 assistantmsg로 사용.");
+            }
+            
+            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model')); // 정제된 메시지를 기록
+            return { assistantmsg: assistantMessageText, parsedSampleAnswers: parsedSampleAnswers };
+
         } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
             console.warn("[API] Gemini API 요청 차단됨:", responseData.promptFeedback.blockReason, responseData.promptFeedback.safetyRatings);
-            let blockMessage = `죄송합니다. 요청이 안전 문제로 인해 차단되었습니다. (${responseData.promptFeedback.blockReason})`;
+            assistantMessageText = `죄송합니다. 요청이 안전 문제로 인해 차단되었습니다. (${responseData.promptFeedback.blockReason})`;
             if (responseData.promptFeedback.safetyRatings) {
-                blockMessage += " 세부 정보: " + responseData.promptFeedback.safetyRatings.map(r => `${r.category} - ${r.probability}`).join(', ');
+                assistantMessageText += " 세부 정보: " + responseData.promptFeedback.safetyRatings.map(r => `${r.category} - ${r.probability}`).join(', ');
             }
-            chatHistoryForAPI.push(formatChatHistoryForAPI(blockMessage, 'model')); // 차단 응답도 기록
-            return { assistantmsg: blockMessage, error: `Blocked: ${responseData.promptFeedback.blockReason}` };
+            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
+            return { assistantmsg: assistantMessageText, error: `Blocked: ${responseData.promptFeedback.blockReason}`, parsedSampleAnswers: [] };
         } else {
             console.warn("[API] Gemini API 응답에서 유효한 콘텐츠를 찾을 수 없음.");
-             // 이 경우에도 모델이 응답을 못한 것이므로, 모델의 빈 응답 또는 안내 메시지를 기록에 추가할 수 있음.
-            chatHistoryForAPI.push(formatChatHistoryForAPI("모델로부터 유효한 응답을 받지 못했습니다.", 'model'));
-            return { assistantmsg: "죄송합니다, AI 모델로부터 응답을 받지 못했습니다. 다시 시도해주세요.", error: "No valid content in API response" };
+            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
+            return { assistantmsg: assistantMessageText, error: "No valid content in API response", parsedSampleAnswers: [] };
         }
 
     } catch (error) {
         console.error("[API] Gemini API 호출 중 예외 발생:", error.message);
-         // 여기서도 모델이 응답을 못한 것이므로, 모델의 에러 메시지를 기록에 추가할 수 있음.
-        chatHistoryForAPI.push(formatChatHistoryForAPI(`API 통신 오류: ${error.message}`, 'model'));
-        return { assistantmsg: `죄송합니다. AI 모델과 통신 중 오류가 발생했습니다: ${error.message}`, error: error.message };
+        const errorMessageForChat = `죄송합니다. AI 모델과 통신 중 오류가 발생했습니다: ${error.message}`;
+        chatHistoryForAPI.push(formatChatHistoryForAPI(errorMessageForChat, 'model'));
+        return { assistantmsg: errorMessageForChat, error: error.message, parsedSampleAnswers: [] };
     }
 }
 
@@ -2260,54 +2260,62 @@ async function handleConfirmThreeCardsCost() {
 
 async function handleCardSelectionComplete() {
     console.log("[SimulateResponse] handleCardSelectionComplete 실행. 선택된 카드:", userProfile.선택된타로카드들);
-    let rubyCommentary = "";
-    let nextSampleAnswersData = [];
-    let additionalInstructionForAPI = "사용자가 타로 카드를 선택했습니다. 선택된 카드에 대한 기본 해석과 함께, 다음 단계로 어떤 것을 할 수 있는지 안내해주세요.";
-
+    
     if (!userProfile.선택된타로카드들 || userProfile.선택된타로카드들.length === 0) {
-        return { // 카드가 선택되지 않은 예외 케이스
-            assistantmsg: "선택된 카드가 없어 풀이를 진행할 수 없습니다. 다시 시도해주십시오.",
+        chatHistoryForAPI.push(formatChatHistoryForAPI("카드 선택 없이 '카드 선택 완료'가 호출됨 (오류 상황)", 'user')); // 시스템적 사용자 메시지
+        const errorMsg = "선택된 카드가 없어 풀이를 진행할 수 없습니다. 다시 시도해주십시오.";
+        chatHistoryForAPI.push(formatChatHistoryForAPI(errorMsg, 'model'));
+        return {
+            assistantmsg: errorMsg,
             tarocardview: false, cards_to_select: null, importance: 'low',
             sampleAnswers: [{ text: "카드 뽑기", value: "카드 뽑기", actionType: 'message' }],
             user_profile_update: {}
         };
     }
     
-    // Gemini API 호출
     const tarotIni = await fetchTarotIniContent();
-    // chatHistoryForAPI에는 현재 "카드 선택 완료" 메시지가 포함되지 않음.
-    // API 호출 직전에 추가하거나, API 응답 생성 후 쌍으로 추가. 여기서는 호출 전에 추가.
-    const currentMessageForHistory = formatChatHistoryForAPI(`사용자가 다음 타로 카드를 선택했습니다: ${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id] ? TAROT_CARD_DATA[id].name : id)).join(', ')}. 이 카드들에 대한 해석을 부탁합니다.`, 'user');
+    // API 호출 전에 현재 사용자 행동(카드 선택 완료)을 context로 추가
+    const userActionMessage = `사용자가 다음 타로 카드를 선택했습니다: ${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id] ? TAROT_CARD_DATA[id].name : id)).join(', ')}. 이 카드들에 대한 해석을 부탁합니다. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)를 JSON 코드 블록 안에 포함해야 합니다. 예시: \`\`\`json\\n{\\n  \"msg\": \"[카드 해석 내용]\",\\n  \"sampleanswer\": [\"질문1\", \"질문2\"]\n}\\n\`\`\``;
     
-    const apiResponse = await callGeminiAPI(tarotIni, userProfile, [...chatHistoryForAPI, currentMessageForHistory], additionalInstructionForAPI);
-    // API 응답을 받으면, 방금 보낸 사용자 메시지를 실제 히스토리에 추가
-    chatHistoryForAPI.push(currentMessageForHistory);
-    // assistantmsg는 apiResponse에서 가져옴, 에러 처리 포함
+    // 이 메시지를 chatHistoryForAPI에 추가 (중복 방지 로직은 handleDefaultMessage와 유사하게 적용 가능하나, 여기선 일단 직접 추가)
+    chatHistoryForAPI.push(formatChatHistoryForAPI(userActionMessage, 'user'));
+    console.log("[API History] handleCardSelectionComplete에서 사용자 액션 메시지 추가:", userActionMessage);
+    
+    const additionalInstructionForAPI = "사용자가 타로 카드를 선택했습니다. 선택된 카드에 대한 기본 해석과 함께, 다음 단계로 어떤 것을 할 수 있는지 안내해주세요. 응답에는 항상 JSON 코드 블록으로 msg와 sampleanswer를 포함해야 합니다.";
+    
+    const apiResponse = await callGeminiAPI(tarotIni, userProfile, chatHistoryForAPI, additionalInstructionForAPI);
 
-    // API 응답 후 다음 샘플 답변 결정
-    if (userProfile.선택된타로카드들.length === 1) {
-        nextSampleAnswersData = [
-            { text: "2장 더 뽑기", value: "action_add_two_cards", cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' },
-            { text: "더 깊은 해석", value: "action_deep_analysis_single", cost: 3, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
-        ];
-    } else { // 3장 (또는 1+2장)
-        nextSampleAnswersData = [
-            { text: "조금 더 풀이", value: "action_more_interpretation_triple", cost: 0, displayCostIcon: false, actionType: 'message' }, // 이 부분도 API 호출로 변경 가능
-            { text: "더 깊은 해석", value: "action_deep_analysis_triple", cost: 1, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
-        ];
+    let finalSampleAnswers;
+    if (apiResponse.parsedSampleAnswers && apiResponse.parsedSampleAnswers.length > 0) {
+        finalSampleAnswers = apiResponse.parsedSampleAnswers.map(saText => ({
+            text: saText,
+            value: saText,
+            actionType: 'message'
+        }));
+    } else { // API가 sampleanswer를 제공하지 못한 경우, 상황에 맞는 기본값 설정
+        if (userProfile.선택된타로카드들.length === 1) {
+            finalSampleAnswers = [
+                { text: "2장 더 뽑기", value: "action_add_two_cards", cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' },
+                { text: "더 깊은 해석", value: "action_deep_analysis_single", cost: 3, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
+            ];
+        } else { 
+            finalSampleAnswers = [
+                { text: "조금 더 풀이", value: "action_more_interpretation_triple", cost: 0, displayCostIcon: false, actionType: 'message' },
+                { text: "더 깊은 해석", value: "action_deep_analysis_triple", cost: 1, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
+            ];
+        }
+        console.warn("[SimulateResponse] API 응답에서 sampleanswer를 파싱하지 못했거나 비어있음. 시나리오 기반 샘플 답변 사용.");
     }
 
     return {
-        assistantmsg: apiResponse.assistantmsg || "카드 해석을 준비 중입니다...", // API 응답 사용
-        // assistant_interpretation: apiResponse.assistant_interpretation, // API가 HTML을 줄 경우, 아니면 assistantmsg에 통합
+        assistantmsg: apiResponse.assistantmsg || "카드 해석을 준비 중입니다...",
         tarocardview: false,
         cards_to_select: null,
-        sampleAnswers: nextSampleAnswersData,
+        sampleAnswers: finalSampleAnswers,
         importance: 'low',
-        user_profile_update: {} // API 호출 결과로 프로필 업데이트가 필요하면 여기서 처리
+        user_profile_update: {}
     };
 }
-
 async function handleAddTwoCards_Confirmation() {
     console.log("[SimulateResponse] handleAddTwoCards_Confirmation 실행");
     return {
@@ -2410,6 +2418,8 @@ async function handleDefaultMessage(userMessageText) {
     if (!userMessageText || userMessageText.trim() === "") {
         console.warn("[SimulateResponse] handleDefaultMessage: 빈 메시지 수신, 기본 응답 처리.");
         const emptyMsgResponse = "죄송해요, 잘 이해하지 못했어요. 좀 더 자세히 말씀해주시겠어요?";
+        // 빈 메시지 입력에 대한 봇의 응답도 히스토리에 추가
+        // chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user')); // 사용자는 빈 메시지 보냄 (선택사항)
         chatHistoryForAPI.push(formatChatHistoryForAPI(emptyMsgResponse, 'model'));
         return {
             assistantmsg: emptyMsgResponse,
@@ -2421,21 +2431,7 @@ async function handleDefaultMessage(userMessageText) {
         };
     }
 
-    // === 이 함수가 호출되기 전에 processMessageExchange에서 이미 사용자 메시지를 API 히스토리에 추가했어야 함 ===
-    // === 또는, 여기서 사용자 메시지를 history에 추가한다면 processMessageExchange의 중복 로직을 제거해야 함. ===
-    // 현재는 processMessageExchange에서 일반 메시지(input 또는 message 타입 샘플버튼)를 히스토리에 넣고,
-    // 이 함수를 호출하는 것으로 가정. 만약 직접 추가한다면 아래 주석 해제.
-    // chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user'));
-    // console.log("[API History] handleDefaultMessage에서 사용자 메시지 추가:", userMessageText);
-    // === 위의 가정이 틀렸다면, 즉 processMessageExchange에서 일반 메시지를 chatHistoryForAPI에 넣지 않았다면, 여기서 추가해야 함.
-    // 로그를 보면 processMessageExchange의 API History 추가 로직이 주석처리 되거나 조건이 복잡하여
-    // handleDefaultMessage에 도달했을 때 userMessageText가 history에 없을 수 있음.
-    // 따라서, handleDefaultMessage가 호출되었다는 것은 이것이 사용자 턴이라는 의미이므로, 여기서 추가하는 것이 안전.
-    
-    // 현재 사용자의 턴을 chatHistoryForAPI에 명시적으로 추가
-    // (processMessageExchange의 히스토리 추가 로직이 복잡하므로 여기서 확실히 추가)
     const userMessageEntry = formatChatHistoryForAPI(userMessageText, 'user');
-    // 중복 추가 방지: 바로 직전 기록이 같은 내용의 사용자 메시지인지 확인
     if (chatHistoryForAPI.length === 0 || 
         !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'user' && 
           chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === userMessageText)) {
@@ -2445,26 +2441,32 @@ async function handleDefaultMessage(userMessageText) {
         console.log("[API History] handleDefaultMessage: 직전과 동일한 사용자 메시지, 중복 추가 방지.");
     }
 
-
     const tarotIni = await fetchTarotIniContent();
-    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요.";
+    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)를 JSON 코드 블록 안에 포함해야 합니다. 예시: ```json\\n{\\n  \"msg\": \"[여기에 짧은 답변]\",\\n  \"sampleanswer\": [\"질문1\", \"질문2\"]\n}\\n```";
     if (userMessageText.toLowerCase().includes("도움말") || userMessageText.toLowerCase().includes("help")) {
-        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요.";
+        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)를 JSON 코드 블록 안에 포함해야 합니다. 예시: ```json\\n{\\n  \"msg\": \"[여기에 도움말 내용]\",\\n  \"sampleanswer\": [\"기능1 문의\", \"기능2 문의\"]\n}\\n```";
     }
     
     const apiResponse = await callGeminiAPI(tarotIni, userProfile, chatHistoryForAPI, additionalInstruction);
-    // callGeminiAPI 내부에서 모델의 응답을 chatHistoryForAPI에 추가함.
-
-    let nextSampleAnswers = [{ text: "다른 질문", value: "다른 질문 할래", actionType: 'message' }];
-    if (apiResponse.assistantmsg && apiResponse.assistantmsg.toLowerCase().includes("운세")) {
-        nextSampleAnswers.unshift({ text: "오늘의 운세 자세히", value: "오늘의 운세 자세히 알려줘", actionType: 'message' });
+    
+    let finalSampleAnswers;
+    if (apiResponse.parsedSampleAnswers && apiResponse.parsedSampleAnswers.length > 0) {
+        finalSampleAnswers = apiResponse.parsedSampleAnswers.map(saText => ({
+            text: saText,
+            value: saText, // 사용자가 누르면 이 텍스트가 다음 입력으로
+            actionType: 'message'
+        }));
+    } else {
+        // API가 sampleanswer를 제공하지 못한 경우 기본값
+        finalSampleAnswers = [{ text: "다른 질문", value: "다른 질문 할래", actionType: 'message' }];
+        console.warn("[SimulateResponse] API 응답에서 sampleanswer를 파싱하지 못했거나 비어있음. 기본 샘플 답변 사용.");
     }
 
     return {
         assistantmsg: apiResponse.assistantmsg || "응답을 생성하는 중입니다...",
         tarocardview: false,
         cards_to_select: null,
-        sampleAnswers: nextSampleAnswers,
+        sampleAnswers: finalSampleAnswers,
         importance: 'low',
         user_profile_update: {}
     };
