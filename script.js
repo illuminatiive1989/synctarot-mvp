@@ -1061,7 +1061,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
     }
-    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && buttonData.actionType === 'confirm_cost') && source !== 'system_internal_no_user_echo') { // "카드 선택 완료" 는 messageText가 있지만 사용자 에코 안함
+    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && buttonData.actionType === 'confirm_cost') && source !== 'system_internal_no_user_echo') {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지 또는 특정 내부 호출 아님).");
         return;
     }
@@ -1076,7 +1076,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
 
     if (shouldClearChat) {
         clearChatMessages();
-        chatHistoryForAPI = []; // 채팅창 비울 때 API용 히스토리도 초기화
+        chatHistoryForAPI = [];
         console.log("[ProcessExchange] 채팅창 비움. API 대화 기록도 초기화됨.");
     }
 
@@ -1089,7 +1089,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         moreOptionsBtn.classList.remove('active');
     }
 
-    const shouldAddUserMessageToDisplay = // 화면에 사용자 메시지를 표시할지 여부
+    const shouldAddUserMessageToDisplay =
         source === 'input' || 
         source === 'panel_option' || 
         source === 'panel_option_topic_reset' ||
@@ -1101,23 +1101,36 @@ async function processMessageExchange(messageText, source = 'input', options = {
         await addMessage(textForUserDisplay, 'user');
     }
     
-    // API로 보낼 메시지 (텍스트 또는 버튼의 value)
     const effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
 
-    // 사용자의 실제 입력이나 의미있는 선택만 API 히스토리에 추가
-    // (내부 액션값이나 "카드 선택 완료" 같은 시스템 메시지는 각 핸들러에서 API 요청 직전에 context에 맞게 구성)
-    if (source === 'input' || (source === 'sample_button' && buttonData && buttonData.actionType === 'message')) {
-        // 순수 텍스트 입력이나, 메시지 전송용 샘플 버튼 클릭 시
-         chatHistoryForAPI.push(formatChatHistoryForAPI(effectiveMessageForAPI, 'user'));
-         console.log("[API History] 사용자 메시지 추가:", effectiveMessageForAPI);
-    } else if (source === 'sample_button' && buttonData && buttonData.actionType === 'choice' && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost') {
-        // 비용 확인/취소가 아닌 '선택' 액션 버튼 (예: "1장", "3장")
-        // 이 경우는 사용자가 '버튼 텍스트'를 입력한 것처럼 히스토리에 남김
-        chatHistoryForAPI.push(formatChatHistoryForAPI(textForUserDisplay, 'user'));
-        console.log("[API History] 사용자 선택(버튼 텍스트) 추가:", textForUserDisplay);
+    // === 수정된 부분: API 히스토리 추가 로직 변경 ===
+    // simulateBotResponse를 호출하기 전에, 현재 사용자 입력을 chatHistoryForAPI에 추가합니다.
+    // 단, "카드 선택 완료"와 같이 내부적으로 처리되는 메시지는 해당 핸들러에서 직접 추가합니다.
+    if (source === 'input' || 
+        (source === 'sample_button' && buttonData && (buttonData.actionType === 'message' || buttonData.actionType === 'choice'))) {
+        // 'choice' 액션은 사용자가 버튼 텍스트를 입력한 것으로 간주하여 히스토리에 추가합니다.
+        // 'confirm_cost', 'cancel_cost'는 사용자의 직접적인 대화 내용이 아니므로 제외.
+        // effectiveMessageForAPI는 버튼의 value (action_select_one_card 등) 일 수 있으므로,
+        // 사용자가 실제로 본 텍스트 (textForUserDisplay)를 히스토리에 넣는 것이 더 적절할 수 있음.
+        // 여기서는 사용자가 최종적으로 API와 상호작용하는 "의도"인 effectiveMessageForAPI를 기준으로 하되,
+        // 이것이 action_... 형태이면, 해당 action을 유발한 사용자 인터랙션 텍스트를 넣어야 함.
+        // 현재는 effectiveMessageForAPI가 action_... 형태의 값일 수 있음.
+        // => handleDefaultMessage, handleCardSelectionComplete 등에서 API 호출 전에 적절한 형태로 사용자 메시지를 구성하여 추가하는 것이 더 좋음.
+        // 이 부분은 각 simulateBotResponse의 핸들러 함수들이 API 호출 전에 chatHistoryForAPI에 직접 추가하도록 변경했으므로, 여기서는 중복 추가를 피합니다.
+        // 단, handleDefaultMessage를 호출할 경우에는 사용자 입력이 history에 있어야 함.
+        if (effectiveMessageForAPI !== "카드 선택 완료" && // "카드 선택 완료"는 handleCardSelectionComplete에서 처리
+            !effectiveMessageForAPI.startsWith("action_confirm_") && // 비용 확인 액션은 다음 턴에 API 호출하므로 지금 추가 안함
+            !effectiveMessageForAPI.startsWith("action_cancel_") && // 취소는 API 호출 안함
+            !(effectiveMessageForAPI.startsWith("action_deep_analysis_") && !effectiveMessageForAPI.includes("_cost")) // 비용확인 전 단계의 deep_analysis도 지금 추가안함
+           ) {
+            // 위의 조건에 해당하지 않는 일반적인 사용자 입력이나 선택(choice)의 경우
+            // chatHistoryForAPI.push(formatChatHistoryForAPI(textForUserDisplay, 'user'));
+            // console.log("[API History] 사용자 메시지/선택(버튼텍스트) 추가:", textForUserDisplay);
+            // => 이 로직은 simulateBotResponse 내부의 각 핸들러가 API 호출 직전에 수행하도록 이전.
+            // => 특히, handleDefaultMessage를 호출할 경우, 해당 함수 내에서 API 호출 전에 현재 effectiveMessageForAPI를 사용자 메시지로 추가해야함.
+        }
     }
-    // 'confirm_cost', 'cancel_cost', 'system_internal_no_user_echo' 등은 여기서 API 히스토리에 바로 추가하지 않음.
-    // API를 호출하는 핸들러 (handleCardSelectionComplete 등)에서 API 요청 직전에 적절한 사용자 메시지를 구성하여 추가.
+    // ==========================================
 
 
     if (source === 'input' && messageInput) {
@@ -1126,7 +1139,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
     }
 
     try {
-        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI); // effectiveMessageForAPI는 주로 버튼의 value
+        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI);
         
         if (botApiResponse.user_profile_update) {
             for (const key in botApiResponse.user_profile_update) {
@@ -1139,24 +1152,16 @@ async function processMessageExchange(messageText, source = 'input', options = {
             if (Object.keys(botApiResponse.user_profile_update).some(k => k !== "bones")) {
                 saveUserProfileToLocalStorage(userProfile);
             }
-            console.log("[UserProfile] API 응답으로 프로필 업데이트 (일부):", botApiResponse.user_profile_update);
         }
 
-        if (botApiResponse.assistant_interpretation && typeof botApiResponse.assistant_interpretation === 'string') { // HTML 문자열인지 확인
+        if (botApiResponse.assistant_interpretation && typeof botApiResponse.assistant_interpretation === 'string') {
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
-            // API 응답이므로 히스토리에 추가 (만약 assistant_interpretation이 주 응답이라면)
-            // chatHistoryForAPI.push(formatChatHistoryForAPI(botApiResponse.assistant_interpretation, 'model')); // HTML을 그대로 넣을지, 텍스트만 추출할지 결정 필요
         }
 
-        if (botApiResponse.assistantmsg) {
+        if (botApiResponse.assistantmsg) { // systemMessageOnConfirm 보다 우선순위 (API 응답이므로)
             await addMessage(botApiResponse.assistantmsg, 'bot');
-            // 일반 봇 응답도 API 히스토리에 추가 (simulateBotResponse 내부에서 API 호출 후 이미 추가되었을 수 있음 - 중복 확인 필요)
-            // 현재 simulateBotResponse의 핸들러들이 API 호출 후 직접 chatHistoryForAPI에 추가하므로, 여기서는 추가하지 않음.
-            // 만약 API 호출 안하는 핸들러가 assistantmsg를 반환하면, 여기서 추가.
-            // 지금은 handleDefaultMessage에서 추가하고 있음.
         } else if (botApiResponse.systemMessageOnConfirm) {
              await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
-             // 시스템 메시지는 API 대화 기록에 포함하지 않음 (일반적으로)
         }
         
         await updateSampleAnswers(
@@ -1192,7 +1197,9 @@ async function processMessageExchange(messageText, source = 'input', options = {
         setUIInteractions(false, shouldFocus);
         console.log("[ProcessExchange] 완료. 현재 API 대화 기록 길이:", chatHistoryForAPI.length);
         if (chatHistoryForAPI.length > 0) {
-            console.log("[API History] 마지막 기록:", chatHistoryForAPI[chatHistoryForAPI.length -1]);
+            console.log("[API History] 마지막 기록:", JSON.stringify(chatHistoryForAPI[chatHistoryForAPI.length -1]));
+        } else {
+            console.log("[API History] 기록 비어있음.");
         }
     }
 }
@@ -2062,6 +2069,21 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
         return { error: "tarot.ini 내용 없음", assistantmsg: "API 통신 오류: 타로 프롬프트 파일을 불러올 수 없습니다." };
     }
 
+    // === 추가된 방어 코드: currentChatHistory가 비어있는지 확인 ===
+    if (!currentChatHistory || currentChatHistory.length === 0) {
+        console.error("[API] 호출 중단: currentChatHistory (contents)가 비어 있습니다.");
+        // chatHistoryForAPI에 마지막 사용자 입력이 누락된 경우를 대비해, 여기서라도 추가 시도 (임시방편)
+        // 근본적으로는 이 함수를 호출하기 전에 chatHistoryForAPI에 메시지가 포함되어야 함.
+        // 예: if (chatHistoryForAPI.length === 0 && /* 마지막 사용자 메시지가 있다면 */) {
+        //    currentChatHistory.push(formatChatHistoryForAPI(lastUserMessage, 'user'));
+        // }
+        // 그래도 비어있으면 오류 반환
+        if (!currentChatHistory || currentChatHistory.length === 0) {
+             return { error: "Contents 비어있음", assistantmsg: "API 통신 오류: 전달할 대화 내용이 없습니다." };
+        }
+    }
+    // ======================================================
+
     console.log("[API] Gemini API 호출 시작...");
 
     const systemPromptParts = [
@@ -2087,58 +2109,20 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
         systemPromptParts.push({text: "\n## 추가 시스템 지침 (Additional System Instruction):\n" + additionalSystemInstruction});
     }
     
-    const systemInstruction = {
-        role: "system", // Gemini API는 system role을 직접 지원하지 않으므로, contents 배열 시작에 포함하거나 사용자 메시지에 섞음
-                        // 여기서는 첫 번째 user 메시지 앞에 내용을 넣어주는 형태로 구성
-        parts: systemPromptParts
-    };
-
-
-    // Gemini는 user와 model 턴을 번갈아 가며 구성
-    // 첫 번째 contents는 시스템 지침 + 첫 사용자 메시지, 또는 시스템 지침만 (내부 로직에 따라)
-    // 현재 chatHistoryForAPI는 {role, parts} 객체의 배열이므로 그대로 사용 가능
-    const contentsPayload = [...currentChatHistory]; // 복사해서 사용
-    
-    // 시스템 지침을 첫번째 user 턴 메시지 앞에 추가하거나, history가 비어있으면 history의 첫 요소로 추가
-    // Gemini API는 명시적인 system role을 contents 배열에서 지원하지 않으므로,
-    // 보통은 첫 번째 User 메시지에 섞거나, context로 전달합니다.
-    // 여기서는 히스토리의 가장 처음에 추가하는 형태로 (히스토리가 사용자 메시지로 시작한다고 가정)
-    // 또는, contents의 첫번째 요소로 사용자 역할(role: "user")에 시스템 프롬프트를 포함시키는 방법도 있음.
-    // 여기서는 간단히 모든 히스토리 앞에 시스템 프롬프트를 두는 형태로 구성
-    // contents = [system_instruction_as_user_turn, ...actual_history]
-    
-    // 더 나은 접근: Gemini는 `SystemInstruction` 객체를 `generateContent` 요청 시 `systemInstruction` 필드에 넣을 수 있음.
-    // const requestPayload = {
-    //     contents: contentsPayload,
-    //     systemInstruction: systemInstruction, // systemInstruction 필드 사용
-    //     generationConfig: {
-    //         // "temperature": 0.7,
-    //         // "topK": 40,
-    //         // "topP": 0.95,
-    //         "maxOutputTokens": 2048,
-    //     }
-    // };
-
-    // systemInstruction을 contents의 첫 번째 요소로 구성 (role: 'user'로 시작하는 contents 앞에 삽입)
-    // 또는 첫 번째 user 메시지에 내용을 합치는 방식도 가능
-    // 현재 API_URL이 generateContent이므로, systemInstruction 필드를 사용하는 것이 더 적합해 보임.
-
     const generationConfig = {
-        "temperature": 0.7, // 창의성 조절 (0.0 ~ 1.0)
+        "temperature": 0.7,
         "topK": 40,
         "topP": 0.95,
-        "maxOutputTokens": 2048, // 응답 최대 토큰 수
-        // "stopSequences": ["사용자:"] // 필요시 중단 시퀀스
+        "maxOutputTokens": 2048,
     };
 
     const requestBody = {
-        contents: contentsPayload, // 현재 대화 내용
-        systemInstruction: { // 시스템 지침
+        contents: currentChatHistory, // 수정: 이전에는 contentsPayload 였으나, currentChatHistory로 직접 사용
+        systemInstruction: {
             parts: systemPromptParts
         },
         generationConfig: generationConfig
     };
-
 
     console.log("[API] 요청 URL:", API_URL);
     console.log("[API] 요청 본문 (Request Body):", JSON.stringify(requestBody, null, 2));
@@ -2153,9 +2137,22 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
         });
 
         if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`[API] Gemini API 오류 응답: ${response.status} ${response.statusText}`, errorBody);
-            throw new Error(`API 오류: ${response.status} - ${errorBody}`);
+            const errorBodyText = await response.text(); // 오류 내용을 텍스트로 먼저 받음
+            console.error(`[API] Gemini API 오류 응답: ${response.status} ${response.statusText}`, errorBodyText);
+            // 여기서 errorBodyText를 파싱하여 message를 추출하거나, 그대로 사용
+            let errorMessage = `API 오류: ${response.status}`;
+            try {
+                const errorJson = JSON.parse(errorBodyText);
+                if (errorJson.error && errorJson.error.message) {
+                    errorMessage = errorJson.error.message;
+                } else {
+                    errorMessage = errorBodyText; // JSON 파싱 실패하거나 message 필드 없으면 원본 텍스트 사용
+                }
+            } catch (e) {
+                // JSON 파싱 실패 시 원본 텍스트 사용
+                errorMessage = errorBodyText;
+            }
+            throw new Error(errorMessage);
         }
 
         const responseData = await response.json();
@@ -2164,8 +2161,7 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
         if (responseData.candidates && responseData.candidates.length > 0 && responseData.candidates[0].content && responseData.candidates[0].content.parts && responseData.candidates[0].content.parts.length > 0) {
             const assistantMessage = responseData.candidates[0].content.parts[0].text;
             console.log("[API] 추출된 Assistant 응답:", assistantMessage);
-            // API 응답도 기록에 추가
-            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessage, 'model'));
+            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessage, 'model')); // 모델 응답 기록
             return { assistantmsg: assistantMessage };
         } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
             console.warn("[API] Gemini API 요청 차단됨:", responseData.promptFeedback.blockReason, responseData.promptFeedback.safetyRatings);
@@ -2173,15 +2169,19 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             if (responseData.promptFeedback.safetyRatings) {
                 blockMessage += " 세부 정보: " + responseData.promptFeedback.safetyRatings.map(r => `${r.category} - ${r.probability}`).join(', ');
             }
-             chatHistoryForAPI.push(formatChatHistoryForAPI(blockMessage, 'model'));
+            chatHistoryForAPI.push(formatChatHistoryForAPI(blockMessage, 'model')); // 차단 응답도 기록
             return { assistantmsg: blockMessage, error: `Blocked: ${responseData.promptFeedback.blockReason}` };
         } else {
             console.warn("[API] Gemini API 응답에서 유효한 콘텐츠를 찾을 수 없음.");
+             // 이 경우에도 모델이 응답을 못한 것이므로, 모델의 빈 응답 또는 안내 메시지를 기록에 추가할 수 있음.
+            chatHistoryForAPI.push(formatChatHistoryForAPI("모델로부터 유효한 응답을 받지 못했습니다.", 'model'));
             return { assistantmsg: "죄송합니다, AI 모델로부터 응답을 받지 못했습니다. 다시 시도해주세요.", error: "No valid content in API response" };
         }
 
     } catch (error) {
-        console.error("[API] Gemini API 호출 중 예외 발생:", error);
+        console.error("[API] Gemini API 호출 중 예외 발생:", error.message);
+         // 여기서도 모델이 응답을 못한 것이므로, 모델의 에러 메시지를 기록에 추가할 수 있음.
+        chatHistoryForAPI.push(formatChatHistoryForAPI(`API 통신 오류: ${error.message}`, 'model'));
         return { assistantmsg: `죄송합니다. AI 모델과 통신 중 오류가 발생했습니다: ${error.message}`, error: error.message };
     }
 }
@@ -2409,10 +2409,10 @@ async function handleDefaultMessage(userMessageText) {
 
     if (!userMessageText || userMessageText.trim() === "") {
         console.warn("[SimulateResponse] handleDefaultMessage: 빈 메시지 수신, 기본 응답 처리.");
-        // 이 경우, API 호출 없이 간단한 기본 응답 반환 가능
-        chatHistoryForAPI.push(formatChatHistoryForAPI("이해할 수 없는 요청입니다.", 'model')); // 모델의 응답으로 기록
+        const emptyMsgResponse = "죄송해요, 잘 이해하지 못했어요. 좀 더 자세히 말씀해주시겠어요?";
+        chatHistoryForAPI.push(formatChatHistoryForAPI(emptyMsgResponse, 'model'));
         return {
-            assistantmsg: "죄송해요, 잘 이해하지 못했어요. 좀 더 자세히 말씀해주시겠어요?",
+            assistantmsg: emptyMsgResponse,
             tarocardview: false,
             cards_to_select: null,
             sampleAnswers: [{ text: "도움말", value: "도움말", actionType: 'message' }],
@@ -2421,42 +2421,26 @@ async function handleDefaultMessage(userMessageText) {
         };
     }
 
-    // 사용자 메시지를 API 기록에 추가 (이 함수가 호출되었다는 것은 유효한 사용자 입력이 있었다는 의미)
-    // processMessageExchange에서 이미 추가했을 수 있으므로, 중복 방지를 위해 여기서 추가하는 것은 지양하거나,
-    // processMessageExchange에서 일반 메시지 추가 로직을 여기로 완전히 위임.
-    // 현재 processMessageExchange에서는 일반 메시지를 history에 추가하고 있음.
-    // 따라서, 이 함수는 그 history를 사용.
-    // 만약 여기서 history 추가를 책임진다면, processMessageExchange의 해당 부분을 제거해야 함.
-    // 여기서는 processMessageExchange가 history에 사용자 메시지를 넣었다고 가정하고 API 호출.
-
-    const tarotIni = await fetchTarotIniContent(); // 모든 응답에 타로 컨텍스트가 필요할 수 있음 (조정 가능)
-    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요.";
-    if (userMessageText.toLowerCase().includes("도움말") || userMessageText.toLowerCase().includes("help")) {
-        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요.";
-    }
+    // === 이 함수가 호출되기 전에 processMessageExchange에서 이미 사용자 메시지를 API 히스토리에 추가했어야 함 ===
+    // === 또는, 여기서 사용자 메시지를 history에 추가한다면 processMessageExchange의 중복 로직을 제거해야 함. ===
+    // 현재는 processMessageExchange에서 일반 메시지(input 또는 message 타입 샘플버튼)를 히스토리에 넣고,
+    // 이 함수를 호출하는 것으로 가정. 만약 직접 추가한다면 아래 주석 해제.
+    // chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user'));
+    // console.log("[API History] handleDefaultMessage에서 사용자 메시지 추가:", userMessageText);
+    // === 위의 가정이 틀렸다면, 즉 processMessageExchange에서 일반 메시지를 chatHistoryForAPI에 넣지 않았다면, 여기서 추가해야 함.
+    // 로그를 보면 processMessageExchange의 API History 추가 로직이 주석처리 되거나 조건이 복잡하여
+    // handleDefaultMessage에 도달했을 때 userMessageText가 history에 없을 수 있음.
+    // 따라서, handleDefaultMessage가 호출되었다는 것은 이것이 사용자 턴이라는 의미이므로, 여기서 추가하는 것이 안전.
     
-    // API 호출 전 사용자 메시지가 chatHistoryForAPI에 마지막으로 추가되어 있어야 함.
-    // processMessageExchange에서 추가된 history를 사용.
-    const apiResponse = await callGeminiAPI(tarotIni, userProfile, chatHistoryForAPI, additionalInstruction);
-    // callGeminiAPI 내부에서 모델의 응답을 chatHistoryForAPI에 추가함.
-
-    // API 응답 기반으로 샘플 답변 생성 (필요시)
-    // 예시: API 응답에 따라 다음 행동 제안
-    let nextSampleAnswers = [{ text: "다른 질문", value: "다른 질문 할래", actionType: 'message' }];
-    if (apiResponse.assistantmsg && apiResponse.assistantmsg.toLowerCase().includes("운세")) {
-        nextSampleAnswers.unshift({ text: "오늘의 운세 자세히", value: "오늘의 운세 자세히 알려줘", actionType: 'message' });
-    }
-
-
-    return {
-        assistantmsg: apiResponse.assistantmsg || "응답을 생성하는 중입니다...",
-        tarocardview: false,
-        cards_to_select: null,
-        sampleAnswers: nextSampleAnswers,
-        importance: 'low',
-        user_profile_update: {} // 필요시 API 응답에 따른 프로필 업데이트
-    };
-}
+    // 현재 사용자의 턴을 chatHistoryForAPI에 명시적으로 추가
+    // (processMessageExchange의 히스토리 추가 로직이 복잡하므로 여기서 확실히 추가)
+    const userMessageEntry = formatChatHistoryForAPI(userMessageText, 'user');
+    // 중복 추가 방지: 바로 직전 기록이 같은 내용의 사용자 메시지인지 확인
+    if (chatHistoryForAPI.length === 0 || 
+        !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'user' && 
+          chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === userMessageText)) {
+        chatHistoryForAPI.push(userMessageEntry);
+        console.log
 
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
