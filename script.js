@@ -2950,7 +2950,8 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
             }
             requestBody.contents.push({ role: "user", parts: [{ text: promptContent }] });
             
-            console.log(`[API] 요청 본문 (시도 ${attempt + 1}):`, JSON.stringify(requestBody).substring(0, 300) + "...");
+            // 요청 본문 전체 출력으로 변경
+            console.log(`[API] 요청 본문 (시도 ${attempt + 1}):`, JSON.stringify(requestBody));
 
             const response = await fetch(API_URL, {
                 method: 'POST',
@@ -2966,7 +2967,8 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
             }
 
             const responseJson = await response.json();
-            console.log("[API] 응답 성공 (시도 " + (attempt + 1) + "):", JSON.stringify(responseJson).substring(0,200) + "...");
+            // 응답 본문 전체 출력으로 변경
+            console.log("[API] 응답 성공 (시도 " + (attempt + 1) + "):", JSON.stringify(responseJson));
 
             if (!responseJson.candidates || !responseJson.candidates[0] || !responseJson.candidates[0].content || !responseJson.candidates[0].content.parts || !responseJson.candidates[0].content.parts[0] || typeof responseJson.candidates[0].content.parts[0].text !== 'string') {
                 console.error("[API] 응답 형식이 예상과 다릅니다:", responseJson);
@@ -2974,20 +2976,19 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
             }
             
             let rawText = responseJson.candidates[0].content.parts[0].text;
-            // 마크다운 코드 블록 제거 로직 추가
             if (rawText.startsWith("```json")) {
-                rawText = rawText.substring(7); // "```json\n" 또는 "```json " 제거 고려
-            } else if (rawText.startsWith("```")) { // json 명시 없이 ```만 있을 경우
+                rawText = rawText.substring(7); 
+            } else if (rawText.startsWith("```")) { 
                 rawText = rawText.substring(3);
             }
             if (rawText.endsWith("```")) {
                 rawText = rawText.substring(0, rawText.length - 3);
             }
-            rawText = rawText.trim(); // 앞뒤 공백 제거
+            rawText = rawText.trim(); 
 
             return { 
                 json: () => Promise.resolve(responseJson), 
-                text: () => Promise.resolve(rawText), // 정제된 텍스트 반환
+                text: () => Promise.resolve(rawText), 
                 ok: true 
             };
 
