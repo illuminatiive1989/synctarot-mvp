@@ -982,7 +982,7 @@ const botKnowledgeBase = {
     "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
     "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
 };
-async function simulateBotResponse(userMessageText) { // async로 변경 (재화 소모 등 비동기 작업 있을 수 있음)
+async function simulateBotResponse(userMessageText) { // as화 소모 등 비동기 작업 있을 수 있음)
     console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
     return new Promise(async (resolve) => {
         await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
