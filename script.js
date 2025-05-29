@@ -1519,7 +1519,7 @@ async function handleTarotCardSelectionCompleteActions(userMessageText, buttonDa
 async function handleTarotInterpretationActions(userMessageText, buttonData, selectedTarotTopicName) {
     let responseData = {};
     let 진행메시지 = "";
-    let currentScenario = userProfile.시나리오 || "tarot_general"; // 시나리오 문자열은 보조적으로 사용 가능
+    let currentScenario = userProfile.시나리오 || "tarot_general";
     let currentConsultationStage = userProfile.tarotConsultationStage;
 
     if (userMessageText === "action_skip_sync_type_test") {
@@ -1531,7 +1531,6 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
     } else {
         return {}; 
     }
-    // userProfile.시나리오 = currentScenario; // 시나리오는 이미 이전 단계에서 업데이트됨
     saveUserProfileToLocalStorage(userProfile); 
     console.log(`[BotResponse] ${진행메시지} 상담 단계: ${currentConsultationStage}, 시나리오: ${currentScenario}`);
     
@@ -1540,35 +1539,71 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
     const actualTarotTopic = selectedTarotTopicName || 
                              (userProfile.시나리오 ? userProfile.시나리오.split("_pick")[0].replace("tarot_topic_", "").replace(/_/g, " ") : '선택하신 주제');
 
-    let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE;
-    tarotChoicePrompt += `\n타로 상담 주제: ${actualTarotTopic}`; 
-    tarotChoicePrompt += `\n선택된 카드: ${userProfile.선택된타로카드들.join(', ')}`;
-    // 상담 단계 정보 추가 (API 프롬프트에서 활용 가능하도록)
-    tarotChoicePrompt += `\n상담 단계: ${currentConsultationStage}`;
+    let tarotChoicePrompt = LOADED_PROMPT_TAROT_CHOICE; // .ini 파일의 기본 프롬프트
+    tarotChoicePrompt += `\n\n; --- 이 아래는 JS에서 동적으로 채워질 사용자 정보 및 카드 목록 영역입니다. ---\n`; // 프롬프트 파일 내 주석과 일치하도록
+    tarotChoicePrompt += `\n; [타로 상담 주제]\n${actualTarotTopic}\n`;
+    tarotChoicePrompt += `\n; [상담 단계]\n${currentConsultationStage}\n`;
+    tarotChoicePrompt += `\n; --- 상담 단계별 카드 정보 ---\n`;
+
+    let cardsForAPIInterpretation; // API가 실제로 해석해야 할 카드 목록
+
     if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
-        tarotChoicePrompt += `\n이전 카드 수: ${userProfile.initialCardCount}`;
         const previousCards = userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount);
-        tarotChoicePrompt += `\n이전 선택 카드: ${previousCards.join(', ')}`;
+        const newlyAddedCards = userProfile.선택된타로카드들.slice(userProfile.initialCardCount);
+        cardsForAPIInterpretation = newlyAddedCards; // API는 새로 추가된 카드만 해석
+
+        tarotChoicePrompt += `\n; (상담 단계가 'ADDED_TWO_AFTER_ONE' 일 경우)\n`;
+        tarotChoicePrompt += `\n; [이전에 선택된 카드 정보 (과거/배경)]\n`;
+        previousCards.forEach(cardId => {
+            tarotChoicePrompt += `- ${cardId}\n`;
+        });
+        tarotChoicePrompt += `\n; [새로 추가된 타로 카드 목록 (현재/미래)]\n`;
+        newlyAddedCards.forEach(cardId => {
+            tarotChoicePrompt += `- ${cardId}\n`;
+        });
+    } else { // INITIAL_ONE 또는 INITIAL_THREE
+        cardsForAPIInterpretation = userProfile.선택된타로카드들; // 모든 선택 카드를 API가 해석
+        tarotChoicePrompt += `\n; (상담 단계가 'INITIAL_ONE' 또는 'INITIAL_THREE' 일 경우)\n`;
+        tarotChoicePrompt += `\n; [선택된 타로 카드 목록]\n`;
+        userProfile.선택된타로카드들.forEach(cardId => {
+            tarotChoicePrompt += `- ${cardId}\n`;
+        });
     }
+    tarotChoicePrompt += `\n; --- 카드 정보 끝 ---\n`;
+    // console.log("[Debug] Generated tarotChoicePrompt:", tarotChoicePrompt);
 
 
     try {
-        const choiceApiResponseObj = await callChatAPI(tarotChoicePrompt);
+        // API 호출 시에는 전체 프롬프트(tarotChoicePrompt)를 전달하지만,
+        // API가 반환하는 cardInterpretations는 cardsForAPIInterpretation에 해당하는 카드들에 대한 것일 것으로 기대.
+        // (이는 tarotchoice.ini 프롬프트가 "새로 추가된 타로 카드 목록"에 대해서만 해석하도록 지시해야 함)
+        const choiceApiResponseObj = await callChatAPI(tarotChoicePrompt); 
         const choiceResultText = await choiceApiResponseObj.text();
         const parsedChoiceResult = JSON.parse(choiceResultText);
         
+        // API 응답(parsedChoiceResult.cardInterpretations)은 cardsForAPIInterpretation에 대한 해석임.
+        // userProfile.tarotResult에는 이 해석 결과만 저장.
         userProfile.tarotResult = { 
             cardInterpretations: parsedChoiceResult.cardInterpretations 
         };
         saveUserProfileToLocalStorage(userProfile); 
-        console.log("[TarotChoiceAPI] API 응답 파싱 결과 (overallAdvice 제외된 tarotResult):", userProfile.tarotResult);
+        console.log("[TarotChoiceAPI] API 응답 파싱 결과 (해석 대상 카드에 대한 결과):", userProfile.tarotResult);
 
         let simpleChatHistory = [];
 
-        const transPrompt = LOADED_PROMPT_TAROT_TRANS + `\n## 이전 대화 요약 (카드 선택 결과):\n${JSON.stringify(userProfile.tarotResult, null, 2)}\n## 사용자 질문:\n타로 해석을 부탁드려요.`;
-        // 여기에 추가로 상담 단계(currentConsultationStage)나 이전 카드 정보를 transPrompt에 전달할 수 있음
-        // 예: transPrompt += `\n[상담진행정보]\n현재단계: ${currentConsultationStage}\n...`
-
+        // transPrompt에는 전체 카드 목록과 현재 단계를 알려줄 수 있음.
+        let transPromptContext = `\n## 이전 대화 요약 (카드 선택 결과):\n`;
+        transPromptContext += `상담 단계: ${currentConsultationStage}\n`;
+        transPromptContext += `전체 선택 카드: ${userProfile.선택된타로카드들.join(', ')}\n`;
+        if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
+            transPromptContext += `이전 카드: ${userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount).join(', ')}\n`;
+            transPromptContext += `추가된 카드 해석 결과 (시스템 제공): ${JSON.stringify(userProfile.tarotResult.cardInterpretations, null, 2)}\n`;
+        } else {
+            transPromptContext += `카드 해석 결과 (시스템 제공): ${JSON.stringify(userProfile.tarotResult.cardInterpretations, null, 2)}\n`;
+        }
+        transPromptContext += `## 사용자 질문:\n타로 해석을 부탁드려요.`;
+        
+        const transPrompt = LOADED_PROMPT_TAROT_TRANS + transPromptContext;
         const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory);
         const finalInterpretationText = await transApiResponseObj.text();
         
@@ -1592,10 +1627,7 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
             assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
             assistantInterpretationHTML += `<div class="interpretation-title-text"><b>'${displayTopicName}' ${titleCardTypeText}</b></div><br>`;
             
-            // ADDED_TWO_AFTER_ONE 일 경우, 새로 추가된 카드들만 해석 결과에 표시할지, 아니면 전체를 표시할지 결정 필요.
-            // 현재는 tarotResult.cardInterpretations (API에서 받은 모든 카드 해석)를 순회함.
-            // 만약 추가된 카드만 보여주고 싶다면, cardInterpretations 배열을 필터링해야 함.
-            // (예: interp.cardId가 userProfile.선택된타로카드들.slice(userProfile.initialCardCount)에 포함되는 경우만)
+            // assistant_interpretation 에는 API가 해석해준 카드들(parsedChoiceResult.cardInterpretations)만 표시
             userProfile.tarotResult.cardInterpretations.forEach((interp, index) => {
                 let cardDisplayName = `카드 정보 없음 (${interp.cardId})`; 
                 if (TAROT_CARD_DATA && TAROT_CARD_DATA[interp.cardId] && TAROT_CARD_DATA[interp.cardId].name) {
@@ -1622,26 +1654,21 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                 if (!imageNameForFile.endsWith('_upright')) imageNameForFile += '_upright';
                 const cardImageUrl = `img/tarot/${imageNameForFile}.png`;
                 
-                // 카드 번호 표시: 전체 카드 중 몇 번째인지, 아니면 현재 단계에서 몇 번째인지.
-                // 여기서는 전체 카드 리스트에서의 인덱스를 사용 (index + 1)
-                let displayCardNumber = index + 1;
-                if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE' && index >= userProfile.initialCardCount) {
-                    // 추가된 카드의 경우, (이전 카드 수 + 1) 부터 시작하도록 조정 가능
-                    // displayCardNumber = (index - userProfile.initialCardCount) + 1; // 이렇게 하면 추가된 카드들만 1번부터 시작
-                    // 또는 전체 카드 번호 그대로 사용:
-                    displayCardNumber = index + 1; 
-                }
-
+                // "추가 타로 해석" 시, 카드 번호를 어떻게 매길지 (1, 2번인지 아니면 전체 중 2, 3번인지)
+                // 현재는 API가 반환한 cardInterpretations 배열의 인덱스를 따름.
+                let displayCardNumberInHtml = index + 1; 
+                // 만약 전체 카드 중 순서로 표시하고 싶다면,
+                // const actualCardIndexInProfile = userProfile.선택된타로카드들.indexOf(interp.cardId);
+                // if (actualCardIndexInProfile !== -1) displayCardNumberInHtml = actualCardIndexInProfile + 1;
 
                 assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
-                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${displayCardNumber}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
+                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${displayCardNumberInHtml}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
                 assistantInterpretationHTML += `<div class="interpretation-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
             });
             assistantInterpretationHTML += `</div>`;
         }
         
         let nextSampleAnswers = [];
-        // "2장 더 뽑기" 버튼 표시 조건: 현재 상담 단계가 INITIAL_ONE일 때만
         if (userProfile.tarotConsultationStage === 'INITIAL_ONE') { 
             nextSampleAnswers.push({ text: "2장 더 뽑기", value: "action_add_two_cards_phase1", actionType: 'message', cost:2, displayCostIcon: true, iconType:'bone' });
         }
