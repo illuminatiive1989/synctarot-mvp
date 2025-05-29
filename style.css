@@ -245,6 +245,16 @@ html, body {
     margin: 0;
     white-space: pre-wrap; /* 줄바꿈 및 공백 유지 */
 }
+.assistant-interpretation-container .card-name-keyword-text {
+    text-align: center !important; /* 카드 이름과 키워드는 항상 가운데 정렬 */
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.assistant-interpretation-container .card-brief-meaning-text {
+    text-align: left; /* briefMeaning은 왼쪽 정렬 유지 (또는 필요에 따라 center) */
+     /* 기존 .interpretation-text 스타일이 이미 적용되므로, 특별히 변경할 게 없다면 이 클래스 선택자는 생략 가능 */
+}
 .assistant-interpretation-container .interpretation-text b,
 .assistant-interpretation-container .interpretation-text strong {
     color: var(--emphasis-color); /* 강조색 동일하게 적용 */

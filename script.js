@@ -1574,8 +1574,8 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
 
     try {
         const choiceApiResponseObj = await callChatAPI(tarotChoicePrompt); 
-        const choiceResultText = await choiceApiResponseObj.text();
-        const parsedChoiceResult = JSON.parse(choiceResultText);
+        // choiceApiResponseObj.json()을 사용하여 실제 파싱된 JSON 객체를 가져옴
+        const parsedChoiceResult = await choiceApiResponseObj.json(); 
         
         userProfile.tarotResult = { 
             cardInterpretations: parsedChoiceResult.cardInterpretations 
@@ -1590,13 +1590,10 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         transPromptContext += `결정된 싱크타입: ${userProfile.결정된싱크타입 || '미결정'}\n`;
         transPromptContext += `사용자 소속 성운: ${userProfile.사용자소속성운 || '미결정'}\n`;
         transPromptContext += `DISC 점수: D(${userProfile.DISC_D_점수 || 0}), I(${userProfile.DISC_I_점수 || 0}), S(${userProfile.DISC_S_점수 || 0}), C(${userProfile.DISC_C_점수 || 0})\n`;
-        // 감정 상태는 "사용자의감정상태" 필드를 사용 (만약 Big5 점수를 감정 점수로 본다면 해당 필드 사용)
         transPromptContext += `사용자 감정 상태: ${userProfile.사용자의감정상태 || '알 수 없음'}\n`; 
-        // 만약 5대 성격 요인 점수를 보내고 싶다면:
-        // transPromptContext += `5대 성격 특성: 신경성(${userProfile.신경성||0}), 외향성(${userProfile.외향성||0}), 개방성(${userProfile.개방성||0}), 우호성(${userProfile.우호성||0}), 성실성(${userProfile.성실성||0})\n`;
         
         transPromptContext += `\n## 이전 대화 요약 (카드 선택 결과):\n`;
-        transPromptContext += `타로 상담 주제: ${actualTarotTopic}\n`; // 타로 주제도 명시적으로 전달
+        transPromptContext += `타로 상담 주제: ${actualTarotTopic}\n`;
         transPromptContext += `상담 단계: ${currentConsultationStage}\n`;
         transPromptContext += `전체 선택 카드: ${userProfile.선택된타로카드들.join(', ')}\n`;
         if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
@@ -1609,7 +1606,12 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         
         const transPrompt = LOADED_PROMPT_TAROT_TRANS + transPromptContext;
         const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory);
-        const finalInterpretationText = await transApiResponseObj.text();
+        // transApiResponseObj.json()을 사용하여 실제 파싱된 JSON 객체를 가져옴
+        const transApiJsonResult = await transApiResponseObj.json(); 
+        
+        // JSON.parse() 대신, API 응답에서 rubyMessage 필드를 직접 사용
+        const finalInterpretationText = transApiJsonResult.rubyMessage; 
+        // 필요하다면 suggestionType도 여기서 사용 가능: const suggestionType = transApiJsonResult.suggestionType;
         
         let assistantInterpretationHTML = "";
         if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
@@ -1664,9 +1666,10 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                     displayCardNumberInHtml = index + 1;
                 }
 
+                // 카드 이름과 키워드 부분을 감싸는 div에 새로운 클래스 추가 또는 인라인 스타일로 text-align: center 적용
                 assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
-                assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${displayCardNumberInHtml}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
-                assistantInterpretationHTML += `<div class="interpretation-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
+                assistantInterpretationHTML += `<div class="interpretation-text card-name-keyword-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${displayCardNumberInHtml}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
+                assistantInterpretationHTML += `<div class="interpretation-text card-brief-meaning-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
             });
             assistantInterpretationHTML += `</div>`;
         }
@@ -1679,7 +1682,7 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
 
         responseData = {
             assistant_interpretation: assistantInterpretationHTML, 
-            assistantmsg: finalInterpretationText, 
+            assistantmsg: finalInterpretationText, // 여기서 finalInterpretationText는 rubyMessage의 내용임
             tarocardview: false, cards_to_select: null,
             sampleAnswers: nextSampleAnswers,
             importance: 'low', disableChatInput: true, 
@@ -3163,7 +3166,6 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
             }
             requestBody.contents.push({ role: "user", parts: [{ text: promptContent }] });
             
-            // 요청 본문 전체 출력으로 변경
             console.log(`[API] 요청 본문 (시도 ${attempt + 1}):`, JSON.stringify(requestBody));
 
             const response = await fetch(API_URL, {
@@ -3180,30 +3182,58 @@ async function callChatAPI(promptContent, chatHistory = [], maxRetries = 3) {
             }
 
             const responseJson = await response.json();
-            // 응답 본문 전체 출력으로 변경
             console.log("[API] 응답 성공 (시도 " + (attempt + 1) + "):", JSON.stringify(responseJson));
 
-            if (!responseJson.candidates || !responseJson.candidates[0] || !responseJson.candidates[0].content || !responseJson.candidates[0].content.parts || !responseJson.candidates[0].content.parts[0] || typeof responseJson.candidates[0].content.parts[0].text !== 'string') {
-                console.error("[API] 응답 형식이 예상과 다릅니다:", responseJson);
+            // 응답 구조 확인: responseJson.candidates[0].content.parts[0].text 에 JSON 문자열이 있는지,
+            // 아니면 responseJson 자체가 우리가 원하는 최종 JSON 객체인지 확인 필요.
+            // 현재 프롬프트는 JSON 객체 자체를 반환하도록 요청하고 있음.
+            // 따라서, Gemini API가 "```json\n{...}\n```" 와 같이 마크다운 코드 블록으로 감싸서 반환하는 경우가 있는지 확인.
+            
+            let rawTextOutput = "";
+            if (responseJson.candidates && responseJson.candidates[0] && responseJson.candidates[0].content && responseJson.candidates[0].content.parts && responseJson.candidates[0].content.parts[0] && typeof responseJson.candidates[0].content.parts[0].text === 'string') {
+                rawTextOutput = responseJson.candidates[0].content.parts[0].text;
+            } else {
+                // 예외적인 경우, responseJson 자체가 문자열화된 JSON일 수 있음 (Gemini 모델에 따라 다름)
+                // 또는, 원하는 데이터가 다른 경로에 있을 수 있음.
+                // 지금은 candidates 경로를 기본으로 함.
+                console.error("[API] 응답에서 예상된 텍스트 경로를 찾을 수 없습니다:", responseJson);
                 throw new Error("API 응답에서 유효한 텍스트를 찾을 수 없습니다.");
             }
             
-            let rawText = responseJson.candidates[0].content.parts[0].text;
-            if (rawText.startsWith("```json")) {
-                rawText = rawText.substring(7); 
-            } else if (rawText.startsWith("```")) { 
-                rawText = rawText.substring(3);
+            // Gemini가 JSON 문자열을 반환할 때 마크다운 코드 블록(```json ... ```)으로 감싸는 경우가 있으므로 제거
+            if (rawTextOutput.startsWith("```json")) {
+                rawTextOutput = rawTextOutput.substring(7); 
+            } else if (rawTextOutput.startsWith("```")) { 
+                rawTextOutput = rawTextOutput.substring(3);
             }
-            if (rawText.endsWith("```")) {
-                rawText = rawText.substring(0, rawText.length - 3);
+            if (rawTextOutput.endsWith("```")) {
+                rawTextOutput = rawTextOutput.substring(0, rawTextOutput.length - 3);
             }
-            rawText = rawText.trim(); 
+            rawTextOutput = rawTextOutput.trim(); 
 
-            return { 
-                json: () => Promise.resolve(responseJson), 
-                text: () => Promise.resolve(rawText), 
-                ok: true 
-            };
+            // rawTextOutput이 이제 순수한 JSON 문자열이라고 가정하고 파싱 시도
+            try {
+                const parsedJson = JSON.parse(rawTextOutput);
+                // 성공적으로 파싱되면, 이 JSON 객체를 반환 (text()는 이 객체를 다시 문자열화, json()은 객체 그대로)
+                return { 
+                    json: () => Promise.resolve(parsedJson), // 실제 JSON 객체 반환
+                    text: () => Promise.resolve(rawTextOutput),  // 정제된 JSON 문자열 반환
+                    ok: true 
+                };
+            } catch (parseError) {
+                // JSON 파싱 실패 시, rawTextOutput이 JSON이 아니었음을 의미.
+                // 이 경우, rawTextOutput을 일반 텍스트로 간주하고 반환.
+                // (tarottrans.ini의 경우, JSON을 반환해야 하므로 여기서 에러 발생 가능성 있음)
+                console.warn("[API] 반환된 텍스트가 JSON 형식이 아니거나 파싱에 실패했습니다. 일반 텍스트로 처리합니다:", rawTextOutput, parseError);
+                // tarottrans.ini의 경우, JSON을 기대하므로, 파싱 실패는 오류로 간주해야 할 수 있음.
+                // 여기서는 일단 텍스트로 반환하나, 호출부에서 JSON.parse() 실패 시 에러 처리 필요.
+                // 또는 여기서 throw new Error("API가 유효한 JSON을 반환하지 않았습니다."); 로 처리 가능
+                 return { 
+                    json: () => Promise.reject(new Error("API 응답이 유효한 JSON이 아님: " + rawTextOutput)), // JSON 변환 실패
+                    text: () => Promise.resolve(rawTextOutput), // 원본 텍스트 (JSON이 아닐 수 있음)
+                    ok: true // HTTP 응답은 성공했으므로 ok는 true
+                };
+            }
 
         } catch (error) {
             console.error(`[API] 호출 시도 ${attempt + 1} 실패:`, error);
