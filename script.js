@@ -703,25 +703,32 @@ function sanitizeBotHtml(htmlString) {
         }
     }
 
-async function addMessage(data, type, options = {}) { // 첫 번째 인자를 data 객체로 받거나, 텍스트와 타입을 분리
+async function addMessage(data, type, options = {}) {
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message');
     
     let textContentForLog = "";
+    let tarotImageToDisplay = null; // 표시할 타로 이미지 경로
+
     if (typeof data === 'string') {
         textContentForLog = data;
     } else if (data && typeof data.text === 'string') {
         textContentForLog = data.text;
-    } else if (data && typeof data.interpretationHtml === 'string') { // 조수 해석용 객체
+        if (data.tarotImg) tarotImageToDisplay = data.tarotImg; // 데이터 객체에서 tarotImg 경로 추출
+    } else if (data && typeof data.interpretationHtml === 'string') {
         textContentForLog = "조수 해석 컨텐츠";
+    } else if (data && data.assistantmsg && typeof data.assistantmsg === 'string') { // simulateBotResponse 응답 객체 직접 처리
+        textContentForLog = data.assistantmsg;
+        if (data.tarotImg) tarotImageToDisplay = data.tarotImg;
     }
 
-    console.log(`[Message] '${type}' 메시지 추가 시작: "${textContentForLog.substring(0, 70)}..."`);
+
+    console.log(`[Message] '${type}' 메시지 추가 시작: "${textContentForLog.substring(0, 70)}..."`, tarotImageToDisplay ? `이미지: ${tarotImageToDisplay}` : "");
 
     return new Promise(async (resolveAllMessagesAdded) => {
         if (type === 'user') {
             messageDiv.classList.add('user-message');
-            messageDiv.textContent = typeof data === 'string' ? data : data.text; // data가 문자열일 수도 객체일 수도 있음
+            messageDiv.textContent = typeof data === 'string' ? data : (data.text || data.assistantmsg);
             if (chatMessages) chatMessages.appendChild(messageDiv);
             requestAnimationFrame(() => {
                 adjustChatMessagesPadding();
@@ -731,15 +738,23 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
             });
         } else if (type === 'bot') {
             messageDiv.classList.add('bot-message');
-            // 만약 data.isAssistantInterpretation 플래그가 true이면 특별 클래스 추가
+            
+            // 타로 이미지 표시 (tarotImageToDisplay가 유효할 경우)
+            if (tarotImageToDisplay) {
+                const imgElement = document.createElement('img');
+                // 이미지 경로는 실제 파일 위치에 맞게 조정 필요 (예: 'img/tarot/')
+                imgElement.src = `img/tarot/${tarotImageToDisplay}`; 
+                imgElement.alt = "타로 카드 이미지";
+                imgElement.className = 'chat-embedded-image tarot-card-in-message'; // 클래스 추가
+                messageDiv.appendChild(imgElement);
+            }
+
             if (data && data.isAssistantInterpretation) {
-                messageDiv.classList.add('assistant-type-message'); // 이 클래스로 CSS에서 패딩 등 조절
-                // 내부 컨테이너 직접 생성
+                messageDiv.classList.add('assistant-type-message');
                 const interpretationContainer = document.createElement('div');
                 interpretationContainer.className = 'assistant-interpretation-container';
-                // data.interpretationHtml은 이미 HTML 문자열로 가정 (sanitize는 simulateBotResponse에서 미리 처리)
                 interpretationContainer.innerHTML = sanitizeBotHtml(data.interpretationHtml);
-                messageDiv.appendChild(interpretationContainer);
+                messageDiv.appendChild(interpretationContainer); // 이미지 다음에 해석 컨테이너 추가
                 if (chatMessages) chatMessages.appendChild(messageDiv);
                 requestAnimationFrame(() => {
                     adjustChatMessagesPadding();
@@ -747,8 +762,7 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
                     console.log("[Message] 조수 해석 메시지 DOM 추가 완료.");
                     resolveAllMessagesAdded();
                 });
-
-            } else { // 일반 봇 메시지 (루비)
+            } else {
                 if (chatMessages) chatMessages.appendChild(messageDiv);
                 
                 requestAnimationFrame(() => {
@@ -756,12 +770,16 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
                     scrollToBottom();
                 });
 
-                const textToType = typeof data === 'string' ? data : data.text; // 일반 봇 메시지 텍스트
+                const textToType = typeof data === 'string' ? data : (data.text || data.assistantmsg);
                 const sanitizedHtml = sanitizeBotHtml(textToType);
                 
-                const tempContainer = document.createElement('div');
+                const tempContainer = document.createElement('div'); // 텍스트 부분만 담을 임시 컨테이너
                 tempContainer.innerHTML = sanitizedHtml;
 
+                // 텍스트 타이핑 로직은 messageDiv의 자식으로 tempContainer 내용을 옮기는 방식
+                // 또는 messageDiv에 직접 텍스트 노드와 요소들을 추가
+                // 여기서는 messageDiv에 직접 추가하는 방식으로 수정
+                
                 const typingChunks = [];
                 function extractChunksRecursive(node) {
                     if (node.nodeType === Node.TEXT_NODE) {
@@ -769,56 +787,56 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
                         if (textContent.trim() !== '') {
                             const words = textContent.match(/\S+\s*|\S/g) || [];
                             words.forEach(word => {
-                                if (word.trim() !== '') {
-                                    typingChunks.push({ type: 'text_word', content: word });
-                                } else if (word.length > 0) {
-                                    typingChunks.push({ type: 'text_whitespace', content: word });
-                                }
+                                if (word.trim() !== '') typingChunks.push({ type: 'text_word', content: word });
+                                else if (word.length > 0) typingChunks.push({ type: 'text_whitespace', content: word });
                             });
                         } else if (textContent.length > 0) {
                             typingChunks.push({ type: 'text_whitespace', content: textContent });
                         }
                     } else if (node.nodeType === Node.ELEMENT_NODE) {
                         const tagName = node.tagName.toLowerCase();
-                        if (tagName === 'img') {
-                            typingChunks.push({ type: 'element_immediate', element: node.cloneNode(true) });
+                        // 이미지는 위에서 별도 처리했으므로, 여기서는 텍스트 내의 다른 태그들만 고려
+                        if (tagName === 'img' && node.classList.contains('chat-embedded-image')) {
+                            // 이미 messageDiv에 추가된 이미지는 건너뜀
                         } else if (tagName === 'br') {
                             typingChunks.push({ type: 'br_tag' });
-                        } else {
+                        } else { // b, strong, span 등
                             typingChunks.push({ type: 'open_tag', tagName: tagName, attributes: Array.from(node.attributes) });
                             Array.from(node.childNodes).forEach(extractChunksRecursive);
                             typingChunks.push({ type: 'close_tag', tagName: tagName });
                         }
                     }
                 }
-
+                
+                // tempContainer (sanitizedHtml을 담은) 에서 청크 추출
                 Array.from(tempContainer.childNodes).forEach(extractChunksRecursive);
-                let currentContextElement = messageDiv;
+                
+                let currentContextElement = messageDiv; // 텍스트가 추가될 현재 위치 (이미지 뒤)
 
                 for (let i = 0; i < typingChunks.length; i++) {
                     const chunk = typingChunks[i];
-                    if (chunk.type === 'element_immediate') {
-                        currentContextElement.appendChild(chunk.element);
-                    } else {
-                        await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
-                        if (chunk.type === 'text_word') {
-                            const wordSpan = document.createElement('span');
-                            wordSpan.className = 'message-text-chunk-animated';
-                            wordSpan.textContent = chunk.content;
-                            currentContextElement.appendChild(wordSpan);
-                        } else if (chunk.type === 'text_whitespace') {
-                            currentContextElement.appendChild(document.createTextNode(chunk.content));
-                        } else if (chunk.type === 'br_tag') {
-                            currentContextElement.appendChild(document.createElement('br'));
-                        } else if (chunk.type === 'open_tag') {
-                            const newElement = document.createElement(chunk.tagName);
-                            chunk.attributes.forEach(attr => newElement.setAttribute(attr.name, attr.value));
-                            currentContextElement.appendChild(newElement);
-                            currentContextElement = newElement;
-                        } else if (chunk.type === 'close_tag') {
-                            if (currentContextElement.tagName.toLowerCase() === chunk.tagName && currentContextElement.parentElement && currentContextElement !== messageDiv) {
-                                currentContextElement = currentContextElement.parentElement;
-                            }
+                    // 이미지 요소는 이미 위에서 추가했으므로 여기서 다시 추가하지 않음
+                    // if (chunk.type === 'element_immediate') { ... } 이 부분 제거 또는 수정
+                    
+                    await new Promise(resolve => setTimeout(resolve, TYPING_CHUNK_DELAY_MS));
+                    if (chunk.type === 'text_word') {
+                        const wordSpan = document.createElement('span');
+                        wordSpan.className = 'message-text-chunk-animated';
+                        wordSpan.textContent = chunk.content;
+                        currentContextElement.appendChild(wordSpan);
+                    } else if (chunk.type === 'text_whitespace') {
+                        currentContextElement.appendChild(document.createTextNode(chunk.content));
+                    } else if (chunk.type === 'br_tag') {
+                        currentContextElement.appendChild(document.createElement('br'));
+                    } else if (chunk.type === 'open_tag') {
+                        const newElement = document.createElement(chunk.tagName);
+                        chunk.attributes.forEach(attr => newElement.setAttribute(attr.name, attr.value));
+                        currentContextElement.appendChild(newElement);
+                        currentContextElement = newElement;
+                    } else if (chunk.type === 'close_tag') {
+                        // 현재 컨텍스트가 messageDiv 자체가 아니면서, 닫으려는 태그와 일치할 때만 부모로 이동
+                        if (currentContextElement !== messageDiv && currentContextElement.tagName.toLowerCase() === chunk.tagName && currentContextElement.parentElement) {
+                            currentContextElement = currentContextElement.parentElement;
                         }
                     }
                     if (i % 3 === 0 || i === typingChunks.length - 1) {
@@ -833,10 +851,9 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
                 console.log("[Message] 봇 메시지(루비) 타이핑 완료.");
                 resolveAllMessagesAdded();
             }
-
         } else if (type === 'system') {
             messageDiv.classList.add('system-message');
-            messageDiv.textContent = typeof data === 'string' ? data : data.text;
+            messageDiv.textContent = typeof data === 'string' ? data : (data.text || data.assistantmsg);
             if (chatMessages) chatMessages.appendChild(messageDiv);
             requestAnimationFrame(() => {
                 adjustChatMessagesPadding();
@@ -846,7 +863,7 @@ async function addMessage(data, type, options = {}) { // 첫 번째 인자를 da
             });
         } else {
             console.warn(`[Message] 알 수 없는 메시지 타입: ${type}`);
-            resolveAllMessagesAdded(); // 알 수 없는 타입도 일단 Promise는 resolve
+            resolveAllMessagesAdded();
         }
     });
 }
@@ -1061,6 +1078,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
     }
+    // ... (기존 유효성 검사 로직 유지) ...
     if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && buttonData.actionType === 'confirm_cost') && source !== 'system_internal_no_user_echo') {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지 또는 특정 내부 호출 아님).");
         return;
@@ -1071,7 +1089,6 @@ async function processMessageExchange(messageText, source = 'input', options = {
         shouldClearChat = true;
         hasUserSentMessage = true;
         userProfile.메뉴단계 = 2;
-        console.log("[ProcessExchange] 사용자의 첫 상호작용. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
     }
 
     if (shouldClearChat) {
@@ -1103,36 +1120,6 @@ async function processMessageExchange(messageText, source = 'input', options = {
     
     const effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
 
-    // === 수정된 부분: API 히스토리 추가 로직 변경 ===
-    // simulateBotResponse를 호출하기 전에, 현재 사용자 입력을 chatHistoryForAPI에 추가합니다.
-    // 단, "카드 선택 완료"와 같이 내부적으로 처리되는 메시지는 해당 핸들러에서 직접 추가합니다.
-    if (source === 'input' || 
-        (source === 'sample_button' && buttonData && (buttonData.actionType === 'message' || buttonData.actionType === 'choice'))) {
-        // 'choice' 액션은 사용자가 버튼 텍스트를 입력한 것으로 간주하여 히스토리에 추가합니다.
-        // 'confirm_cost', 'cancel_cost'는 사용자의 직접적인 대화 내용이 아니므로 제외.
-        // effectiveMessageForAPI는 버튼의 value (action_select_one_card 등) 일 수 있으므로,
-        // 사용자가 실제로 본 텍스트 (textForUserDisplay)를 히스토리에 넣는 것이 더 적절할 수 있음.
-        // 여기서는 사용자가 최종적으로 API와 상호작용하는 "의도"인 effectiveMessageForAPI를 기준으로 하되,
-        // 이것이 action_... 형태이면, 해당 action을 유발한 사용자 인터랙션 텍스트를 넣어야 함.
-        // 현재는 effectiveMessageForAPI가 action_... 형태의 값일 수 있음.
-        // => handleDefaultMessage, handleCardSelectionComplete 등에서 API 호출 전에 적절한 형태로 사용자 메시지를 구성하여 추가하는 것이 더 좋음.
-        // 이 부분은 각 simulateBotResponse의 핸들러 함수들이 API 호출 전에 chatHistoryForAPI에 직접 추가하도록 변경했으므로, 여기서는 중복 추가를 피합니다.
-        // 단, handleDefaultMessage를 호출할 경우에는 사용자 입력이 history에 있어야 함.
-        if (effectiveMessageForAPI !== "카드 선택 완료" && // "카드 선택 완료"는 handleCardSelectionComplete에서 처리
-            !effectiveMessageForAPI.startsWith("action_confirm_") && // 비용 확인 액션은 다음 턴에 API 호출하므로 지금 추가 안함
-            !effectiveMessageForAPI.startsWith("action_cancel_") && // 취소는 API 호출 안함
-            !(effectiveMessageForAPI.startsWith("action_deep_analysis_") && !effectiveMessageForAPI.includes("_cost")) // 비용확인 전 단계의 deep_analysis도 지금 추가안함
-           ) {
-            // 위의 조건에 해당하지 않는 일반적인 사용자 입력이나 선택(choice)의 경우
-            // chatHistoryForAPI.push(formatChatHistoryForAPI(textForUserDisplay, 'user'));
-            // console.log("[API History] 사용자 메시지/선택(버튼텍스트) 추가:", textForUserDisplay);
-            // => 이 로직은 simulateBotResponse 내부의 각 핸들러가 API 호출 직전에 수행하도록 이전.
-            // => 특히, handleDefaultMessage를 호출할 경우, 해당 함수 내에서 API 호출 전에 현재 effectiveMessageForAPI를 사용자 메시지로 추가해야함.
-        }
-    }
-    // ==========================================
-
-
     if (source === 'input' && messageInput) {
         messageInput.value = '';
         adjustTextareaHeight();
@@ -1142,7 +1129,8 @@ async function processMessageExchange(messageText, source = 'input', options = {
         const botApiResponse = await simulateBotResponse(effectiveMessageForAPI);
         
         if (botApiResponse.user_profile_update) {
-            for (const key in botApiResponse.user_profile_update) {
+            // ... (프로필 업데이트 로직) ...
+             for (const key in botApiResponse.user_profile_update) {
                 if (key !== "bones") {
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
                         userProfile[key] = botApiResponse.user_profile_update[key];
@@ -1153,14 +1141,25 @@ async function processMessageExchange(messageText, source = 'input', options = {
                 saveUserProfileToLocalStorage(userProfile);
             }
         }
-
-        if (botApiResponse.assistant_interpretation && typeof botApiResponse.assistant_interpretation === 'string') {
-            await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
-        }
-
-        if (botApiResponse.assistantmsg) { // systemMessageOnConfirm 보다 우선순위 (API 응답이므로)
-            await addMessage(botApiResponse.assistantmsg, 'bot');
-        } else if (botApiResponse.systemMessageOnConfirm) {
+        
+        // addMessage에 전달할 데이터 객체 생성 (tarotImg 포함 가능성)
+        const messageDataForBot = {
+            assistantmsg: botApiResponse.assistantmsg, // simulateBotResponse가 반환하는 주요 텍스트
+            tarotImg: botApiResponse.tarotImg || null, // simulateBotResponse가 반환하는 이미지 경로
+            isAssistantInterpretation: botApiResponse.assistant_interpretation ? true : false, // 조수 해석 여부
+            interpretationHtml: botApiResponse.assistant_interpretation // 조수 해석 HTML
+        };
+        
+        // isAssistantInterpretation이 true이면 해당 타입으로 메시지 추가
+        if (messageDataForBot.isAssistantInterpretation) {
+            await addMessage(messageDataForBot, 'bot');
+        } 
+        // 그렇지 않고 assistantmsg (또는 tarotImg)가 있으면 일반 봇 메시지로 추가
+        else if (messageDataForBot.assistantmsg || messageDataForBot.tarotImg) { 
+            await addMessage(messageDataForBot, 'bot');
+        } 
+        // 시스템 메시지가 있다면 표시
+        else if (botApiResponse.systemMessageOnConfirm) {
              await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
         }
         
@@ -1168,10 +1167,12 @@ async function processMessageExchange(messageText, source = 'input', options = {
             botApiResponse.sampleAnswers || [], 
             botApiResponse.importance || 'low',
             botApiResponse.isConfirmationStage || false,
-            botApiResponse.assistantmsg && botApiResponse.isConfirmationStage ? botApiResponse.assistantmsg : null
+            // 확인 단계 프롬프트는 assistantmsg가 아닌, 별도 필드나 조건으로 명확히 하는 것이 좋으나 일단 유지
+            (botApiResponse.isConfirmationStage && botApiResponse.assistantmsg) ? botApiResponse.assistantmsg : null
         );
 
         if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
+            // ... (타로 UI 로직) ...
             if (messageInput && document.activeElement === messageInput) messageInput.blur();
             let currentTarotBg = userProfile.tarotbg || 'default.png';
             const bgSource = menuItemData || (source === 'sample_button' && buttonData ? buttonData : null);
@@ -1184,6 +1185,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         }
 
     } catch (error) {
+        // ... (오류 처리 로직) ...
         console.error("[ProcessExchange] 오류 발생:", error);
         await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
         const fallbackSampleAnswers = (typeof initialBotMessage !== 'undefined' && initialBotMessage.sampleAnswers) 
@@ -1191,6 +1193,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
             : [{text: "도움말", value: "도움말", actionType: 'message'}];
         await updateSampleAnswers(fallbackSampleAnswers);
     } finally {
+        // ... (finally 로직) ...
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
         const shouldFocus = (source === 'input' && !isTarotSelectionActive);
@@ -2062,18 +2065,29 @@ function formatChatHistoryForAPI(messageText, role = 'user') {
 async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistory, additionalSystemInstruction = null) {
     if (!API_KEY) {
         console.error("[API] Gemini API 키가 설정되지 않았습니다.");
-        return { error: "API 키가 없습니다.", assistantmsg: "API 통신 오류: API 키가 설정되지 않았습니다. 관리자에게 문의하세요.", parsedSampleAnswers: [] };
+        return { error: "API 키가 없습니다.", assistantmsg: "API 통신 오류: API 키가 설정되지 않았습니다. 관리자에게 문의하세요.", parsedSampleAnswers: [], tarotImg: null };
     }
     if (!tarotIniContent) {
         console.error("[API] tarot.ini 프롬프트 내용이 없습니다.");
-        return { error: "tarot.ini 내용 없음", assistantmsg: "API 통신 오류: 타로 프롬프트 파일을 불러올 수 없습니다.", parsedSampleAnswers: [] };
+        return { error: "tarot.ini 내용 없음", assistantmsg: "API 통신 오류: 타로 프롬프트 파일을 불러올 수 없습니다.", parsedSampleAnswers: [], tarotImg: null };
     }
     if (!currentChatHistory || currentChatHistory.length === 0) {
         console.error("[API] 호출 중단: currentChatHistory (contents)가 비어 있습니다.");
-        return { error: "Contents 비어있음", assistantmsg: "API 통신 오류: 전달할 대화 내용이 없습니다.", parsedSampleAnswers: [] };
+        return { error: "Contents 비어있음", assistantmsg: "API 통신 오류: 전달할 대화 내용이 없습니다.", parsedSampleAnswers: [], tarotImg: null };
     }
 
     console.log("[API] Gemini API 호출 시작...");
+    
+    // 선택된 타로 카드 정보 문자열 생성 (API 프롬프트용)
+    let selectedCardsInfoForPrompt = "없음";
+    if (userProfileData.선택된타로카드들 && userProfileData.선택된타로카드들.length > 0) {
+        selectedCardsInfoForPrompt = userProfileData.선택된타로카드들.map((cardId, index) => {
+            const cardName = TAROT_CARD_DATA[cardId] ? TAROT_CARD_DATA[cardId].name : cardId.replace(/_/g, " ");
+            return `${index + 1}. ${cardName} (${cardId})`; // 카드 이름과 ID 함께 전달
+        }).join(', ');
+    }
+    console.log("[API] 프롬프트용 선택된 카드 정보:", selectedCardsInfoForPrompt);
+
 
     const systemPromptParts = [
         { text: "## 시스템 지침 (System Instruction):\n당신은 사용자의 타로 카드 점괘를 해석하고 조언하는 숙련된 타로 리더 '루비'입니다. 친절하고 공감하는 어투를 사용하며, 사용자의 상황에 맞는 깊이 있는 해석을 제공해야 합니다. 사용자의 프로필 정보와 이전 대화 내용을 참고하여 개인화된 답변을 생성하십시오.\n" },
@@ -2090,7 +2104,7 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             `- 소속 성운: ${userProfileData.사용자소속성운 || "미결정"}\n` +
             `- 맞춤 싱크타입 이름: ${userProfileData.맞춤싱크타입이름 || "정보 없음"}\n` +
             `- 현재 감정 상태: ${userProfileData.사용자의감정상태 || "알 수 없음"}\n` +
-            `- 선택된 타로 카드: ${ (userProfileData.선택된타로카드들 && userProfileData.선택된타로카드들.length > 0) ? userProfileData.선택된타로카드들.map(cardId => (TAROT_CARD_DATA[cardId] ? TAROT_CARD_DATA[cardId].name : cardId)).join(', ') : "없음"}\n`
+            `- ⭐현재 선택된 타로 카드 (순서대로 명시, 이 카드들을 중심으로 해석): ${selectedCardsInfoForPrompt}\n` // API가 카드 정보를 명확히 알도록 수정
         }
     ];
     
@@ -2109,7 +2123,10 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
     };
 
     console.log("[API] 요청 URL:", API_URL);
-    console.log("[API] 요청 본문 (Request Body):", JSON.stringify(requestBody, null, 2));
+    // console.log("[API] 요청 본문 (Request Body):", JSON.stringify(requestBody, null, 2)); // 너무 길어서 일단 주석
+    console.log("[API] 요청 본문 (Contents만 일부 로깅):", JSON.stringify(requestBody.contents.slice(-2), null, 2)); // 마지막 2개 대화만 로깅
+    console.log("[API] 요청 본문 (SystemInstruction 일부 로깅): 사용자 프로필 부분만:", systemPromptParts.find(p => p.text.startsWith("\n## 사용자 프로필 정보")));
+
 
     try {
         const response = await fetch(API_URL, {
@@ -2122,67 +2139,67 @@ async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistor
             const errorBodyText = await response.text();
             console.error(`[API] Gemini API 오류 응답: ${response.status} ${response.statusText}`, errorBodyText);
             let errorMessage = `API 오류: ${response.status}`;
-            try {
-                const errorJson = JSON.parse(errorBodyText);
-                if (errorJson.error && errorJson.error.message) errorMessage = errorJson.error.message;
-                else errorMessage = errorBodyText;
-            } catch (e) { errorMessage = errorBodyText; }
+            try { const errorJson = JSON.parse(errorBodyText); if (errorJson.error && errorJson.error.message) errorMessage = errorJson.error.message; else errorMessage = errorBodyText; } catch (e) { errorMessage = errorBodyText; }
             throw new Error(errorMessage);
         }
 
         const responseData = await response.json();
-        console.log("[API] Gemini API 응답 성공 (Raw):", JSON.stringify(responseData, null, 2));
+        console.log("[API] Gemini API 응답 성공 (Raw Candidate[0]):", responseData.candidates ? JSON.stringify(responseData.candidates[0], null, 2) : "Candidates 없음");
+
 
         let assistantMessageText = "죄송합니다, AI 모델로부터 유효한 응답을 받지 못했습니다.";
-        let parsedSampleAnswers = []; // 파싱된 샘플 답변 저장용
+        let parsedSampleAnswers = [];
+        let parsedTarotImg = null; // 파싱된 tarotImg 저장용
 
         if (responseData.candidates && responseData.candidates.length > 0 && responseData.candidates[0].content && responseData.candidates[0].content.parts && responseData.candidates[0].content.parts.length > 0) {
             let rawText = responseData.candidates[0].content.parts[0].text;
             console.log("[API] 추출된 Raw 응답 텍스트:", rawText);
 
-            // JSON 블록 추출 및 파싱 시도
-            const jsonRegex = /```json\s*([\s\S]*?)\s*```/; // ```json ... ``` 패턴
+            const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
             const jsonMatch = rawText.match(jsonRegex);
 
             if (jsonMatch && jsonMatch[1]) {
                 try {
                     const parsedJson = JSON.parse(jsonMatch[1]);
-                    assistantMessageText = parsedJson.msg || rawText.replace(jsonRegex, "").trim(); // JSON의 msg 사용, 없으면 JSON 제거한 텍스트
-                    if (Array.isArray(parsedJson.sampleanswer)) {
-                        parsedSampleAnswers = parsedJson.sampleanswer;
-                    }
-                    console.log("[API] JSON 파싱 성공: msg=", assistantMessageText, "sampleanswer=", parsedSampleAnswers);
+                    assistantMessageText = parsedJson.msg || rawText.replace(jsonRegex, "").trim();
+                    if (Array.isArray(parsedJson.sampleanswer)) parsedSampleAnswers = parsedJson.sampleanswer;
+                    if (parsedJson.tarotImg && typeof parsedJson.tarotImg === 'string') parsedTarotImg = parsedJson.tarotImg; // tarotImg 추출
+
+                    console.log("[API] JSON 파싱 성공: msg=", assistantMessageText, "sampleanswer=", parsedSampleAnswers, "tarotImg=", parsedTarotImg);
                 } catch (e) {
                     console.warn("[API] 응답 내 JSON 파싱 실패, 전체 텍스트를 assistantmsg로 사용:", e);
-                    assistantMessageText = rawText; // 파싱 실패 시 원본 텍스트 사용
+                    assistantMessageText = rawText;
                 }
             } else {
-                assistantMessageText = rawText; // JSON 블록 없음
+                assistantMessageText = rawText;
                 console.log("[API] JSON 블록 없음, 전체 텍스트를 assistantmsg로 사용.");
             }
             
-            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model')); // 정제된 메시지를 기록
-            return { assistantmsg: assistantMessageText, parsedSampleAnswers: parsedSampleAnswers };
+            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
+            return { assistantmsg: assistantMessageText, parsedSampleAnswers: parsedSampleAnswers, tarotImg: parsedTarotImg };
 
         } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
+            // ... (기존 차단 처리 로직)
             console.warn("[API] Gemini API 요청 차단됨:", responseData.promptFeedback.blockReason, responseData.promptFeedback.safetyRatings);
             assistantMessageText = `죄송합니다. 요청이 안전 문제로 인해 차단되었습니다. (${responseData.promptFeedback.blockReason})`;
             if (responseData.promptFeedback.safetyRatings) {
                 assistantMessageText += " 세부 정보: " + responseData.promptFeedback.safetyRatings.map(r => `${r.category} - ${r.probability}`).join(', ');
             }
             chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
-            return { assistantmsg: assistantMessageText, error: `Blocked: ${responseData.promptFeedback.blockReason}`, parsedSampleAnswers: [] };
+            return { assistantmsg: assistantMessageText, error: `Blocked: ${responseData.promptFeedback.blockReason}`, parsedSampleAnswers: [], tarotImg: null };
         } else {
+            // ... (기존 유효 콘텐츠 없음 처리 로직)
             console.warn("[API] Gemini API 응답에서 유효한 콘텐츠를 찾을 수 없음.");
             chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessageText, 'model'));
-            return { assistantmsg: assistantMessageText, error: "No valid content in API response", parsedSampleAnswers: [] };
+            return { assistantmsg: assistantMessageText, error: "No valid content in API response", parsedSampleAnswers: [], tarotImg: null };
         }
 
     } catch (error) {
+        // ... (기존 예외 처리 로직)
         console.error("[API] Gemini API 호출 중 예외 발생:", error.message);
         const errorMessageForChat = `죄송합니다. AI 모델과 통신 중 오류가 발생했습니다: ${error.message}`;
         chatHistoryForAPI.push(formatChatHistoryForAPI(errorMessageForChat, 'model'));
-        return { assistantmsg: errorMessageForChat, error: error.message, parsedSampleAnswers: [] };
+        return { assistantmsg: errorMessageForChat, error: error.message, parsedSampleAnswers: [], tarotImg: null };
     }
 }
 
@@ -2413,13 +2430,41 @@ async function handleConfirmDeepAnalysisCost(userMessageText) {
 }
 
 async function handleDefaultMessage(userMessageText) {
-    console.log("[SimulateResponse] handleDefaultMessage 실행 (API 호출로 변경):", userMessageText);
+    console.log("[SimulateResponse] handleDefaultMessage 실행:", userMessageText);
+
+    // "오늘의 운세 보여줘" 또는 유사 키워드 감지
+    const lowerUserMessage = userMessageText.toLowerCase();
+    if (lowerUserMessage.includes("오늘의 운세") || lowerUserMessage.includes("오늘 운세")) {
+        console.log("[SimulateResponse] '오늘의 운세' 요청 감지. 카드 뽑기 단계로 안내.");
+        // 사용자 메시지를 히스토리에 추가
+        const userMessageEntry = formatChatHistoryForAPI(userMessageText, 'user');
+         if (chatHistoryForAPI.length === 0 || 
+            !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'user' && 
+              chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === userMessageText)) {
+            chatHistoryForAPI.push(userMessageEntry);
+        }
+        // 봇의 안내 메시지도 히스토리에 추가
+        const fortuneIntroMsg = "오늘의 운세를 보려면 먼저 카드를 뽑아야 해. 😊<br>몇 장으로 볼까?";
+        chatHistoryForAPI.push(formatChatHistoryForAPI(fortuneIntroMsg, 'model'));
+        
+        return {
+            assistantmsg: fortuneIntroMsg,
+            tarocardview: false,
+            cards_to_select: null,
+            sampleAnswers: [ // "카드 뽑기"와 동일한 선택지 제공
+                { text: "1장", value: "action_select_one_card", cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' },
+                { text: "3장", value: "action_select_three_cards", cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
+            ],
+            importance: 'low',
+            user_profile_update: {}
+        };
+    }
+
 
     if (!userMessageText || userMessageText.trim() === "") {
+        // ... (기존 빈 메시지 처리 로직)
         console.warn("[SimulateResponse] handleDefaultMessage: 빈 메시지 수신, 기본 응답 처리.");
         const emptyMsgResponse = "죄송해요, 잘 이해하지 못했어요. 좀 더 자세히 말씀해주시겠어요?";
-        // 빈 메시지 입력에 대한 봇의 응답도 히스토리에 추가
-        // chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user')); // 사용자는 빈 메시지 보냄 (선택사항)
         chatHistoryForAPI.push(formatChatHistoryForAPI(emptyMsgResponse, 'model'));
         return {
             assistantmsg: emptyMsgResponse,
@@ -2442,9 +2487,9 @@ async function handleDefaultMessage(userMessageText) {
     }
 
     const tarotIni = await fetchTarotIniContent();
-    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)를 JSON 코드 블록 안에 포함해야 합니다. 예시: ```json\\n{\\n  \"msg\": \"[여기에 짧은 답변]\",\\n  \"sampleanswer\": [\"질문1\", \"질문2\"]\n}\\n```";
+    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)와, 해당 답변과 관련된 타로 카드 이미지가 있다면 그 파일명을 tarotImg 필드로 JSON 코드 블록 안에 포함해야 합니다. 예시: ```json\\n{\\n  \"msg\": \"[여기에 짧은 답변]\",\\n  \"tarotImg\": \"major_00_fool_upright.png\",\\n  \"sampleanswer\": [\"질문1\", \"질문2\"]\n}\\n```";
     if (userMessageText.toLowerCase().includes("도움말") || userMessageText.toLowerCase().includes("help")) {
-        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)를 JSON 코드 블록 안에 포함해야 합니다. 예시: ```json\\n{\\n  \"msg\": \"[여기에 도움말 내용]\",\\n  \"sampleanswer\": [\"기능1 문의\", \"기능2 문의\"]\n}\\n```";
+        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요. 답변은 항상 사용자가 다음에 선택할 수 있는 2~3개의 sampleanswer (문자열 배열)를 JSON 코드 블록 안에 포함해야 합니다. tarotImg는 null로 설정해도 됩니다. 예시: ```json\\n{\\n  \"msg\": \"[여기에 도움말 내용]\",\\n  \"tarotImg\": null,\\n  \"sampleanswer\": [\"기능1 문의\", \"기능2 문의\"]\n}\\n```";
     }
     
     const apiResponse = await callGeminiAPI(tarotIni, userProfile, chatHistoryForAPI, additionalInstruction);
@@ -2452,18 +2497,16 @@ async function handleDefaultMessage(userMessageText) {
     let finalSampleAnswers;
     if (apiResponse.parsedSampleAnswers && apiResponse.parsedSampleAnswers.length > 0) {
         finalSampleAnswers = apiResponse.parsedSampleAnswers.map(saText => ({
-            text: saText,
-            value: saText, // 사용자가 누르면 이 텍스트가 다음 입력으로
-            actionType: 'message'
+            text: saText, value: saText, actionType: 'message'
         }));
     } else {
-        // API가 sampleanswer를 제공하지 못한 경우 기본값
         finalSampleAnswers = [{ text: "다른 질문", value: "다른 질문 할래", actionType: 'message' }];
         console.warn("[SimulateResponse] API 응답에서 sampleanswer를 파싱하지 못했거나 비어있음. 기본 샘플 답변 사용.");
     }
 
     return {
         assistantmsg: apiResponse.assistantmsg || "응답을 생성하는 중입니다...",
+        tarotImg: apiResponse.tarotImg || null, // API 응답에서 tarotImg 전달
         tarocardview: false,
         cards_to_select: null,
         sampleAnswers: finalSampleAnswers,

@@ -208,6 +208,17 @@ html, body {
     object-fit: contain;
 }
 
+.bot-message .tarot-card-in-message {
+    display: block; /* 블록 요소로 만들어 단독 줄 차지 */
+    max-width: 100px; /* 타로 카드 이미지 크기 조절 (예시) */
+    /* max-height: auto; /* 비율 유지 */
+    margin: 5px auto 10px auto; /* 위, 좌우 자동, 아래 간격 */
+    border-radius: 6px;
+    border: 1px solid var(--input-border-color);
+    background-color: var(--white-color); /* 로딩 중 배경 */
+    object-fit: contain;
+}
+
 /* 조수 해석 컨테이너를 위한 스타일 */
 /* assistant-type-message 클래스가 bot-message와 함께 있을 때 적용 */
 .bot-message.assistant-type-message {
