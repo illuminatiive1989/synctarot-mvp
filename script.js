@@ -2623,7 +2623,7 @@ function updateSyncTypeModal(tabId = 'overview') {
         tarotCardInfo.textContent = `${selectedTarotCardIndices.length}장 선택됨 / 총 ${cardsToSelectCount}장 선택하세요`;
     }
 
-async function handleTarotCardSelectionConfirm() {
+async function handleTarotSelectionConfirm() {
     if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
 
     console.log("[TarotSelection] 선택 완료. 사용자가 고른 'UI 위치' 인덱스:", selectedTarotCardIndices);
@@ -2633,38 +2633,49 @@ async function handleTarotCardSelectionConfirm() {
 
     for (let i = 0; i < cardsToSelectCount; i++) {
         if (availableCardIds.length === 0) break; 
-        let currentDeck = [...availableCardIds];
-        // 이미 userProfile.선택된타로카드들 에 있는 카드(이전 단계에서 뽑은 카드 포함)는 제외하지 않음.
-        // 이번 선택에서 뽑을 카드들과, userProfile.선택된타로카드들에 있는 모든 카드를 합쳐서 중복되지 않도록 해야 함.
-        // 그러나, "2장 더 뽑기" 시에는 이전에 뽑은 1장을 제외하고 새로 2장을 뽑아야 함.
-        // 즉, availableCardIds에서 userProfile.선택된타로카드들 중 userProfile.initialCardCount 이전 카드들은 제외해야 함.
         
+        let currentDeck = [...availableCardIds];
         let cardsToExcludeFromDeck = [];
+
+        // "2장 더 뽑기" 경우, 이전에 뽑은 카드들은 제외하고 새로운 카드를 뽑아야 함.
         if (userProfile.tarotConsultationStage === 'ADDED_TWO_AFTER_ONE' && userProfile.initialCardCount > 0) {
-            // 이전 단계에서 뽑은 카드(들)은 제외 (initialCardCount 만큼)
+            // 이전 단계(INITIAL_ONE)에서 뽑은 카드(들)은 제외 (initialCardCount 만큼)
             cardsToExcludeFromDeck = userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount);
-        } else if (userProfile.tarotConsultationStage !== 'INITIAL_ONE' && userProfile.tarotConsultationStage !== 'INITIAL_THREE') {
-            // 새로운 주제/일반 뽑기 시작 시에는 기존 선택된 카드들 모두 제외 (선택사항, 이전 카드와 완전 별개로 뽑으려면)
-            // cardsToExcludeFromDeck = [...userProfile.선택된타로카드들];
-            // 여기서는 이전 카드들을 제외하지 않고, 덱 전체에서 랜덤으로 뽑도록 함.
-            // 만약 완전히 새로운 덱에서 뽑는 것처럼 하려면 위 주석 해제 또는 userProfile.선택된타로카드들 초기화 필요
         }
-
-
-        currentDeck = currentDeck.filter(id => !cardsToExcludeFromDeck.includes(id));
+        // 그 외 (INITIAL_ONE, INITIAL_THREE)의 경우, 현재 userProfile.선택된타로카드들 (이전에 다른 주제로 뽑았던 카드들)은 
+        // 이번 선택과 무관하므로 제외할 필요가 없음. 새로운 주제의 카드를 뽑는 것이기 때문.
+        // 만약, 동일 주제 내에서 여러 번 뽑기를 반복하고, 이전 뽑기 카드를 제외해야 한다면,
+        // userProfile.선택된타로카드들 자체를 cardsToExcludeFromDeck에 넣고, 
+        // ADDED_TWO_AFTER_ONE에서는 initialCardCount 만큼만 유지하고 나머지를 새로 뽑도록 해야 함.
+        // 여기서는 'ADDED_TWO_AFTER_ONE'만 특별 취급.
+        
+        // 새로 뽑을 카드들과, 이미 뽑힌 카드(cardsToExcludeFromDeck)가 중복되지 않도록 currentDeck 필터링
+        // 또한, newlyChosenCardIds (이번 선택에서 이미 고른 카드)와도 중복되지 않도록 필터링
+        currentDeck = currentDeck.filter(id => !cardsToExcludeFromDeck.includes(id) && !newlyChosenCardIds.includes(id));
         
         if (currentDeck.length === 0) { 
             console.warn("[TarotSelection] 더 이상 뽑을 유니크한 카드가 없습니다. (제외 카드 고려 후)");
-            currentDeck = [...availableCardIds]; // 최후의 수단: 전체 덱에서 다시 시도 (중복 가능성)
-            if (currentDeck.length === 0) break; 
+            // 최후의 수단: 제외 조건을 완화하거나 전체 덱에서 다시 시도 (중복 가능성)
+            // 여기서는 availableCardIds (전체 카드 덱)에서 newlyChosenCardIds만 제외하고 다시 시도
+            currentDeck = availableCardIds.filter(id => !newlyChosenCardIds.includes(id));
+            if (currentDeck.length === 0) {
+                console.error("[TarotSelection] 뽑을 수 있는 카드가 전혀 없습니다.");
+                break; 
+            }
         }
 
         const randomIndex = Math.floor(Math.random() * currentDeck.length);
         const chosenId = currentDeck.splice(randomIndex, 1)[0]; 
         newlyChosenCardIds.push(chosenId);
 
-        const indexInAvailable = availableCardIds.indexOf(chosenId);
-        if (indexInAvailable > -1) availableCardIds.splice(indexInAvailable, 1);
+        // availableCardIds에서는 항상 제거 (전체 덱에서 유일성을 보장하기 위함 - 한 번 뽑힌 카드는 다시 나오지 않도록)
+        // 이 부분은 모든 카드가 한 번씩만 뽑히도록 하는 전역적인 중복 방지 로직.
+        // 만약 다른 상담에서 동일 카드가 나올 수 있다면 이 로직은 수정 필요.
+        // 현재는 한 번 뽑은 카드는 모든 상담 통틀어 다시 안 나온다고 가정.
+        // const indexInAvailable = availableCardIds.indexOf(chosenId);
+        // if (indexInAvailable > -1) availableCardIds.splice(indexInAvailable, 1); 
+        // 위 로직은 너무 강력하므로, 한 세션 내에서만 중복 방지하는 것으로 가정하고 주석처리.
+        // 대신, userProfile.지금까지수집된타로카드 에 추가하는 것으로 대체.
     }
     
     if (userProfile.tarotConsultationStage === 'ADDED_TWO_AFTER_ONE') {
