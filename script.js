@@ -1494,46 +1494,39 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         const choiceResultText = await choiceApiResponseObj.text();
         const parsedChoiceResult = JSON.parse(choiceResultText);
         
-        // overallAdvice를 userProfile.tarotResult에서 제외하고 저장
         userProfile.tarotResult = { 
             cardInterpretations: parsedChoiceResult.cardInterpretations 
-            // overallAdvice는 여기서 저장하지 않음
         };
         saveUserProfileToLocalStorage(userProfile); 
         console.log("[TarotChoiceAPI] API 응답 파싱 결과 (overallAdvice 제외된 tarotResult):", userProfile.tarotResult);
 
         let simpleChatHistory = [];
-        // overallAdvice를 simpleChatHistory에 추가하지 않음
-        // if (userProfile.tarotResult && userProfile.tarotResult.overallAdvice) { // 이 부분 제거
-        //      simpleChatHistory.push({role: "model", parts: [{text: `선택하신 카드에 대한 간략한 정보입니다: ${userProfile.tarotResult.overallAdvice}`}]});
-        // }
 
-        // tarottrans.ini에 전달할 때, cardInterpretations만 명시적으로 전달하거나,
-        // tarotResult 전체를 전달하되, tarottrans.ini 프롬프트에서 overallAdvice를 참조하지 않도록 해야 함.
-        // 현재는 tarotResult 전체를 전달하므로, tarottrans.ini 프롬프트가 overallAdvice를 참조하지 않는다고 가정.
         const transPrompt = LOADED_PROMPT_TAROT_TRANS + `\n## 이전 대화 요약 (카드 선택 결과):\n${JSON.stringify(userProfile.tarotResult, null, 2)}\n## 사용자 질문:\n타로 해석을 부탁드려요.`;
         const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory);
         const finalInterpretationText = await transApiResponseObj.text();
         
         let assistantInterpretationHTML = "";
         if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
-            let cardCountText = "";
-            const numSelectedCards = userProfile.선택된타로카드들.length;
+            let titleCardTypeText = "";
+            // userProfile.선택된타로카드들.length 로 현재 최종 선택된 카드 수를 알 수 있음
+            // userProfile.시나리오 를 통해 어떤 과정을 거쳤는지 파악
 
-            if (currentScenario.includes("_add_two_pick")) { // "2장 더 뽑기" 시나리오
-                 cardCountText = ` (+${numSelectedCards - (userProfile.tarotResult.cardInterpretations.length - 2)}장)`; // 초기 1장 + 추가 2장 = 3장, 이 중 새로 추가된 장수 표시
-            } else if (currentScenario.includes("_single_pick") || numSelectedCards === 1) {
-                cardCountText = " (1장)";
-            } else if (currentScenario.includes("_triple_pick") || numSelectedCards === 3) {
-                cardCountText = " (3장)";
-            } else if (numSelectedCards > 0) { // 그 외 카드 장수
-                cardCountText = ` (${numSelectedCards}장)`;
+            if (currentScenario.includes("_add_two_pick")) { // "2장 더 뽑기" 시나리오 (최종 3장)
+                 titleCardTypeText = "추가 타로 해석";
+            } else if (userProfile.선택된타로카드들.length === 1 || currentScenario.includes("_single_pick")) { // 1장 선택 시
+                titleCardTypeText = "싱글 타로 해석";
+            } else if (userProfile.선택된타로카드들.length === 3 || currentScenario.includes("_triple_pick")) { // 처음부터 3장 선택 시
+                titleCardTypeText = "트리플 타로 해석";
+            } else if (userProfile.선택된타로카드들.length > 0) { // 그 외의 경우 (예: cards_to_select 가 다른 값으로 설정된 경우)
+                 titleCardTypeText = `(${userProfile.선택된타로카드들.length}장) 타로 해석`; // 일반적인 장수 표시
+            } else {
+                titleCardTypeText = "타로 해석"; // 카드 정보가 없을 경우 기본
             }
 
 
             assistantInterpretationHTML += `<div class="assistant-interpretation-container">`;
-            // 제목에 카드 장수 정보 추가
-            assistantInterpretationHTML += `<div class="interpretation-title-text"><b>${selectedTarotTopicName || '선택하신 주제'} 타로 해석${cardCountText}</b></div><br>`;
+            assistantInterpretationHTML += `<div class="interpretation-title-text"><b>'${selectedTarotTopicName || '선택하신 주제'}' ${titleCardTypeText}</b></div><br>`;
             userProfile.tarotResult.cardInterpretations.forEach((interp, index) => {
                 let cardDisplayName = `카드 정보 없음 (${interp.cardId})`; 
                 if (TAROT_CARD_DATA && TAROT_CARD_DATA[interp.cardId] && TAROT_CARD_DATA[interp.cardId].name) {
@@ -1564,9 +1557,6 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                 assistantInterpretationHTML += `<div class="interpretation-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${index + 1}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
                 assistantInterpretationHTML += `<div class="interpretation-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
             });
-             // overallAdvice (시스템 종합 조언)는 tarotResult에서 제거되었으므로, 표시하지 않음.
-             // 만약 tarottrans.ini를 통해 받은 루비의 최종 메시지에 종합 조언이 포함된다면, 그 메시지가 표시될 것임.
-             // assistantInterpretationHTML += `<div class="interpretation-text"><br>${userProfile.tarotResult.overallAdvice || '종합 조언 준비 중'}</div>`; // 이 부분 제거 또는 주석 처리
             assistantInterpretationHTML += `</div>`;
         }
         
