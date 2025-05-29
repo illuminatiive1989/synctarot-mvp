@@ -2440,8 +2440,35 @@ async function handleDefaultMessage(userMessageText) {
         !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'user' && 
           chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === userMessageText)) {
         chatHistoryForAPI.push(userMessageEntry);
-        console.log
+        console.log("[API History] handleDefaultMessage에서 사용자 메시지 추가:", userMessageText);
+    } else {
+        console.log("[API History] handleDefaultMessage: 직전과 동일한 사용자 메시지, 중복 추가 방지.");
+    }
 
+
+    const tarotIni = await fetchTarotIniContent();
+    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요.";
+    if (userMessageText.toLowerCase().includes("도움말") || userMessageText.toLowerCase().includes("help")) {
+        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요.";
+    }
+    
+    const apiResponse = await callGeminiAPI(tarotIni, userProfile, chatHistoryForAPI, additionalInstruction);
+    // callGeminiAPI 내부에서 모델의 응답을 chatHistoryForAPI에 추가함.
+
+    let nextSampleAnswers = [{ text: "다른 질문", value: "다른 질문 할래", actionType: 'message' }];
+    if (apiResponse.assistantmsg && apiResponse.assistantmsg.toLowerCase().includes("운세")) {
+        nextSampleAnswers.unshift({ text: "오늘의 운세 자세히", value: "오늘의 운세 자세히 알려줘", actionType: 'message' });
+    }
+
+    return {
+        assistantmsg: apiResponse.assistantmsg || "응답을 생성하는 중입니다...",
+        tarocardview: false,
+        cards_to_select: null,
+        sampleAnswers: nextSampleAnswers,
+        importance: 'low',
+        user_profile_update: {}
+    };
+}
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
     initializeUserProfile();
