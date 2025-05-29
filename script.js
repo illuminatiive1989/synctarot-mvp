@@ -1574,7 +1574,6 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
 
     try {
         const choiceApiResponseObj = await callChatAPI(tarotChoicePrompt); 
-        // choiceApiResponseObj.json()을 사용하여 실제 파싱된 JSON 객체를 가져옴
         const parsedChoiceResult = await choiceApiResponseObj.json(); 
         
         userProfile.tarotResult = { 
@@ -1583,7 +1582,42 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         saveUserProfileToLocalStorage(userProfile); 
         console.log("[TarotChoiceAPI] API 응답 파싱 결과 (해석 대상 카드에 대한 결과):", userProfile.tarotResult);
 
+        // simpleChatHistory 구성 로직 추가
         let simpleChatHistory = [];
+        const messages = Array.from(chatMessages.querySelectorAll('.message'));
+        // 최근 N개의 메시지만 히스토리로 구성 (예: 최근 6개)
+        // 너무 많은 히스토리는 토큰 제한 및 API 응답 속도에 영향 줄 수 있음
+        const recentMessagesForHistory = messages.slice(-6); 
+        recentMessagesForHistory.forEach(msgEl => {
+            let role = "";
+            let textContent = msgEl.textContent || "";
+
+            if (msgEl.classList.contains('user-message')) {
+                role = "user";
+            } else if (msgEl.classList.contains('bot-message')) {
+                role = "model";
+                // 봇 메시지 중 assistant-type-message(시스템 분석 결과)는 제외하거나 요약 필요.
+                // 여기서는 간단히 텍스트만 가져오되, 시스템 메시지(뼈다귀 차감 등)도 제외하는 것이 좋을 수 있음.
+                if (msgEl.classList.contains('assistant-type-message')) {
+                    // assistant-type-message는 히스토리에서 제외하거나, 매우 간략한 요약으로 대체.
+                    // 예: textContent = "[시스템 분석 결과 표시됨]";
+                    return; // 일단 제외
+                }
+                // 뼈다귀 차감 메시지 등 특정 패턴 제외
+                textContent = textContent.replace(/ \(뼈다귀 -\d+\)/, "").trim();
+            } else if (msgEl.classList.contains('system-message')) {
+                // 시스템 메시지는 일반적으로 히스토리에 포함하지 않거나, 'system' 역할로 넣되 API가 이를 어떻게 처리할지 확인 필요.
+                // Gemini API는 user/model 턴을 번갈아 기대하므로, system 메시지 처리는 주의.
+                // 여기서는 일단 제외.
+                return; 
+            }
+
+            if (role && textContent) {
+                simpleChatHistory.push({role: role, parts: [{text: textContent}]});
+            }
+        });
+        console.log("[TarotInterpretation] 구성된 simpleChatHistory:", JSON.parse(JSON.stringify(simpleChatHistory)));
+
 
         let transPromptContext = `\n## 사용자 프로필 정보:\n`;
         transPromptContext += `애칭: ${userProfile.사용자애칭 || '방문객'}\n`;
@@ -1592,28 +1626,30 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
         transPromptContext += `DISC 점수: D(${userProfile.DISC_D_점수 || 0}), I(${userProfile.DISC_I_점수 || 0}), S(${userProfile.DISC_S_점수 || 0}), C(${userProfile.DISC_C_점수 || 0})\n`;
         transPromptContext += `사용자 감정 상태: ${userProfile.사용자의감정상태 || '알 수 없음'}\n`; 
         
-        transPromptContext += `\n## 이전 대화 요약 (카드 선택 결과):\n`;
+        transPromptContext += `\n## 이전 대화 요약 (카드 선택 결과):\n`; // 이 부분은 tarottrans.ini 프롬프트에서 '# 이전 대화 내용:' 같은 플레이스홀더로 활용
         transPromptContext += `타로 상담 주제: ${actualTarotTopic}\n`;
         transPromptContext += `상담 단계: ${currentConsultationStage}\n`;
         transPromptContext += `전체 선택 카드: ${userProfile.선택된타로카드들.join(', ')}\n`;
         if (currentConsultationStage === 'ADDED_TWO_AFTER_ONE') {
             transPromptContext += `이전 카드: ${userProfile.선택된타로카드들.slice(0, userProfile.initialCardCount).join(', ')}\n`;
-            transPromptContext += `추가된 카드 해석 결과 (시스템 제공): ${JSON.stringify(userProfile.tarotResult.cardInterpretations, null, 2)}\n`;
+            // 시스템 분석 결과(tarotResult)는 이전 카드와 함께 '이전 대화'의 일부로 전달
+            transPromptContext += `추가된 카드에 대한 시스템 분석: ${JSON.stringify(userProfile.tarotResult.cardInterpretations, null, 2)}\n`;
         } else {
-            transPromptContext += `카드 해석 결과 (시스템 제공): ${JSON.stringify(userProfile.tarotResult.cardInterpretations, null, 2)}\n`;
+            transPromptContext += `선택된 카드에 대한 시스템 분석: ${JSON.stringify(userProfile.tarotResult.cardInterpretations, null, 2)}\n`;
         }
-        transPromptContext += `## 사용자 질문:\n타로 해석을 부탁드려요.`;
+        // 사용자 질문은 API 프롬프트 자체에 포함시키거나, chatHistory의 마지막 user 턴으로 넣을 수 있음.
+        // 현재는 프롬프트의 '# 이전 대화 내용' 이후에 별도 지시문으로 루비가 해석하도록 유도
+        // transPromptContext += `## 사용자 질문:\n타로 해석을 부탁드려요.`; // 이 부분은 프롬프트 지시문으로 대체 가능
         
         const transPrompt = LOADED_PROMPT_TAROT_TRANS + transPromptContext;
-        const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory);
-        // transApiResponseObj.json()을 사용하여 실제 파싱된 JSON 객체를 가져옴
+        const transApiResponseObj = await callChatAPI(transPrompt, simpleChatHistory); // 수정: simpleChatHistory 전달
         const transApiJsonResult = await transApiResponseObj.json(); 
         
-        // JSON.parse() 대신, API 응답에서 rubyMessage 필드를 직접 사용
         const finalInterpretationText = transApiJsonResult.rubyMessage; 
-        // 필요하다면 suggestionType도 여기서 사용 가능: const suggestionType = transApiJsonResult.suggestionType;
         
         let assistantInterpretationHTML = "";
+        // assistantInterpretationHTML 구성 로직은 이전과 동일하게 유지 (생략)
+        // ... (이전 답변의 assistantInterpretationHTML 구성 로직 전체 복사) ...
         if (userProfile.tarotResult && userProfile.tarotResult.cardInterpretations) {
             let titleCardTypeText = "";
             const displayTopicName = actualTarotTopic;
@@ -1666,14 +1702,14 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
                     displayCardNumberInHtml = index + 1;
                 }
 
-                // 카드 이름과 키워드 부분을 감싸는 div에 새로운 클래스 추가 또는 인라인 스타일로 text-align: center 적용
                 assistantInterpretationHTML += `<img src="${cardImageUrl}" alt="${cardDisplayName}" class="chat-embedded-image">`;
                 assistantInterpretationHTML += `<div class="interpretation-text card-name-keyword-text" style="text-align: center; font-size: 0.9em; margin-bottom: 10px;"><b>${displayCardNumberInHtml}번 카드 - ${cardDisplayName}</b><br>(${(interp.keyword || '정보없음')})</div>`;
                 assistantInterpretationHTML += `<div class="interpretation-text card-brief-meaning-text">${(interp.briefMeaning || '해석 준비 중').replace(/\n/g, '<br>')}</div><br>`;
             });
             assistantInterpretationHTML += `</div>`;
         }
-        
+
+
         let nextSampleAnswers = [];
         if (userProfile.tarotConsultationStage === 'INITIAL_ONE') { 
             nextSampleAnswers.push({ text: "2장 더 뽑기", value: "action_add_two_cards_phase1", actionType: 'message', cost:2, displayCostIcon: true, iconType:'bone' });
@@ -1682,7 +1718,7 @@ async function handleTarotInterpretationActions(userMessageText, buttonData, sel
 
         responseData = {
             assistant_interpretation: assistantInterpretationHTML, 
-            assistantmsg: finalInterpretationText, // 여기서 finalInterpretationText는 rubyMessage의 내용임
+            assistantmsg: finalInterpretationText, 
             tarocardview: false, cards_to_select: null,
             sampleAnswers: nextSampleAnswers,
             importance: 'low', disableChatInput: true, 
