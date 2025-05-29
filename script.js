@@ -49,6 +49,14 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollLeftStart: 0
     };
 
+        // --- API 관련 상수 ---
+    const API_KEY = 'AIzaSyDSAA6rbNdD3tV1W_u0nIll0XyTe63rU_k'; // 사용자가 제공한 API 키
+    let MODEL_NAME = 'gemini-2.5-flash-preview-04-17'; // 기본 모델명, 추후 변경 가능
+    let API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+    console.log("[API] 초기화: API_KEY, MODEL_NAME, API_URL 설정 완료.");
+
+    // --- 대화 기록 관리 ---
+    let chatHistoryForAPI = []; // Gemini API 요청을 위한 대화 기록
 
 
     // 참고용 카드 파일명 목록 (실제 사용은 데이터 파일의 cardName 필드를 우선)
@@ -91,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
 
+    
     const ALL_TAROT_CARD_IDS = [
         "major_00_fool_upright", "major_01_magician_upright", "major_02_high_priestess_upright", "major_03_empress_upright", "major_04_emperor_upright", "major_05_hierophant_upright", "major_06_lovers_upright", "major_07_chariot_upright", "major_08_justice_upright", "major_09_hermit_upright", "major_10_wheel_upright", "major_11_strength_upright", "major_12_hanged_man_upright", "major_13_death_upright", "major_14_temperance_upright", "major_15_devil_upright", "major_16_tower_upright", "major_17_star_upright", "major_18_moon_upright", "major_19_sun_upright", "major_20_judgement_upright", "major_21_world_upright",
         "wands_01_ace_upright", "wands_02_two_upright", "wands_03_three_upright", "wands_04_four_upright", "wands_05_five_upright", "wands_06_six_upright", "wands_07_seven_upright", "wands_08_eight_upright", "wands_09_nine_upright", "wands_10_ten_upright", "wands_11_page_upright", "wands_12_knight_upright", "wands_13_queen_upright", "wands_14_king_upright",
@@ -979,54 +988,44 @@ function updateSampleAnswers(answers = [], importance = 'low', isConfirmationSta
 //     "날씨 알려줘": { response: "오늘 서울의 날씨는 <b>맑음</b>, 최고 기온 25도입니다. <br>외출하기 좋은 날씨네요!", sampleAnswers: ["미세먼지 정보", "내일 날씨는?", "고마워"] },
 //     "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
 // };
-async function simulateBotResponse(userMessageText) { // as화 소모 등 비동기 작업 있을 수 있음)
-    console.log(`[BotResponse] "${userMessageText}"에 대한 응답 시뮬레이션 시작.`);
-    return new Promise(async (resolve) => {
-        await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+async function simulateBotResponse(userMessageText) {
+    console.log(`[SimulateResponse] 메인 분기 시작. 입력: "${userMessageText}"`);
+    let responseData = {};
 
-        let responseData = {};
-        const lowerUserMessage = userMessageText.toLowerCase();
+    // 사용자 메시지를 API 기록에 추가 (중복 추가 방지 필요 - 각 핸들러에서 API 호출 직전에 추가하는 것으로 변경)
+    // chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user'));
 
-        // 액션 상수 정의
-        const SELECT_ONE_CARD_ACTION = "action_select_one_card"; // 카드 1장 뽑기 UI 요청
-        const TAROT_MENU_PREFIX = "prepare_tarot_"; // 더보기 메뉴에서 타로 선택 시 접두사
+    // 분기 로직
+    if (userMessageText === "카드 뽑기" || userMessageText === "카드뽑을래" || userMessageText === "action_cancel_cost_confirmation") {
+        responseData = await handleInitialCardPickQuery(userMessageText);
+    } else if (userMessageText === "action_select_one_card") {
+        responseData = await handleSelectOneCard();
+    } else if (userMessageText === "action_select_three_cards") {
+        responseData = await handleSelectThreeCards_Confirmation();
+    } else if (userMessageText === "action_confirm_three_cards_cost") {
+        responseData = await handleConfirmThreeCardsCost();
+    } else if (userMessageText === "카드 선택 완료") {
+        responseData = await handleCardSelectionComplete();
+    } else if (userMessageText === "action_add_two_cards") {
+        responseData = await handleAddTwoCards_Confirmation();
+    } else if (userMessageText === "action_confirm_add_two_cards_cost") {
+        responseData = await handleConfirmAddTwoCardsCost();
+    } else if (userMessageText === "action_deep_analysis_single" || userMessageText === "action_deep_analysis_triple") {
+        responseData = await handleDeepAnalysis_Confirmation(userMessageText);
+    } else if (userMessageText === "action_confirm_deep_analysis_single_cost" || userMessageText === "action_confirm_deep_analysis_triple_cost") {
+        responseData = await handleConfirmDeepAnalysisCost(userMessageText);
+    } else {
+        responseData = await handleDefaultMessage(userMessageText);
+    }
+    
+    // API 응답을 받은 후 (또는 미리 정의된 응답), 봇의 응답도 API 기록에 추가
+    // 이 부분은 각 핸들러 내부에서 API 호출 직후 또는 응답 생성 직후 처리하는 것이 더 정확함.
+    // 예: if (responseData.assistantmsg) chatHistoryForAPI.push(formatChatHistoryForAPI(responseData.assistantmsg, 'model'));
+    // 현재는 callGeminiAPI 내부와 handleDefaultMessage 내부에서 assistantmsg를 history에 추가하고 있음.
 
-        if (userMessageText.startsWith(TAROT_MENU_PREFIX)) {
-            // "OO타로 준비해줘" 메시지 처리 (사용자가 메뉴에서 선택)
-            // userMessageText는 "prepare_tarot_오늘의 운세" 와 같은 형태가 될 것임
-            // 실제 타로 종류에 따른 분기는 여기서 필요 없음 (요청사항에 따라 단순 응답)
-            responseData = {
-                assistantmsg: "그래 좋아, 그럼 바로 운명의 카드를 한장 뽑아줄래? 🤗",
-                tarocardview: true, // 카드 선택 UI 표시
-                cards_to_select: 1, // 1장 선택
-                sampleAnswers: [], // 카드 선택 UI가 나오므로 샘플 답변 없음
-                importance: 'low',
-                user_profile_update: { "시나리오": "tarot_single_pick_from_menu" }, // 시나리오 업데이트
-                // systemMessageOnConfirm은 카드 선택 UI 표시 시 자동으로 처리될 수 있도록 processMessageExchange에서 처리
-            };
-        } else if (userMessageText === "카드 선택 완료") { // 카드 UI에서 "선택 완료" 후 내부적으로 호출되는 메시지
-            // 이 부분은 기존 로직을 유지하되, 1장 선택 완료 시나리오에 맞게 단순화 가능
-            // 현재 요구사항에서는 API 호출 없이 시스템 메시지만 표시
-            // 실제 카드 데이터 처리나 해석은 추후 확장 가능
-             responseData = {
-                // assistantmsg는 필요 없음 (시스템 메시지로 대체)
-                tarocardview: false,
-                cards_to_select: null,
-                sampleAnswers: [{ text: "좌측 메뉴에서 원하시는 타로를 선택해주세요", value: "no_action_placeholder", actionType: 'placeholder', disabled: true }], // 초기 샘플 답변과 동일하게
-                importance: 'low',
-                user_profile_update: { "선택된타로카드들": [] }, // 선택된 카드 초기화 (예시)
-                // processMessageExchange에서 systemMessageOnConfirm 대신 직접 시스템 메시지를 보내도록 처리해야 함
-                // 또는, 여기서 systemMessage를 직접 반환하고 processMessageExchange에서 이를 처리
-            };
-        }
-        // 기타 다른 메시지나 액션에 대한 처리는 현재 요구사항에서 제외되었으므로 생략
-        // 필요시 기존 botKnowledgeBase와 유사한 구조로 확장 가능
-
-        console.log(`[BotResponse] 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
-        resolve(responseData);
-    });
+    console.log(`[SimulateResponse] 최종 생성된 응답 데이터:`, JSON.parse(JSON.stringify(responseData)));
+    return responseData;
 }
-
     function setUIInteractions(isProcessing, shouldFocusInput = false) {
         console.log(`[UI] 상호작용 상태 변경: isProcessing=${isProcessing}, shouldFocusInput=${shouldFocusInput}`);
         if (messageInput) messageInput.disabled = isProcessing;
@@ -1062,28 +1061,23 @@ async function processMessageExchange(messageText, source = 'input', options = {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
     }
-    // "no_action_placeholder"는 버튼 비활성화를 위한 값이므로, 실제 메시지 처리에서는 무시
-    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && (buttonData.actionType === 'confirm_cost' || buttonData.value === "no_action_placeholder"))) {
-        console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지 또는 플레이스홀더 아님).");
+    if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && buttonData.actionType === 'confirm_cost') && source !== 'system_internal_no_user_echo') { // "카드 선택 완료" 는 messageText가 있지만 사용자 에코 안함
+        console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지 또는 특정 내부 호출 아님).");
         return;
     }
-    if (buttonData && buttonData.value === "no_action_placeholder") {
-        console.log("[ProcessExchange] 플레이스홀더 버튼 클릭, 아무 작업 안 함.");
-        return; // 플레이스홀더 버튼은 아무 동작도 하지 않음
-    }
-
 
     let shouldClearChat = clearBeforeSend;
-    // 사용자의 첫 메시지 이후 채팅창 클리어 로직은 현재 시나리오에서는 불필요하므로 주석 처리 또는 삭제 가능
-    // if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset' && source !== 'system_init_skip_user_message') {
-    //     shouldClearChat = true;
-    //     hasUserSentMessage = true;
-    //     userProfile.메뉴단계 = 2;
-    //     console.log("[ProcessExchange] 사용자의 첫 상호작용. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
-    // }
+    if (!hasUserSentMessage && source !== 'system_init' && source !== 'system_internal' && source !== 'panel_option_topic_reset' && source !== 'system_init_skip_user_message') {
+        shouldClearChat = true;
+        hasUserSentMessage = true;
+        userProfile.메뉴단계 = 2;
+        console.log("[ProcessExchange] 사용자의 첫 상호작용. 채팅창 비움 활성화, 메뉴 단계 2로 변경.");
+    }
 
     if (shouldClearChat) {
         clearChatMessages();
+        chatHistoryForAPI = []; // 채팅창 비울 때 API용 히스토리도 초기화
+        console.log("[ProcessExchange] 채팅창 비움. API 대화 기록도 초기화됨.");
     }
 
     isLoadingBotResponse = true;
@@ -1091,26 +1085,39 @@ async function processMessageExchange(messageText, source = 'input', options = {
     setUIInteractions(true, false);
 
     if (moreOptionsPanel.classList.contains('active')) {
-        console.log("[ProcessExchange] 더보기 패널 닫기.");
         moreOptionsPanel.classList.remove('active');
         moreOptionsBtn.classList.remove('active');
     }
 
-    const shouldAddUserMessage =
-        source === 'input' ||
-        source === 'panel_option' ||
+    const shouldAddUserMessageToDisplay = // 화면에 사용자 메시지를 표시할지 여부
+        source === 'input' || 
+        source === 'panel_option' || 
         source === 'panel_option_topic_reset' ||
-        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost' && buttonData.actionType !== 'placeholder');
+        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost');
 
+    const textForUserDisplay = (source === 'sample_button' && buttonData && buttonData.text) ? buttonData.text : messageText;
 
-    if (shouldAddUserMessage && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
-        let textForUserMessage = (source === 'sample_button' && buttonData && buttonData.text) ? buttonData.text : messageText;
-        // "더보기" 메뉴에서 선택 시, 사용자 메시지 텍스트를 "OO타로 준비해줘" 형태로 가공
-        if (source === 'panel_option' && menuItemData && menuItemData.text) {
-            textForUserMessage = `${menuItemData.text} 준비해줘`;
-        }
-        await addMessage(textForUserMessage, 'user');
+    if (shouldAddUserMessageToDisplay && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
+        await addMessage(textForUserDisplay, 'user');
     }
+    
+    // API로 보낼 메시지 (텍스트 또는 버튼의 value)
+    const effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
+
+    // 사용자의 실제 입력이나 의미있는 선택만 API 히스토리에 추가
+    // (내부 액션값이나 "카드 선택 완료" 같은 시스템 메시지는 각 핸들러에서 API 요청 직전에 context에 맞게 구성)
+    if (source === 'input' || (source === 'sample_button' && buttonData && buttonData.actionType === 'message')) {
+        // 순수 텍스트 입력이나, 메시지 전송용 샘플 버튼 클릭 시
+         chatHistoryForAPI.push(formatChatHistoryForAPI(effectiveMessageForAPI, 'user'));
+         console.log("[API History] 사용자 메시지 추가:", effectiveMessageForAPI);
+    } else if (source === 'sample_button' && buttonData && buttonData.actionType === 'choice' && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost') {
+        // 비용 확인/취소가 아닌 '선택' 액션 버튼 (예: "1장", "3장")
+        // 이 경우는 사용자가 '버튼 텍스트'를 입력한 것처럼 히스토리에 남김
+        chatHistoryForAPI.push(formatChatHistoryForAPI(textForUserDisplay, 'user'));
+        console.log("[API History] 사용자 선택(버튼 텍스트) 추가:", textForUserDisplay);
+    }
+    // 'confirm_cost', 'cancel_cost', 'system_internal_no_user_echo' 등은 여기서 API 히스토리에 바로 추가하지 않음.
+    // API를 호출하는 핸들러 (handleCardSelectionComplete 등)에서 API 요청 직전에 적절한 사용자 메시지를 구성하여 추가.
 
 
     if (source === 'input' && messageInput) {
@@ -1118,25 +1125,14 @@ async function processMessageExchange(messageText, source = 'input', options = {
         adjustTextareaHeight();
     }
 
-    // API로 보낼 메시지 가공 (더보기 메뉴 선택 시)
-    let effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
-    if (source === 'panel_option' && menuItemData && menuItemData.text) {
-        // simulateBotResponse가 "prepare_tarot_오늘의 운세" 같은 형태로 메시지를 받도록 함
-        effectiveMessageForAPI = `prepare_tarot_${menuItemData.text}`;
-    }
-
-
     try {
-        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI);
-
+        const botApiResponse = await simulateBotResponse(effectiveMessageForAPI); // effectiveMessageForAPI는 주로 버튼의 value
+        
         if (botApiResponse.user_profile_update) {
-             for (const key in botApiResponse.user_profile_update) {
+            for (const key in botApiResponse.user_profile_update) {
                 if (key !== "bones") {
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
-                        if (key === "선택된타로카드들" && Array.isArray(botApiResponse.user_profile_update[key]) && botApiResponse.user_profile_update[key].length === 0 && userProfile.선택된타로카드들.length > 0) {
-                        } else {
-                            userProfile[key] = botApiResponse.user_profile_update[key];
-                        }
+                        userProfile[key] = botApiResponse.user_profile_update[key];
                     }
                 }
             }
@@ -1146,56 +1142,58 @@ async function processMessageExchange(messageText, source = 'input', options = {
             console.log("[UserProfile] API 응답으로 프로필 업데이트 (일부):", botApiResponse.user_profile_update);
         }
 
-        if (botApiResponse.assistant_interpretation) {
+        if (botApiResponse.assistant_interpretation && typeof botApiResponse.assistant_interpretation === 'string') { // HTML 문자열인지 확인
             await addMessage({ interpretationHtml: botApiResponse.assistant_interpretation, isAssistantInterpretation: true }, 'bot');
+            // API 응답이므로 히스토리에 추가 (만약 assistant_interpretation이 주 응답이라면)
+            // chatHistoryForAPI.push(formatChatHistoryForAPI(botApiResponse.assistant_interpretation, 'model')); // HTML을 그대로 넣을지, 텍스트만 추출할지 결정 필요
         }
 
-        // "카드 선택 완료" 시에는 assistantmsg 대신 시스템 메시지를 표시
-        if (effectiveMessageForAPI === "카드 선택 완료") {
-            await addMessage("카드 1장 선택완료", 'system');
-        } else if (botApiResponse.assistantmsg && !botApiResponse.systemMessageOnConfirm) {
+        if (botApiResponse.assistantmsg) {
             await addMessage(botApiResponse.assistantmsg, 'bot');
-        } else if (botApiResponse.systemMessageOnConfirm) { // 이 경우는 카드 선택 UI 직전 시스템 메시지
+            // 일반 봇 응답도 API 히스토리에 추가 (simulateBotResponse 내부에서 API 호출 후 이미 추가되었을 수 있음 - 중복 확인 필요)
+            // 현재 simulateBotResponse의 핸들러들이 API 호출 후 직접 chatHistoryForAPI에 추가하므로, 여기서는 추가하지 않음.
+            // 만약 API 호출 안하는 핸들러가 assistantmsg를 반환하면, 여기서 추가.
+            // 지금은 handleDefaultMessage에서 추가하고 있음.
+        } else if (botApiResponse.systemMessageOnConfirm) {
              await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
+             // 시스템 메시지는 API 대화 기록에 포함하지 않음 (일반적으로)
         }
-
-
+        
         await updateSampleAnswers(
-            botApiResponse.sampleAnswers || [],
+            botApiResponse.sampleAnswers || [], 
             botApiResponse.importance || 'low',
             botApiResponse.isConfirmationStage || false,
             botApiResponse.assistantmsg && botApiResponse.isConfirmationStage ? botApiResponse.assistantmsg : null
         );
 
         if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) {
-            if (messageInput && document.activeElement === messageInput) {
-                messageInput.blur();
-            }
+            if (messageInput && document.activeElement === messageInput) messageInput.blur();
             let currentTarotBg = userProfile.tarotbg || 'default.png';
-            // 더보기 메뉴에서 tarotbg를 가져오도록 수정
-            const bgSource = (source === 'panel_option' && menuItemData) ? menuItemData : (source === 'sample_button' && buttonData ? buttonData : null);
-
+            const bgSource = menuItemData || (source === 'sample_button' && buttonData ? buttonData : null);
             if (bgSource && bgSource.tarotbg) {
                 currentTarotBg = bgSource.tarotbg;
                 userProfile.tarotbg = currentTarotBg;
                 saveUserProfileToLocalStorage(userProfile);
             }
-            console.log(`[TarotUI] 카드 선택 UI 표시. 선택할 카드 수: ${botApiResponse.cards_to_select}, 배경: ${currentTarotBg}`);
             showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
         }
 
     } catch (error) {
         console.error("[ProcessExchange] 오류 발생:", error);
         await addMessage("죄송합니다. 응답 중 오류가 발생했습니다.", 'system');
-        // 오류 발생 시 초기 샘플 답변으로 되돌림
-        const fallbackSampleAnswers = [{ text: "좌측 메뉴에서 원하시는 타로를 선택해주세요", value: "no_action_placeholder", actionType: 'placeholder', disabled: true }];
+        const fallbackSampleAnswers = (typeof initialBotMessage !== 'undefined' && initialBotMessage.sampleAnswers) 
+            ? initialBotMessage.sampleAnswers.map(sa => ({text: sa, value: sa, actionType: 'message'}))
+            : [{text: "도움말", value: "도움말", actionType: 'message'}];
         await updateSampleAnswers(fallbackSampleAnswers);
     } finally {
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
         const shouldFocus = (source === 'input' && !isTarotSelectionActive);
         setUIInteractions(false, shouldFocus);
-        console.log("[ProcessExchange] 완료.");
+        console.log("[ProcessExchange] 완료. 현재 API 대화 기록 길이:", chatHistoryForAPI.length);
+        if (chatHistoryForAPI.length > 0) {
+            console.log("[API History] 마지막 기록:", chatHistoryForAPI[chatHistoryForAPI.length -1]);
+        }
     }
 }
     async function handleSendMessage() {
@@ -1543,64 +1541,70 @@ function updateSyncTypeModal(tabId = 'overview') {
         tarotCardInfo.textContent = `${selectedTarotCardIndices.length}장 선택됨 / 총 ${cardsToSelectCount}장 선택하세요`;
     }
 
-    async function handleTarotSelectionConfirm() {
-        if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
+async function handleTarotSelectionConfirm() {
+    if (selectedTarotCardIndices.length !== cardsToSelectCount) return;
 
-        console.log("[TarotSelection] 선택 완료. 사용자가 고른 'UI 위치' 인덱스:", selectedTarotCardIndices);
+    console.log("[TarotSelection] 선택 완료. 사용자가 고른 'UI 위치' 인덱스:", selectedTarotCardIndices);
 
-        // 실제 타로 카드 ID를 할당하는 로직
-        const availableCardIds = [...ALL_TAROT_CARD_IDS];
-        let newlyChosenCardIds = []; // 이번 선택 단계에서 새로 뽑힌 카드 ID들
+    const availableCardIds = [...ALL_TAROT_CARD_IDS];
+    let newlyChosenCardIds = [];
 
-        // 사용자가 UI에서 선택한 '위치'에 해당하는 카드들에게 실제 카드 ID를 랜덤 배정
-        for (let i = 0; i < cardsToSelectCount; i++) {
-            if (availableCardIds.length === 0) break; 
-            // 중복 방지를 위해 userProfile.선택된타로카드들 (이미 뽑힌 카드)과 availableCardIds에서 제외
-            let currentDeck = [...availableCardIds];
-            if (userProfile.선택된타로카드들 && userProfile.선택된타로카드들.length > 0) {
-                currentDeck = currentDeck.filter(id => !userProfile.선택된타로카드들.includes(id));
-            }
-             if (currentDeck.length === 0) { // 뽑을 수 있는 유니크한 카드가 없다면
-                console.warn("[TarotSelection] 더 이상 뽑을 유니크한 카드가 없습니다. 이미 뽑은 카드 중에서 중복될 수 있습니다.");
-                // 이 경우, availableCardIds (전체 덱)에서 다시 뽑도록 하거나, 에러 처리
-                currentDeck = [...availableCardIds]; // 중복 허용으로 전환 (임시)
-                if (currentDeck.length === 0) break; // 그래도 없으면 중단
-            }
+    // 이전 선택 기록 초기화 (새로운 세션 또는 추가 선택 시나리오에 따라 다를 수 있음)
+    // 현재 로직은 "카드 선택 완료" 메시지가 simulateBotResponse로 가서 처리되므로,
+    // userProfile.선택된타로카드들 은 simulateBotResponse 내부에서 API 호출 전에 설정/사용.
+    // 여기서는 newlyChosenCardIds를 만들어서 userProfile에 임시 저장하고,
+    // "카드 선택 완료" 메시지 처리 시 이 값을 사용하도록 할 수도 있음.
+    // 하지만 현재 구조는 "카드 선택 완료"에서 API 호출 시 userProfile을 참조하므로, 여기서 직접 userProfile을 업데이트.
 
-            const randomIndex = Math.floor(Math.random() * currentDeck.length);
-            const chosenId = currentDeck.splice(randomIndex, 1)[0]; // currentDeck에서 제거하며 선택
-            newlyChosenCardIds.push(chosenId);
-
-            // availableCardIds에서도 제거 (다음 카드 선택 시 중복 방지 위함 - currentDeck에서 이미 처리했지만, 명시적)
-            const indexInAvailable = availableCardIds.indexOf(chosenId);
-            if (indexInAvailable > -1) availableCardIds.splice(indexInAvailable, 1);
-        }
-        
-        // 시나리오에 따라 카드 ID 목록 처리
-        if (userProfile.시나리오 === "tarot_add_two_pick" && userProfile.선택된타로카드들) {
-            // "2장 더 뽑을래" 시나리오: 기존 카드에 새로 뽑은 카드 추가
-            userProfile.선택된타로카드들.push(...newlyChosenCardIds);
-            console.log("[UserProfile] 추가로 2장 선택. 총 선택된 타로 카드 ID:", userProfile.선택된타로카드들);
-        } else {
-            // "한 장만" 또는 "3장" (최초 선택) 시나리오: 새로 뽑은 카드로 덮어쓰기
-            userProfile.선택된타로카드들 = newlyChosenCardIds;
-            console.log("[UserProfile] 최초 선택. 실제 선택된 타로 카드 ID 저장:", userProfile.선택된타로카드들);
-        }
-        
-        // userProfile.지금까지수집된타로카드에도 새로 뽑은 카드 추가 (중복 없이)
-        newlyChosenCardIds.forEach(cardId => {
-            if (!userProfile.지금까지수집된타로카드.includes(cardId)) {
-                userProfile.지금까지수집된타로카드.push(cardId);
-            }
-        });
-
-        saveUserProfileToLocalStorage(userProfile); // 변경된 카드 목록과 수집 목록 저장
-
-        hideTarotSelectionUI();
-        // "카드 선택 완료" 메시지는 시스템 내부적으로 처리하여 사용자에게 보이지 않게 할 수 있음
-        // source를 'system_internal_no_user_echo' 등으로 하여 사용자 메시지 추가 생략
-        await processMessageExchange("카드 선택 완료", 'system_internal_no_user_echo');
+    // 시나리오에 따라 카드 ID 목록 처리
+    if (userProfile.시나리오 === "tarot_add_two_pick") {
+        // "2장 더 뽑을래" 시나리오: 기존 카드에 새로 뽑은 카드 추가
+        // userProfile.선택된타로카드들 은 이미 1장이 들어있다고 가정
+        console.log("[TarotSelection] '2장 더 뽑기' 시나리오. 기존 선택된 카드:", userProfile.선택된타로카드들);
+    } else {
+        // "1장" 또는 "3장" (최초 선택) 시나리오: 새로 뽑은 카드로 덮어쓰기 위해 기존 것 초기화
+        userProfile.선택된타로카드들 = [];
+        console.log("[TarotSelection] 최초 선택 시나리오. 선택된 카드 목록 초기화.");
     }
+
+
+    for (let i = 0; i < cardsToSelectCount; i++) { // cardsToSelectCount는 이번 턴에 뽑아야 할 카드 수
+        let currentDeck = [...availableCardIds];
+        // 이미 userProfile.선택된타로카드들 에 있는 카드와, 이번 턴에서 방금 뽑은 newlyChosenCardIds에 있는 카드는 제외
+        const existingAndNewlyChosen = [...userProfile.선택된타로카드들, ...newlyChosenCardIds];
+        currentDeck = currentDeck.filter(id => !existingAndNewlyChosen.includes(id));
+        
+        if (currentDeck.length === 0) {
+            console.warn("[TarotSelection] 더 이상 뽑을 유니크한 카드가 없습니다. 전체 덱에서 중복 가능하게 다시 뽑습니다.");
+            currentDeck = [...availableCardIds].filter(id => !newlyChosenCardIds.includes(id)); // 최소한 이번 턴 중복은 피함
+            if (currentDeck.length === 0) { // 그래도 없으면 중단 (모든 카드를 다 뽑은 경우)
+                 console.error("[TarotSelection] 모든 카드를 이미 선택했습니다.");
+                 break;
+            }
+        }
+
+        const randomIndex = Math.floor(Math.random() * currentDeck.length);
+        const chosenId = currentDeck.splice(randomIndex, 1)[0];
+        newlyChosenCardIds.push(chosenId); // 이번 턴에 새로 뽑은 카드들
+    }
+    
+    // 새로 뽑은 카드를 userProfile.선택된타로카드들 에 합침 (순서대로)
+    userProfile.선택된타로카드들.push(...newlyChosenCardIds);
+    console.log("[UserProfile] 최종 선택된 타로 카드 ID (순서대로 저장):", userProfile.선택된타로카드들);
+    
+    newlyChosenCardIds.forEach(cardId => {
+        if (!userProfile.지금까지수집된타로카드.includes(cardId)) {
+            userProfile.지금까지수집된타로카드.push(cardId);
+        }
+    });
+
+    saveUserProfileToLocalStorage(userProfile);
+
+    hideTarotSelectionUI();
+    await processMessageExchange("카드 선택 완료", 'system_internal_no_user_echo');
+}
+
+
     function handleClearTarotSelection() {
         if (isLoadingBotResponse || !tarotCardCarousel) return;
         console.log("[TarotSelection] 모든 선택 취소.");
@@ -2020,6 +2024,439 @@ function handleRandomTarotSelection() {
             }
         }, 100);
     });
+
+
+
+async function fetchTarotIniContent() {
+    console.log("[Prompt] prompts/tarot.ini 파일 로드 시도...");
+    try {
+        const response = await fetch('prompts/tarot.ini');
+        if (!response.ok) {
+            throw new Error(`[Prompt] tarot.ini 로드 실패: ${response.status} ${response.statusText}`);
+        }
+        const textContent = await response.text();
+        console.log("[Prompt] tarot.ini 로드 성공. 내용 길이:", textContent.length);
+        return textContent;
+    } catch (error) {
+        console.error(error.message);
+        return null; // 오류 발생 시 null 반환
+    }
+}
+
+function formatChatHistoryForAPI(messageText, role = 'user') {
+    // role: 'user' 또는 'model'
+    // Gemini API는 이전 대화를 'parts': [{'text': message}] 형태로 받음
+    return {
+        role: role,
+        parts: [{ text: messageText }]
+    };
+}
+
+async function callGeminiAPI(tarotIniContent, userProfileData, currentChatHistory, additionalSystemInstruction = null) {
+    if (!API_KEY) {
+        console.error("[API] Gemini API 키가 설정되지 않았습니다.");
+        return { error: "API 키가 없습니다.", assistantmsg: "API 통신 오류: API 키가 설정되지 않았습니다. 관리자에게 문의하세요." };
+    }
+    if (!tarotIniContent) {
+        console.error("[API] tarot.ini 프롬프트 내용이 없습니다.");
+        return { error: "tarot.ini 내용 없음", assistantmsg: "API 통신 오류: 타로 프롬프트 파일을 불러올 수 없습니다." };
+    }
+
+    console.log("[API] Gemini API 호출 시작...");
+
+    const systemPromptParts = [
+        { text: "## 시스템 지침 (System Instruction):\n당신은 사용자의 타로 카드 점괘를 해석하고 조언하는 숙련된 타로 리더 '루비'입니다. 친절하고 공감하는 어투를 사용하며, 사용자의 상황에 맞는 깊이 있는 해석을 제공해야 합니다. 사용자의 프로필 정보와 이전 대화 내용을 참고하여 개인화된 답변을 생성하십시오.\n" },
+        { text: "## 타로 해석 기본 지침 (tarot.ini):\n" + tarotIniContent },
+        { text: "\n## 사용자 프로필 정보 (User Profile):\n" +
+            `- 사용자 이름: ${userProfileData.사용자이름 || "알 수 없음"}\n` +
+            `- 사용자 애칭: ${userProfileData.사용자애칭 || "방문객"}\n` +
+            `- 좋아하는 것: ${userProfileData.사용자가좋아하는것 || "알 수 없음"}\n` +
+            `- 마음 아픈 것: ${userProfileData.사용자의마음을아프게하는것 || "알 수 없음"}\n` +
+            `- 싫어하는 것: ${userProfileData.사용자가싫어하는것 || "알 수 없음"}\n` +
+            `- 나이/성별: ${userProfileData.사용자의나이성별 || "비공개"}\n` +
+            `- 현재 고민: ${userProfileData.사용자의고민 || "일상적인 궁금증"}\n` +
+            `- 결정된 싱크타입: ${userProfileData.결정된싱크타입 || "미결정"}\n` +
+            `- 소속 성운: ${userProfileData.사용자소속성운 || "미결정"}\n` +
+            `- 맞춤 싱크타입 이름: ${userProfileData.맞춤싱크타입이름 || "정보 없음"}\n` +
+            `- 현재 감정 상태: ${userProfileData.사용자의감정상태 || "알 수 없음"}\n` +
+            `- 선택된 타로 카드: ${ (userProfileData.선택된타로카드들 && userProfileData.선택된타로카드들.length > 0) ? userProfileData.선택된타로카드들.map(cardId => (TAROT_CARD_DATA[cardId] ? TAROT_CARD_DATA[cardId].name : cardId)).join(', ') : "없음"}\n`
+        }
+    ];
+    
+    if (additionalSystemInstruction) {
+        systemPromptParts.push({text: "\n## 추가 시스템 지침 (Additional System Instruction):\n" + additionalSystemInstruction});
+    }
+    
+    const systemInstruction = {
+        role: "system", // Gemini API는 system role을 직접 지원하지 않으므로, contents 배열 시작에 포함하거나 사용자 메시지에 섞음
+                        // 여기서는 첫 번째 user 메시지 앞에 내용을 넣어주는 형태로 구성
+        parts: systemPromptParts
+    };
+
+
+    // Gemini는 user와 model 턴을 번갈아 가며 구성
+    // 첫 번째 contents는 시스템 지침 + 첫 사용자 메시지, 또는 시스템 지침만 (내부 로직에 따라)
+    // 현재 chatHistoryForAPI는 {role, parts} 객체의 배열이므로 그대로 사용 가능
+    const contentsPayload = [...currentChatHistory]; // 복사해서 사용
+    
+    // 시스템 지침을 첫번째 user 턴 메시지 앞에 추가하거나, history가 비어있으면 history의 첫 요소로 추가
+    // Gemini API는 명시적인 system role을 contents 배열에서 지원하지 않으므로,
+    // 보통은 첫 번째 User 메시지에 섞거나, context로 전달합니다.
+    // 여기서는 히스토리의 가장 처음에 추가하는 형태로 (히스토리가 사용자 메시지로 시작한다고 가정)
+    // 또는, contents의 첫번째 요소로 사용자 역할(role: "user")에 시스템 프롬프트를 포함시키는 방법도 있음.
+    // 여기서는 간단히 모든 히스토리 앞에 시스템 프롬프트를 두는 형태로 구성
+    // contents = [system_instruction_as_user_turn, ...actual_history]
+    
+    // 더 나은 접근: Gemini는 `SystemInstruction` 객체를 `generateContent` 요청 시 `systemInstruction` 필드에 넣을 수 있음.
+    // const requestPayload = {
+    //     contents: contentsPayload,
+    //     systemInstruction: systemInstruction, // systemInstruction 필드 사용
+    //     generationConfig: {
+    //         // "temperature": 0.7,
+    //         // "topK": 40,
+    //         // "topP": 0.95,
+    //         "maxOutputTokens": 2048,
+    //     }
+    // };
+
+    // systemInstruction을 contents의 첫 번째 요소로 구성 (role: 'user'로 시작하는 contents 앞에 삽입)
+    // 또는 첫 번째 user 메시지에 내용을 합치는 방식도 가능
+    // 현재 API_URL이 generateContent이므로, systemInstruction 필드를 사용하는 것이 더 적합해 보임.
+
+    const generationConfig = {
+        "temperature": 0.7, // 창의성 조절 (0.0 ~ 1.0)
+        "topK": 40,
+        "topP": 0.95,
+        "maxOutputTokens": 2048, // 응답 최대 토큰 수
+        // "stopSequences": ["사용자:"] // 필요시 중단 시퀀스
+    };
+
+    const requestBody = {
+        contents: contentsPayload, // 현재 대화 내용
+        systemInstruction: { // 시스템 지침
+            parts: systemPromptParts
+        },
+        generationConfig: generationConfig
+    };
+
+
+    console.log("[API] 요청 URL:", API_URL);
+    console.log("[API] 요청 본문 (Request Body):", JSON.stringify(requestBody, null, 2));
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[API] Gemini API 오류 응답: ${response.status} ${response.statusText}`, errorBody);
+            throw new Error(`API 오류: ${response.status} - ${errorBody}`);
+        }
+
+        const responseData = await response.json();
+        console.log("[API] Gemini API 응답 성공 (Raw):", JSON.stringify(responseData, null, 2));
+
+        if (responseData.candidates && responseData.candidates.length > 0 && responseData.candidates[0].content && responseData.candidates[0].content.parts && responseData.candidates[0].content.parts.length > 0) {
+            const assistantMessage = responseData.candidates[0].content.parts[0].text;
+            console.log("[API] 추출된 Assistant 응답:", assistantMessage);
+            // API 응답도 기록에 추가
+            chatHistoryForAPI.push(formatChatHistoryForAPI(assistantMessage, 'model'));
+            return { assistantmsg: assistantMessage };
+        } else if (responseData.promptFeedback && responseData.promptFeedback.blockReason) {
+            console.warn("[API] Gemini API 요청 차단됨:", responseData.promptFeedback.blockReason, responseData.promptFeedback.safetyRatings);
+            let blockMessage = `죄송합니다. 요청이 안전 문제로 인해 차단되었습니다. (${responseData.promptFeedback.blockReason})`;
+            if (responseData.promptFeedback.safetyRatings) {
+                blockMessage += " 세부 정보: " + responseData.promptFeedback.safetyRatings.map(r => `${r.category} - ${r.probability}`).join(', ');
+            }
+             chatHistoryForAPI.push(formatChatHistoryForAPI(blockMessage, 'model'));
+            return { assistantmsg: blockMessage, error: `Blocked: ${responseData.promptFeedback.blockReason}` };
+        } else {
+            console.warn("[API] Gemini API 응답에서 유효한 콘텐츠를 찾을 수 없음.");
+            return { assistantmsg: "죄송합니다, AI 모델로부터 응답을 받지 못했습니다. 다시 시도해주세요.", error: "No valid content in API response" };
+        }
+
+    } catch (error) {
+        console.error("[API] Gemini API 호출 중 예외 발생:", error);
+        return { assistantmsg: `죄송합니다. AI 모델과 통신 중 오류가 발생했습니다: ${error.message}`, error: error.message };
+    }
+}
+
+// simulateBotResponse 관련 헬퍼 함수들
+async function handleInitialCardPickQuery(userMessageText) {
+    // "카드 뽑기", "카드뽑을래", CANCEL_COST_CONFIRMATION_ACTION
+    console.log("[SimulateResponse] handleInitialCardPickQuery 실행:", userMessageText);
+    return {
+        assistantmsg: "카드를 몇 장 뽑으시겠어요?",
+        tarocardview: false,
+        cards_to_select: null,
+        sampleAnswers: [
+            { text: "1장", value: "action_select_one_card", cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' },
+            { text: "3장", value: "action_select_three_cards", cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
+        ],
+        importance: 'low',
+        user_profile_update: {}
+    };
+}
+
+async function handleSelectOneCard() {
+    console.log("[SimulateResponse] handleSelectOneCard 실행");
+    return {
+        tarocardview: true,
+        cards_to_select: 1,
+        sampleAnswers: [],
+        importance: 'low',
+        user_profile_update: { "시나리오": "tarot_single_pick" },
+        systemMessageOnConfirm: "1장을 선택하셨습니다. 카드를 골라주세요."
+    };
+}
+
+async function handleSelectThreeCards_Confirmation() {
+    console.log("[SimulateResponse] handleSelectThreeCards_Confirmation 실행");
+    return {
+        assistantmsg: `<b>3장</b> 선택 시 <img src="img/icon/bone_inline.png" alt="뼈다귀" class="inline-bone-icon"><b>2개</b>가 사용됩니다. 진행하시겠어요?`,
+        importance: 'high',
+        isConfirmationStage: true,
+        sampleAnswers: [
+            { text: `사용`, value: "action_confirm_three_cards_cost", cost: 2, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
+            { text: "취소", value: "action_cancel_cost_confirmation", actionType: 'cancel_cost' }
+        ],
+        user_profile_update: {}
+    };
+}
+
+async function handleConfirmThreeCardsCost() {
+    console.log("[SimulateResponse] handleConfirmThreeCardsCost 실행");
+    if (userProfile.bones >= 2) {
+        userProfile.bones -= 2;
+        updateBoneCountDisplay();
+        saveUserProfileToLocalStorage(userProfile);
+        return {
+            tarocardview: true,
+            cards_to_select: 3,
+            sampleAnswers: [],
+            importance: 'low',
+            user_profile_update: { "시나리오": "tarot_triple_pick", "bones": userProfile.bones },
+            systemMessageOnConfirm: "3장을 선택하셨습니다. 카드를 골라주세요. (뼈다귀 -2)"
+        };
+    } else {
+        return {
+            assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)<br>1장만 무료로 보시겠어요?",
+            tarocardview: false,
+            cards_to_select: null,
+            importance: 'low',
+            sampleAnswers: [
+                { text: "1장", value: "action_select_one_card", cost: 0, displayCostIcon: true, iconType: 'free', actionType: 'choice' },
+                { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' }
+            ],
+            user_profile_update: {}
+        };
+    }
+}
+
+async function handleCardSelectionComplete() {
+    console.log("[SimulateResponse] handleCardSelectionComplete 실행. 선택된 카드:", userProfile.선택된타로카드들);
+    let rubyCommentary = "";
+    let nextSampleAnswersData = [];
+    let additionalInstructionForAPI = "사용자가 타로 카드를 선택했습니다. 선택된 카드에 대한 기본 해석과 함께, 다음 단계로 어떤 것을 할 수 있는지 안내해주세요.";
+
+    if (!userProfile.선택된타로카드들 || userProfile.선택된타로카드들.length === 0) {
+        return { // 카드가 선택되지 않은 예외 케이스
+            assistantmsg: "선택된 카드가 없어 풀이를 진행할 수 없습니다. 다시 시도해주십시오.",
+            tarocardview: false, cards_to_select: null, importance: 'low',
+            sampleAnswers: [{ text: "카드 뽑기", value: "카드 뽑기", actionType: 'message' }],
+            user_profile_update: {}
+        };
+    }
+    
+    // Gemini API 호출
+    const tarotIni = await fetchTarotIniContent();
+    // chatHistoryForAPI에는 현재 "카드 선택 완료" 메시지가 포함되지 않음.
+    // API 호출 직전에 추가하거나, API 응답 생성 후 쌍으로 추가. 여기서는 호출 전에 추가.
+    const currentMessageForHistory = formatChatHistoryForAPI(`사용자가 다음 타로 카드를 선택했습니다: ${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id] ? TAROT_CARD_DATA[id].name : id)).join(', ')}. 이 카드들에 대한 해석을 부탁합니다.`, 'user');
+    
+    const apiResponse = await callGeminiAPI(tarotIni, userProfile, [...chatHistoryForAPI, currentMessageForHistory], additionalInstructionForAPI);
+    // API 응답을 받으면, 방금 보낸 사용자 메시지를 실제 히스토리에 추가
+    chatHistoryForAPI.push(currentMessageForHistory);
+    // assistantmsg는 apiResponse에서 가져옴, 에러 처리 포함
+
+    // API 응답 후 다음 샘플 답변 결정
+    if (userProfile.선택된타로카드들.length === 1) {
+        nextSampleAnswersData = [
+            { text: "2장 더 뽑기", value: "action_add_two_cards", cost: 2, displayCostIcon: true, iconType: 'bone', actionType: 'choice' },
+            { text: "더 깊은 해석", value: "action_deep_analysis_single", cost: 3, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
+        ];
+    } else { // 3장 (또는 1+2장)
+        nextSampleAnswersData = [
+            { text: "조금 더 풀이", value: "action_more_interpretation_triple", cost: 0, displayCostIcon: false, actionType: 'message' }, // 이 부분도 API 호출로 변경 가능
+            { text: "더 깊은 해석", value: "action_deep_analysis_triple", cost: 1, displayCostIcon: true, iconType: 'bone', actionType: 'choice' }
+        ];
+    }
+
+    return {
+        assistantmsg: apiResponse.assistantmsg || "카드 해석을 준비 중입니다...", // API 응답 사용
+        // assistant_interpretation: apiResponse.assistant_interpretation, // API가 HTML을 줄 경우, 아니면 assistantmsg에 통합
+        tarocardview: false,
+        cards_to_select: null,
+        sampleAnswers: nextSampleAnswersData,
+        importance: 'low',
+        user_profile_update: {} // API 호출 결과로 프로필 업데이트가 필요하면 여기서 처리
+    };
+}
+
+async function handleAddTwoCards_Confirmation() {
+    console.log("[SimulateResponse] handleAddTwoCards_Confirmation 실행");
+    return {
+        assistantmsg: `<b>2장 더 뽑기</b> 시 <img src="img/icon/bone_inline.png" alt="뼈다귀" class="inline-bone-icon"><b>2개</b>가 사용됩니다. 진행하시겠어요?`,
+        importance: 'high',
+        isConfirmationStage: true,
+        sampleAnswers: [
+            { text: `사용`, value: "action_confirm_add_two_cards_cost", cost: 2, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
+            { text: "취소", value: "action_cancel_cost_confirmation", actionType: 'cancel_cost' }
+        ],
+        user_profile_update: {}
+    };
+}
+
+async function handleConfirmAddTwoCardsCost() {
+    console.log("[SimulateResponse] handleConfirmAddTwoCardsCost 실행");
+    if (userProfile.bones >= 2) {
+        userProfile.bones -= 2;
+        updateBoneCountDisplay();
+        saveUserProfileToLocalStorage(userProfile);
+        return {
+            tarocardview: true,
+            cards_to_select: 2,
+            sampleAnswers: [],
+            importance: 'low',
+            user_profile_update: { "시나리오": "tarot_add_two_pick", "bones": userProfile.bones },
+            systemMessageOnConfirm: "2장을 추가로 선택합니다. 카드를 골라주세요. (뼈다귀 -2)"
+        };
+    } else { // 재화 부족
+        return {
+            assistantmsg: "이런! 뼈다귀가 부족해요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)",
+            importance: 'low',
+            sampleAnswers: [ { text: "다음에 할게요", value: "action_cancel_ 부족", actionType: 'message' } ],
+            user_profile_update: {}
+        };
+    }
+}
+
+async function handleDeepAnalysis_Confirmation(userMessageText) {
+    console.log("[SimulateResponse] handleDeepAnalysis_Confirmation 실행:", userMessageText);
+    let cost = 0;
+    let confirmActionValue = "";
+    if (userMessageText === "action_deep_analysis_single") { cost = 3; confirmActionValue = "action_confirm_deep_analysis_single_cost"; }
+    else if (userMessageText === "action_deep_analysis_triple") { cost = 1; confirmActionValue = "action_confirm_deep_analysis_triple_cost"; }
+
+    if (cost > 0) {
+        return {
+            assistantmsg: `<b>더 깊은 해석</b> 시 <img src="img/icon/bone_inline.png" alt="뼈다귀" class="inline-bone-icon"><b>${cost}개</b>가 사용됩니다. 진행하시겠어요?`,
+            importance: 'high',
+            isConfirmationStage: true,
+            sampleAnswers: [
+                { text: `사용`, value: confirmActionValue, cost: cost, displayCostIcon: true, displayCostText: true, iconType: 'bone', actionType: 'confirm_cost' },
+                { text: "취소", value: "action_cancel_cost_confirmation", actionType: 'cancel_cost' }
+            ],
+            user_profile_update: {}
+        };
+    }
+    // 오류 또는 알 수 없는 요청에 대한 기본 처리
+    return handleDefaultMessage(userMessageText);
+}
+
+async function handleConfirmDeepAnalysisCost(userMessageText) {
+    console.log("[SimulateResponse] handleConfirmDeepAnalysisCost 실행:", userMessageText);
+    let requiredBones = 0;
+    let additionalInstructionForAPI = "사용자가 선택한 카드에 대해 이전에 제공된 기본 해석을 바탕으로, 더 심층적이고 구체적인 조언을 제공해주세요.";
+    if (userMessageText === "action_confirm_deep_analysis_single_cost") requiredBones = 3;
+    else if (userMessageText === "action_confirm_deep_analysis_triple_cost") requiredBones = 1;
+
+    if (requiredBones > 0 && userProfile.bones >= requiredBones) {
+        userProfile.bones -= requiredBones;
+        updateBoneCountDisplay();
+        saveUserProfileToLocalStorage(userProfile);
+
+        const tarotIni = await fetchTarotIniContent();
+        const currentMessageForHistory = formatChatHistoryForAPI(`사용자가 카드 ${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id] ? TAROT_CARD_DATA[id].name : id)).join(', ')}에 대한 더 깊은 해석을 요청했습니다. (비용: ${requiredBones} 뼈다귀 사용)`, 'user');
+        
+        const apiResponse = await callGeminiAPI(tarotIni, userProfile, [...chatHistoryForAPI, currentMessageForHistory], additionalInstructionForAPI);
+        chatHistoryForAPI.push(currentMessageForHistory);
+
+        return {
+            assistantmsg: apiResponse.assistantmsg || `더 깊은 해석을 준비 중입니다... (뼈다귀 -${requiredBones})`,
+            tarocardview: false, cards_to_select: null, importance: 'low',
+            sampleAnswers: [ { text: "정말 고마워요!", value: "고맙습니다", actionType: 'message'}, { text: "다른 질문 있어요", value: "다른 질문", actionType: 'message' } ],
+            user_profile_update: { "bones": userProfile.bones }
+        };
+    } else if (requiredBones > 0) { // 재화 부족
+        return {
+            assistantmsg: "이런! 뼈다귀가 부족해서 더 깊은 해석을 듣기 어렵겠어요. (현재 <img src='img/icon/bone_inline.png' alt='뼈다귀' class='inline-bone-icon'>" + userProfile.bones + "개)",
+            importance: 'low',
+            sampleAnswers: [ { text: "괜찮아요", value: "괜찮습니다", actionType: 'message' }, { text: "뼈다귀는 어떻게 얻나요?", value: "뼈다귀 얻는법", actionType: 'message' } ],
+            user_profile_update: {}
+        };
+    }
+    return handleDefaultMessage(userMessageText);
+}
+
+async function handleDefaultMessage(userMessageText) {
+    console.log("[SimulateResponse] handleDefaultMessage 실행 (API 호출로 변경):", userMessageText);
+
+    if (!userMessageText || userMessageText.trim() === "") {
+        console.warn("[SimulateResponse] handleDefaultMessage: 빈 메시지 수신, 기본 응답 처리.");
+        // 이 경우, API 호출 없이 간단한 기본 응답 반환 가능
+        chatHistoryForAPI.push(formatChatHistoryForAPI("이해할 수 없는 요청입니다.", 'model')); // 모델의 응답으로 기록
+        return {
+            assistantmsg: "죄송해요, 잘 이해하지 못했어요. 좀 더 자세히 말씀해주시겠어요?",
+            tarocardview: false,
+            cards_to_select: null,
+            sampleAnswers: [{ text: "도움말", value: "도움말", actionType: 'message' }],
+            importance: 'low',
+            user_profile_update: {}
+        };
+    }
+
+    // 사용자 메시지를 API 기록에 추가 (이 함수가 호출되었다는 것은 유효한 사용자 입력이 있었다는 의미)
+    // processMessageExchange에서 이미 추가했을 수 있으므로, 중복 방지를 위해 여기서 추가하는 것은 지양하거나,
+    // processMessageExchange에서 일반 메시지 추가 로직을 여기로 완전히 위임.
+    // 현재 processMessageExchange에서는 일반 메시지를 history에 추가하고 있음.
+    // 따라서, 이 함수는 그 history를 사용.
+    // 만약 여기서 history 추가를 책임진다면, processMessageExchange의 해당 부분을 제거해야 함.
+    // 여기서는 processMessageExchange가 history에 사용자 메시지를 넣었다고 가정하고 API 호출.
+
+    const tarotIni = await fetchTarotIniContent(); // 모든 응답에 타로 컨텍스트가 필요할 수 있음 (조정 가능)
+    let additionalInstruction = "사용자의 일반적인 질문 또는 요청에 대해 답변해주세요.";
+    if (userMessageText.toLowerCase().includes("도움말") || userMessageText.toLowerCase().includes("help")) {
+        additionalInstruction = "사용자가 도움말을 요청했습니다. 당신이 할 수 있는 주요 기능들을 간략히 안내해주세요.";
+    }
+    
+    // API 호출 전 사용자 메시지가 chatHistoryForAPI에 마지막으로 추가되어 있어야 함.
+    // processMessageExchange에서 추가된 history를 사용.
+    const apiResponse = await callGeminiAPI(tarotIni, userProfile, chatHistoryForAPI, additionalInstruction);
+    // callGeminiAPI 내부에서 모델의 응답을 chatHistoryForAPI에 추가함.
+
+    // API 응답 기반으로 샘플 답변 생성 (필요시)
+    // 예시: API 응답에 따라 다음 행동 제안
+    let nextSampleAnswers = [{ text: "다른 질문", value: "다른 질문 할래", actionType: 'message' }];
+    if (apiResponse.assistantmsg && apiResponse.assistantmsg.toLowerCase().includes("운세")) {
+        nextSampleAnswers.unshift({ text: "오늘의 운세 자세히", value: "오늘의 운세 자세히 알려줘", actionType: 'message' });
+    }
+
+
+    return {
+        assistantmsg: apiResponse.assistantmsg || "응답을 생성하는 중입니다...",
+        tarocardview: false,
+        cards_to_select: null,
+        sampleAnswers: nextSampleAnswers,
+        importance: 'low',
+        user_profile_update: {} // 필요시 API 응답에 따른 프로필 업데이트
+    };
+}
 
 async function initializeChat() {
     console.log("[App] 초기화 시작.");
