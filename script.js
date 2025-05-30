@@ -1404,6 +1404,190 @@ async function handleConfirmAddTwoCardsCost() {
         }
     }
 
+    async function handleMultiStepChoice(buttonData, currentOptions) {
+    // currentOptions는 processMessageExchange에서 필요시 전달받을 수 있는 추가 정보 (예: menuItemData)
+    const choiceType = buttonData.type;
+    const choiceValue = buttonData.value; // 버튼의 data-value (예: "action_select_one_card_trigger")
+    const choiceText = buttonData.text;   // 버튼의 텍스트 (예: "1장만 볼래")
+
+    console.log(`[HandleMultiStepChoice] 처리 시작. Type: "${choiceType}", Value: "${choiceValue}", Text: "${choiceText}"`);
+
+    // 사용자 선택을 채팅창에 먼저 표시 (모든 multi_step_choice에 대해)
+    await addMessage(choiceText, 'user');
+    console.log(`[HandleMultiStepChoice] 사용자 선택("${choiceText}")을 채팅에 표시함.`);
+
+    let simulateResponse; 
+
+    // 1. "몇 장 뽑을래?" (하드코딩된 초기 선택지)에 대한 처리
+    // choiceValue가 "action_select_one_card_trigger" 또는 "action_select_three_cards_trigger" 와 같은 형태일 것
+    if (choiceType === 'system_choice_one_cost_0' || choiceType === 'system_choice_three_cost_2') {
+        console.log(`[HandleMultiStepChoice] "몇 장 뽑을래" 선택지 (${choiceType}) 처리 중. 다음 액션 value: ${choiceValue}`);
+        
+        if (choiceType === 'system_choice_three_cost_2') {
+            const cost = determineCostByType(choiceType);
+            if (userProfile.bones < cost) {
+                console.log(`[HandleMultiStepChoice] 뼈다귀 부족 (3장 선택 시). 현재: ${userProfile.bones}, 필요: ${cost}`);
+                simulateResponse = await simulateBotResponse("action_bone_lack_guidance");
+            } else {
+                console.log("[HandleMultiStepChoice] 3장 선택, 비용 확인 UI 요청 (handleSelectThreeCards_Confirmation 호출).");
+                simulateResponse = await handleSelectThreeCards_Confirmation(); 
+            }
+        } else { // 1장 선택의 경우 (system_choice_one_cost_0)
+            console.log(`[HandleMultiStepChoice] simulateBotResponse 호출 (다음 액션: ${choiceValue})`);
+            simulateResponse = await simulateBotResponse(choiceValue); // choiceValue는 "action_select_one_card_trigger"
+        }
+    }
+    // 2. 비용 사용 확인 선택지 ("응, 사용할게" 등) 처리
+    // choiceValue가 "action_confirm_three_cards_cost_trigger" 또는 "action_confirm_add_two_cards_cost_trigger"
+    else if (choiceType === 'action_confirm_three_cards_cost_trigger' || choiceType === 'action_confirm_add_two_cards_cost_trigger') {
+        console.log(`[HandleMultiStepChoice] 비용 사용 확인 선택지 (${choiceType}) 처리 중. 다음 액션 value: ${choiceValue}`);
+        const costTypeForDetermination = choiceType === 'action_confirm_three_cards_cost_trigger' ? 'system_choice_three_cost_2' : 'add_two_cards';
+        const cost = determineCostByType(costTypeForDetermination);
+        
+        if (userProfile.bones < cost) {
+            console.log(`[HandleMultiStepChoice] 뼈다귀 부족 (비용 확인 후). 현재: ${userProfile.bones}, 필요: ${cost}`);
+            simulateResponse = await simulateBotResponse("action_bone_lack_guidance");
+        } else {
+            console.log(`[HandleMultiStepChoice] 뼈다귀 ${cost}개 차감.`);
+            userProfile.bones -= cost; 
+            updateBoneCountDisplay();
+            saveUserProfileToLocalStorage(userProfile);
+            await addMessage(`(뼈다귀 ${cost}개 사용했어! 남은 뼈다귀: ${userProfile.bones}개)`, 'system');
+
+            console.log(`[HandleMultiStepChoice] simulateBotResponse 호출 (다음 액션: ${choiceValue})`); 
+            simulateResponse = await simulateBotResponse(choiceValue); 
+        }
+    }
+    // 3. API로부터 받은 다단락 응답의 선택지 처리
+    else if (choiceType === 'again') {
+        console.log("[HandleMultiStepChoice] 'again' 선택지 처리 중.");
+        if (currentCardInterpretation && currentCardInterpretation.shorts && currentShortIndex < currentCardInterpretation.shorts.length - 1) {
+            currentShortIndex++;
+            const nextShortText = currentCardInterpretation.shorts[currentShortIndex].text;
+            if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === nextShortText)) {
+                chatHistoryForAPI.push(formatChatHistoryForAPI(nextShortText, 'model'));
+                console.log("[HandleMultiStepChoice] 다음 단락(again) 히스토리 추가:", nextShortText.substring(0,30)+"...");
+            }
+            await displayCurrentShort(); 
+            return; 
+        } else { 
+            console.error("[HandleMultiStepChoice] 'again' 선택: 다음 단락 없음 또는 해석 데이터 오류");
+            simulateResponse = await simulateBotResponse("action_default_fallback_options");
+        }
+    } else if (choiceType === 'break' || choiceType === 'deepen' || choiceType === 'deepen_overall') {
+        console.log(`[HandleMultiStepChoice] "${choiceType}" 선택지 처리 중. API 재호출 필요.`);
+        const cost = determineCostByType(choiceType);
+        if (userProfile.bones < cost) { 
+            console.log(`[HandleMultiStepChoice] 뼈다귀 부족 (${choiceType}). 현재: ${userProfile.bones}, 필요: ${cost}`);
+            simulateResponse = await simulateBotResponse("action_bone_lack_guidance");
+        } else {
+            if (cost > 0) { console.log(`[HandleMultiStepChoice] 뼈다귀 ${cost}개 차감 (${choiceType}).`); userProfile.bones -= cost; updateBoneCountDisplay(); saveUserProfileToLocalStorage(userProfile); await addMessage(`(뼈다귀 ${cost}개 사용했어! 남은 뼈다귀: ${userProfile.bones}개)`, 'system'); }
+
+            let contextForAPI = `사용자가 이전 단락 ("${currentCardInterpretation.shorts[currentShortIndex].text.substring(0,50)}...")에 대해 "${choiceText}" 라고 반응했어. `;
+            let iniToUse = currentIniFileName; 
+
+            if (choiceType === 'break') contextForAPI += `이 반응을 고려해서 이전의 흐름에서 벗어나 새로운 방향으로 다음 해석 단락들을 생성해줘.`;
+            if (choiceType === 'deepen' || choiceType === 'deepen_overall') { 
+                contextForAPI += `선택된 카드(${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id]? TAROT_CARD_DATA[id].name : id)).join(', ')})에 대해 더 깊이 있는 해석을 요청했어. 새로운 단락들로 심층 분석을 제공해줘.`;
+                if (choiceType === 'deepen_overall' && userProfile.선택된타로카드들.length > 1) { 
+                    contextForAPI = `사용자가 지금까지 나온 카드들(${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id]? TAROT_CARD_DATA[id].name : id)).join(', ')})에 대한 종합적인 심층 해석을 요청했어. 전체 내용을 아우르는 깊이있는 분석을 해줘.`;
+                }
+            }
+            
+            if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== choiceText) { 
+                chatHistoryForAPI.push(formatChatHistoryForAPI(choiceText, 'user'));
+                console.log(`[HandleMultiStepChoice] 사용자 선택(${choiceText}) 히스토리 추가.`);
+            }
+            console.log(`[HandleMultiStepChoice] API 호출 준비 (${choiceType}). ini: ${iniToUse}, 추가 지침: ${contextForAPI.substring(0,100)}...`);
+            const tarotIniCombined = await fetchTarotIniContent(iniToUse); 
+            const apiResponse = await callGeminiAPI(tarotIniCombined, userProfile, chatHistoryForAPI, contextForAPI);
+            simulateResponse = { assistantmsg: apiResponse.assistantmsg }; 
+        }
+    } else if (choiceType === 'next') { 
+        console.log("[HandleMultiStepChoice] 'next' 선택지 처리 중.");
+        let nextActionForSimulate = "action_interpret_next_card"; 
+        if (currentIniFileName === 'tarot-3rd.ini' || currentIniFileName === 'tarot-single-add2-last.ini') {
+            nextActionForSimulate = "action_conclude_session_prompt";
+        }
+        console.log(`[HandleMultiStepChoice] simulateBotResponse 호출 (다음 액션: ${nextActionForSimulate})`);
+        simulateResponse = await simulateBotResponse(nextActionForSimulate); 
+    } else if (choiceType === 'add_two_cards') { 
+        console.log("[HandleMultiStepChoice] 'add_two_cards' 선택지 처리 중.");
+        const cost = determineCostByType(choiceType);
+        if (userProfile.bones < cost) { 
+            console.log(`[HandleMultiStepChoice] 뼈다귀 부족 (2장 더 뽑기). 현재: ${userProfile.bones}, 필요: ${cost}`);
+            simulateResponse = await simulateBotResponse("action_bone_lack_guidance");
+        } else {
+            console.log("[HandleMultiStepChoice] 2장 더 뽑기 비용 확인 UI 요청.");
+            simulateResponse = await simulateBotResponse("action_trigger_add_two_cards_scenario"); 
+        }
+    } else if (choiceType === 'message') { 
+        console.log(`[HandleMultiStepChoice] sampleAnswer type 'message' 처리: "${choiceText}" (value: "${choiceValue}")를 일반 메시지로 API에 전달`);
+        // choiceValue (버튼의 data-value)가 실제 API로 보낼 메시지.
+        simulateResponse = await simulateBotResponse(choiceValue); 
+    } else {
+        console.warn(`[HandleMultiStepChoice] 알 수 없는 다단락 선택지 type: "${choiceType}"`);
+        simulateResponse = await simulateBotResponse("action_default_fallback_options");
+    }
+
+    // simulateResponse 결과 처리
+    if (simulateResponse) {
+        if (simulateResponse.tarocardview && simulateResponse.cards_to_select > 0) {
+            console.log("[HandleMultiStepChoice] 타로 카드 선택 UI 표시 요청 받음.");
+            if (messageInput && document.activeElement === messageInput) messageInput.blur();
+            let currentTarotBg = userProfile.tarotbg || 'default.png';
+            // options에서 menuItemData를 가져와 tarotbg 설정 (processMessageExchange에서 전달받아야 함)
+            if (currentOptions && currentOptions.menuItemData && currentOptions.menuItemData.tarotbg) { 
+                currentTarotBg = currentOptions.menuItemData.tarotbg;
+            }
+            showTarotSelectionUI(simulateResponse.cards_to_select, currentTarotBg);
+            if (simulateResponse.systemMessageOnConfirm) {
+                await addMessage(simulateResponse.systemMessageOnConfirm, 'system');
+            }
+        } else if (simulateResponse.requestUiUpdate === "show_three_cards_cost_confirm") {
+             console.log("[HandleMultiStepChoice] 'show_three_cards_cost_confirm' UI 업데이트 요청 받음.");
+            const confirmationResponse = await handleSelectThreeCards_Confirmation();
+            if (confirmationResponse.assistantmsg && confirmationResponse.assistantmsg.totalShorts > 0) {
+                currentCardInterpretation = confirmationResponse.assistantmsg;
+                currentShortIndex = 0;
+                await displayCurrentShort();
+            } else {
+                 console.error("[HandleMultiStepChoice] 비용 확인 메시지 생성 오류(UI Update):", confirmationResponse);
+            }
+        }
+        else if (simulateResponse.assistantmsg && simulateResponse.assistantmsg.totalShorts > 0) {
+            console.log("[HandleMultiStepChoice] 다단락 응답 받음. 표시 시도.");
+            currentCardInterpretation = simulateResponse.assistantmsg;
+            // API 호출을 통해 새로 받은 해석일 경우 isNewInterpretationAfterBreak 설정
+            currentCardInterpretation.isNewInterpretationAfterBreak = (choiceType === 'break' || choiceType === 'deepen' || choiceType === 'deepen_overall' || choiceType === 'message' || choiceType === 'next' || choiceType === 'system_choice_one_cost_0' /*최초해석*/ || choiceType === 'action_confirm_three_cards_cost_trigger' /*최초해석*/ || choiceType === 'action_confirm_add_two_cards_cost_trigger' /*최초해석*/);
+            currentShortIndex = 0;
+            
+            // API 호출이 있었던 경우에만 모델 응답을 히스토리에 추가
+            const apiCalledTypes = ['break', 'deepen', 'deepen_overall', 'message', 'next', 'system_choice_one_cost_0', 'action_confirm_three_cards_cost_trigger', 'action_confirm_add_two_cards_cost_trigger'];
+            if (apiCalledTypes.includes(choiceType) || choiceValue.startsWith("action_")) { // action_ 으로 시작하는 value는 simulateBotResponse에서 API 호출 가능성 있음
+                 const firstShortText = currentCardInterpretation.shorts[0].text;
+                 if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
+                    chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+                    console.log("[HandleMultiStepChoice] API 응답(첫 단락) 히스토리 추가:", firstShortText.substring(0,30)+"...");
+                }
+            }
+            await displayCurrentShort();
+        } 
+        // simulateBotResponse가 assistantmsg_text (단일 텍스트)를 반환하는 경우는 이제 없음 (모든 응답을 다단락 JSON으로 통일)
+        else {
+            console.warn("[HandleMultiStepChoice] simulateBotResponse로부터 처리할 유효한 응답을 받지 못함:", simulateResponse);
+            // 안전장치: simulateBotResponse가 예상치 못한 값을 반환할 경우의 처리
+            const fallback = await simulateBotResponse("action_error_fallback");
+            if (fallback.assistantmsg && fallback.assistantmsg.totalShorts > 0) {
+                currentCardInterpretation = fallback.assistantmsg; currentShortIndex = 0; await displayCurrentShort();
+            } else {
+                await addMessage({text:"이런, 내가 잠시 길을 잃었나봐. 😵 처음부터 다시 시작해볼까?"}, 'bot');
+                await updateSampleAnswers([{type:"return_home", text:"처음으로 돌아가기"}]);
+            }
+        }
+    }
+}
+
 async function processMessageExchange(messageText, source = 'input', options = {}) {
     const { clearBeforeSend = false, menuItemData = null, buttonData = null } = options;
 
