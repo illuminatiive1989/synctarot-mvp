@@ -1079,3 +1079,28 @@ html, body {
     vertical-align: -0.15em;
     margin: 0 2px;
 }
+
+.message-card-image-header {
+    display: flex;
+    justify-content: center; /* 여러 카드일 경우 중앙 정렬 */
+    align-items: center;
+    margin-bottom: 10px; /* 아래 텍스트와의 간격 */
+    gap: 8px; /* 카드 이미지 사이 간격 */
+    padding-top: 5px; /* 메시지 상단과의 약간의 여유 */
+}
+
+.header-tarot-card-image {
+    max-width: 60px; /* 단락 위 카드 이미지 크기 (작게) */
+    max-height: calc(60px * 1.7); /* 비율 유지 */
+    height: auto;
+    border-radius: 4px;
+    border: 1px solid var(--input-border-color);
+    background-color: var(--white-color);
+    object-fit: contain;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* 3장일 때 크기 조절 (예시) */
+.message-card-image-header img:nth-child(n+3) {
+    /* max-width: 50px; */ /* 3장 이상일 때 조금 더 작게 할 수 있음 */
+}
