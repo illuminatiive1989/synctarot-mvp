@@ -1039,20 +1039,19 @@ async function simulateBotResponse(userMessageText) {
         currentSelectedCardImagePaths = [];
         currentIniFileName = ''; 
 
-        // assistantmsg를 새로운 다단락 JSON 형식으로 통일
         responseData = {
-            assistantmsg: {
+            assistantmsg: { // 다단락 JSON 형식으로 통일
                 totalShorts: 1,
                 shorts: [{
                     id: 1,
                     text: "응, 좋아. 카드를 몇 장 뽑아볼까? 😊",
                     sampleAnswers: [ 
-                        { type: "system_choice_one_cost_0", text: "1장만 볼래" }, // actionType은 updateSampleAnswers에서 자동 부여 가능
-                        { type: "system_choice_three_cost_2", text: "3장으로 자세히 볼래" }
+                        // value는 다음 simulateBotResponse 호출 시 사용될 액션명
+                        { type: "system_choice_one_cost_0", text: "1장만 볼래", value: "action_select_one_card_trigger" }, 
+                        { type: "system_choice_three_cost_2", text: "3장으로 자세히 볼래", value: "action_select_three_cards_trigger" }
                     ]
                 }]
             },
-            // sampleAnswers 필드는 이제 assistantmsg.shorts[0].sampleAnswers로 통합됨
             importance: 'high' 
         };
     } else if (userMessageText === "action_show_initial_menu") { 
@@ -1062,14 +1061,13 @@ async function simulateBotResponse(userMessageText) {
         currentSelectedCardImagePaths = [];
         currentIniFileName = '';
         responseData = {
-            assistantmsg: { // 다단락 형식으로 통일
+            assistantmsg: { 
                 totalShorts: 1,
                 shorts: [{
                     id: 1,
                     text: "안녕, 또 왔네. 😊 어떤 타로를 준비해볼까?",
                     sampleAnswers: [
                         { type: "placeholder", text: "좌측 [더보기] 메뉴에서 원하는 타로를 선택해줘." }
-                        // 플레이스홀더는 버튼으로 만들 때 disabled 처리 필요
                     ]
                 }]
             }
@@ -1086,13 +1084,16 @@ async function simulateBotResponse(userMessageText) {
             cards_to_select: 1,
             systemMessageOnConfirm: "좋아, 1장을 선택했네. 마음에 드는 카드를 골라봐. ✨"
         };
-    } else if (userMessageText === "action_select_three_cards_trigger") { // 비용 확인 UI 요청
+    } 
+    // action_select_three_cards_trigger는 handleMultiStepChoice에서 처리되어, 거기서 handleSelectThreeCards_Confirmation을 호출함.
+    // 따라서 simulateBotResponse가 이 값을 직접 받을 일은 이제 없음. 
+    // (만약 다른 경로로 온다면, 아래와 같이 비용 확인 UI를 위한 메시지 반환 가능)
+    /* else if (userMessageText === "action_select_three_cards_trigger") {
         console.log("[SimulateResponse] 'action_select_three_cards_trigger' 감지: 3장 카드 비용 확인 UI 요청.");
-        responseData = {
-            requestUiUpdate: "show_three_cards_cost_confirm" 
-        };
-    }
-    else if (userMessageText === "action_confirm_three_cards_cost_trigger") { // 비용 확인 후 카드 선택 UI 요청
+        responseData = await handleSelectThreeCards_Confirmation(); // 비용 확인 메시지 반환
+    } */
+
+    else if (userMessageText === "action_confirm_three_cards_cost_trigger") { // 비용 확인 후 '사용할게'를 누르면 이 액션으로 옴
         console.log("[SimulateResponse] 'action_confirm_three_cards_cost_trigger' 감지: 3장 카드 선택 UI 요청.");
         currentIniFileName = 'tarot-1st.ini'; 
         console.log(`[SimulateResponse] currentIniFileName 설정: ${currentIniFileName}`);
@@ -1103,7 +1104,7 @@ async function simulateBotResponse(userMessageText) {
             systemMessageOnConfirm: "좋아! 3장을 선택했구나. 신중하게 골라봐. 😊"
         };
     }
-    else if (userMessageText === "action_confirm_add_two_cards_cost_trigger") { // 2장 추가 비용 확인 후 카드 선택 UI 요청
+    else if (userMessageText === "action_confirm_add_two_cards_cost_trigger") { // 2장 추가 비용 확인 후 '사용할게'
         console.log("[SimulateResponse] 'action_confirm_add_two_cards_cost_trigger' 감지: 2장 추가 카드 선택 UI 요청.");
         currentIniFileName = 'tarot-single-add2-1st.ini'; 
         console.log(`[SimulateResponse] currentIniFileName 설정: ${currentIniFileName}`);
@@ -1114,14 +1115,17 @@ async function simulateBotResponse(userMessageText) {
             systemMessageOnConfirm: "좋아, 2장을 더 골라보자! 어떤 카드가 나올까? 👀"
         };
     }
-    // 3. API 호출이 필요한 경우
-    else if (userMessageText === "카드 선택 완료" || userMessageText === "action_cards_selected_start_interpretation" || userMessageText === "action_interpret_next_card" || userMessageText.startsWith("freetalk_") /* 예시: 자유대화 시작을 알리는 접두사 */ || (!userMessageText.startsWith("action_") && currentCardInterpretation === null) /* 일반 텍스트 입력이고, 현재 해석 중이 아닐 때 */ ) {
+    // 3. API 호출이 필요한 경우 (카드 선택 완료, 다음 카드, 자유 대화 등)
+    else if (userMessageText === "카드 선택 완료" || userMessageText === "action_cards_selected_start_interpretation" || userMessageText === "action_interpret_next_card" || userMessageText === "freetalk_request_from_user" /* 예시: 사용자가 직접 입력한 내용을 freetalk으로 처리해야 함을 나타내는 내부 액션 */ ) {
         
+        let iniToUse = currentIniFileName; // 기본적으로 현재 설정된 ini 사용
+
         if (userMessageText === "카드 선택 완료" || userMessageText === "action_cards_selected_start_interpretation") {
-            console.log(`[SimulateResponse] "${userMessageText}" 감지: 카드 선택 완료, 첫 해석 API 호출. 현재 ini: ${currentIniFileName}`);
-            if (!currentIniFileName) { // tarot-single.ini 또는 tarot-1st.ini 등이 설정되어 있어야 함
+            console.log(`[SimulateResponse] "${userMessageText}" 감지: 카드 선택 완료, 첫 해석 API 호출. 현재 ini: ${iniToUse}`);
+            if (!iniToUse) { // currentIniFileName이 이전에 설정되어 있어야 함 (action_select_one/three_card_trigger에서)
                 console.error("[SimulateResponse] '카드 선택 완료': currentIniFileName이 설정되지 않았습니다. tarot-single.ini로 기본 설정합니다.");
-                currentIniFileName = 'tarot-single.ini'; 
+                iniToUse = 'tarot-single.ini'; 
+                currentIniFileName = iniToUse; // 전역 변수에도 반영
                 console.log(`[SimulateResponse] currentIniFileName 기본값 설정: ${currentIniFileName}`);
             }
             if (!userProfile.선택된타로카드들 || userProfile.선택된타로카드들.length === 0) {
@@ -1132,67 +1136,61 @@ async function simulateBotResponse(userMessageText) {
             const selectionCompleteMsgForHistory = `사용자가 다음 타로 카드를 선택했어: ${cardNames}. 이 카드들에 대한 해석을 부탁해.`;
             if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== selectionCompleteMsgForHistory) {
                 chatHistoryForAPI.push(formatChatHistoryForAPI(selectionCompleteMsgForHistory, 'user'));
-                console.log("[SimulateResponse] 카드 선택 완료 메시지 히스토리 추가:", selectionCompleteMsgForHistory);
             }
-            // additionalInstructionForAPI 설정 (이전과 동일)
+            // additionalInstructionForAPI 설정
             additionalInstructionForAPI = "선택된 카드에 대한 첫 번째 해석을 시작해줘.";
-            if (currentIniFileName === 'tarot-1st.ini') { additionalInstructionForAPI = "사용자가 선택한 세 장의 카드 중 첫 번째 카드를 해석하는 단계야. 전체적인 흐름을 염두에 두되, 이번 응답은 첫 번째 카드에 집중해줘."; } 
-            else if (currentIniFileName === 'tarot-2nd.ini') { additionalInstructionForAPI = "이전에 해석한 첫 번째 카드와 연결하여, 지금 사용자가 선택한 세 장의 카드 중 두 번째 카드에 대한 해석을 시작해줘."; } 
-            else if (currentIniFileName === 'tarot-3rd.ini') { additionalInstructionForAPI = "이전에 해석한 두 카드와 연결하여, 지금 사용자가 선택한 세 장의 카드 중 세 번째 카드에 대한 해석을 시작하고, 전체적인 조언과 함께 마무리해줘. 이 해석이 끝나면 종합 심층 해석이나 상담 종료를 제안해야 해."; } 
-            else if (currentIniFileName === 'tarot-single.ini') { additionalInstructionForAPI = "사용자가 선택한 한 장의 카드에 대한 해석을 시작해줘. 해석이 끝나면 2장 더 뽑기나 심층 해석을 제안해야 해."; } 
-            else if (currentIniFileName === 'tarot-single-add2-1st.ini') { additionalInstructionForAPI = "이전에 해석한 한 장의 카드에 이어, 추가로 선택된 첫 번째 카드(총 두 번째 카드)에 대한 해석을 시작해줘. 이전 카드의 내용을 참고해서 연결해주는 게 좋아."; } 
-            else if (currentIniFileName === 'tarot-single-add2-last.ini') { additionalInstructionForAPI = "이전에 해석한 두 장의 카드에 이어, 추가로 선택된 두 번째 카드(총 세 번째 카드)에 대한 해석을 시작하고, 전체적인 조언과 함께 마무리해줘. 이 해석이 끝나면 종합 심층 해석이나 상담 종료를 제안해야 해.";}
+            if (iniToUse === 'tarot-1st.ini') { additionalInstructionForAPI = "사용자가 선택한 세 장의 카드 중 첫 번째 카드를 해석하는 단계야. 전체적인 흐름을 염두에 두되, 이번 응답은 첫 번째 카드에 집중해줘."; } 
+            else if (iniToUse === 'tarot-single.ini') { additionalInstructionForAPI = "사용자가 선택한 한 장의 카드에 대한 해석을 시작해줘. 해석이 끝나면 2장 더 뽑기나 심층 해석을 제안해야 해."; }
+            else if (iniToUse === 'tarot-single-add2-1st.ini') { additionalInstructionForAPI = "이전에 해석한 한 장의 카드에 이어, 추가로 선택된 첫 번째 카드(총 두 번째 카드)에 대한 해석을 시작해줘. 이전 카드의 내용을 참고해서 연결해주는 게 좋아."; }
+
 
         } else if (userMessageText === "action_interpret_next_card") {
-            // ... (이전과 동일한 nextIni 설정 로직)
-            console.log(`[SimulateResponse] "action_interpret_next_card" 감지. 현재 ini: ${currentIniFileName}`);
+            console.log(`[SimulateResponse] "action_interpret_next_card" 감지. 현재 ini: ${iniToUse}`);
             let nextIni = '';
             let currentCardContext = ''; 
-            if (currentIniFileName === 'tarot-1st.ini') { nextIni = 'tarot-2nd.ini'; currentCardContext = '두 번째'; } 
-            else if (currentIniFileName === 'tarot-2nd.ini') { nextIni = 'tarot-3rd.ini'; currentCardContext = '세 번째'; } 
-            else if (currentIniFileName === 'tarot-single-add2-1st.ini') { nextIni = 'tarot-single-add2-last.ini'; currentCardContext = '추가로 선택한 카드 중 마지막';}
+            if (iniToUse === 'tarot-1st.ini') { nextIni = 'tarot-2nd.ini'; currentCardContext = '두 번째'; } 
+            else if (iniToUse === 'tarot-2nd.ini') { nextIni = 'tarot-3rd.ini'; currentCardContext = '세 번째'; } 
+            else if (iniToUse === 'tarot-single-add2-1st.ini') { nextIni = 'tarot-single-add2-last.ini'; currentCardContext = '추가로 선택한 카드 중 마지막';}
             
             if (nextIni) {
-                currentIniFileName = nextIni;
+                iniToUse = nextIni;
+                currentIniFileName = iniToUse; // 전역 변수 업데이트
                 console.log(`[SimulateResponse] 다음 ini 파일 설정: ${currentIniFileName}`);
-                const userRequestForNextCard = "응, 다음 카드도 해석해줘."; // 이 메시지는 사용자가 'next' 버튼을 눌렀을 때 processMessageExchange에서 히스토리에 추가됨
-                // if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== userRequestForNextCard) {
-                //     chatHistoryForAPI.push(formatChatHistoryForAPI(userRequestForNextCard, 'user'));
-                //     console.log("[SimulateResponse] 다음 카드 요청 메시지 히스토리 추가.");
-                // }
+                const userRequestForNextCard = "응, 다음 카드도 해석해줘."; // 이 메시지는 handleMultiStepChoice에서 이미 히스토리에 추가됨
                 additionalInstructionForAPI = `이제 사용자가 선택한 카드들 중 ${currentCardContext} 카드에 대한 해석을 진행해줘. 이전 카드들의 내용을 참고해서 자연스럽게 이어가면 좋아.`;
                 if (nextIni === 'tarot-3rd.ini' || nextIni === 'tarot-single-add2-last.ini') { additionalInstructionForAPI += " 이 카드가 마지막 해석이니, 전체적인 조언과 함께 마무리하고, 종합 심층 해석이나 상담 종료를 제안해줘."; }
             } else {
-                console.warn("[SimulateResponse] 'action_interpret_next_card': 다음 .ini 파일을 결정할 수 없음. 현재 ini:", currentIniFileName);
-                return await simulateBotResponse("action_conclude_session_prompt"); // await 추가
+                console.warn("[SimulateResponse] 'action_interpret_next_card': 다음 .ini 파일을 결정할 수 없음. 현재 ini:", iniToUse);
+                return await simulateBotResponse("action_conclude_session_prompt"); 
             }
-        } else { // 일반 텍스트 입력 (freetalk)
-            console.log(`[SimulateResponse] 일반 메시지 또는 알 수 없는 액션: "${userMessageText}". freetalk.ini 사용 시도.`);
-            currentIniFileName = 'freetalk.ini';
+        } else { // 일반 텍스트 입력 (freetalk_request_from_user 또는 그 외 action_으로 시작하지 않는 텍스트)
+             // 이 경우는 handleMultiStepChoice에서 type: "message"일 때 choiceValue를 그대로 넘겨서 호출되거나,
+             // processMessageExchange의 일반 메시지 처리 분기에서 호출됨.
+            console.log(`[SimulateResponse] 일반 메시지 또는 freetalk 요청: "${userMessageText}".`);
+            iniToUse = 'freetalk.ini';
+            currentIniFileName = iniToUse; // freetalk으로 전환
             if (chatHistoryForAPI.length === 0 || (chatHistoryForAPI.length > 0 && chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== userMessageText) ) {
                  chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user'));
-                 console.log("[SimulateResponse] 일반 메시지 히스토리 추가:", userMessageText);
             }
             additionalInstructionForAPI = "사용자의 질문에 답변하거나 자유롭게 대화를 이어가줘. 필요하다면 관련된 타로 카드 이미지를 함께 언급해도 좋아.";
         }
         
-        console.log(`[SimulateResponse] API 호출 준비. ini: ${currentIniFileName}, 추가 지침: ${additionalInstructionForAPI ? additionalInstructionForAPI.substring(0,100)+"..." : "없음"}`);
-        const tarotIniCombined = await fetchTarotIniContent(currentIniFileName); 
+        console.log(`[SimulateResponse] API 호출 준비. ini: ${iniToUse}, 추가 지침: ${additionalInstructionForAPI ? additionalInstructionForAPI.substring(0,100)+"..." : "없음"}`);
+        const tarotIniCombined = await fetchTarotIniContent(iniToUse); 
         const apiResponse = await callGeminiAPI(tarotIniCombined, userProfile, chatHistoryForAPI, additionalInstructionForAPI);
         
         if (apiResponse.assistantmsg && apiResponse.assistantmsg.shorts && apiResponse.assistantmsg.shorts.length > 0) {
             const firstShortText = apiResponse.assistantmsg.shorts[0].text;
             if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                  chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
-                 console.log("[SimulateResponse] API 응답(첫 단락) 히스토리 추가:", firstShortText.substring(0,30)+"...");
             }
         }
-        responseData = { assistantmsg: apiResponse.assistantmsg }; // assistantmsg는 다단락 JSON 객체
+        responseData = { assistantmsg: apiResponse.assistantmsg };
 
     }
     // 4. 다단락 JSON을 직접 생성하는 간단한 UI 액션들
     else if (userMessageText === "action_conclude_session_prompt") {
-        // ... (이전과 동일, assistantmsg가 다단락 JSON 형식을 따름)
+        // ... (이전과 동일)
         console.log("[SimulateResponse] 'action_conclude_session_prompt' 감지: 상담 종료 제안 메시지 생성.");
         currentCardInterpretation = null; 
         currentShortIndex = -1;
@@ -1206,13 +1204,13 @@ async function simulateBotResponse(userMessageText) {
     }
     else if (userMessageText === "action_trigger_add_two_cards_scenario") { 
         console.log("[SimulateResponse] 'action_trigger_add_two_cards_scenario' 감지: 2장 더 뽑기 비용 확인 UI 요청.");
-        responseData = await handleAddTwoCards_Confirmation(); // 이 함수는 다단락 JSON 객체를 반환
+        responseData = await handleAddTwoCards_Confirmation();
     }
     else if (userMessageText === "action_cancel_cost_confirmation" || userMessageText.startsWith("action_bone_lack_guidance") || userMessageText === "action_error_fallback" || userMessageText === "action_default_fallback_options") {
         console.log(`[SimulateResponse] "${userMessageText}" 감지: 간단한 UI 액션 처리.`);
-        responseData = await handleSimpleUIActions(userMessageText); // 이 함수는 다단락 JSON 객체를 반환
+        responseData = await handleSimpleUIActions(userMessageText);
     }
-    else { // 정말 알 수 없는 경우 (오류 또는 예외 상황)
+    else { 
         console.error(`[SimulateResponse] 처리할 수 없는 userMessageText: "${userMessageText}"`);
         responseData = { assistantmsg: { totalShorts: 1, shorts: [{ id: 1, text: "음... 내가 지금 뭘 해야 할지 잘 모르겠어. 😥 다시 한번 말해줄래?", sampleAnswers: [{type:"return_home", text:"처음으로"}] }] } };
     }
