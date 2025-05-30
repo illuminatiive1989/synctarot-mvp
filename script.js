@@ -942,16 +942,17 @@ function updateSampleAnswers(answers = [], importance = 'low', isConfirmationSta
                     const answerText = answerData.text;
                     const answerValue = answerData.value || answerText; 
                     button.dataset.value = answerValue; 
-                    // actionType이 명시적으로 있으면 사용, 없으면 type 유무로 multi_step_choice 또는 message 결정
                     button.dataset.actionType = answerData.actionType || (answerData.type ? 'multi_step_choice' : 'message');
                     if (answerData.type) button.dataset.type = answerData.type;
                     
+                    // 로그 추가: 생성되는 버튼의 dataset 확인
+                    console.log(`[SampleAnswers] 버튼 생성: text="${answerText}", value="${answerValue}", actionType="${button.dataset.actionType}", type="${button.dataset.type}"`);
+
                     const contentWrapper = document.createElement('span');
                     contentWrapper.className = 'btn-content-wrapper';
                     
                     const costForThisButton = determineCostByType(answerData.type);
-                    // answerData에 displayCostIcon 등이 명시적으로 있으면 그 값을 따르고, 없으면 costForThisButton 기준으로 결정
-                    const shouldDisplayCostIcon = answerData.displayCostIcon !== undefined ? answerData.displayCostIcon : (costForThisButton >= 0 && answerData.type !== 'placeholder'); // 비용 0 이상이고 플레이스홀더 아니면 아이콘 표시 시도
+                    const shouldDisplayCostIcon = answerData.displayCostIcon !== undefined ? answerData.displayCostIcon : (costForThisButton >= 0 && answerData.type !== 'placeholder');
                     const iconTypeToShow = answerData.iconType || (costForThisButton > 0 ? 'bone' : 'free');
                     const shouldDisplayCostText = answerData.displayCostText !== undefined ? answerData.displayCostText : (costForThisButton > 0);
 
@@ -1011,7 +1012,6 @@ function updateSampleAnswers(answers = [], importance = 'low', isConfirmationSta
         }
     });
 }
-
 // const botKnowledgeBase = {
 //     "오늘의 운세 보여줘": { response: "오늘 당신의 운세는... <b>매우 긍정적</b>입니다! 새로운 시작을 하기에 좋은 날이에요. <br>자신감을 가지세요!", sampleAnswers: ["다른 운세", "고마워"] },
 //     "오늘 뭐 먹을지 추천해줘": { response: "오늘은 <b>따뜻한 국물 요리</b> 어떠세요? 예를 들어, <b>김치찌개</b>나 <b>순두부찌개</b>도 좋겠네요!", sampleAnswers: ["김치찌개 레시피", "다른 추천"] },
@@ -1027,72 +1027,77 @@ function updateSampleAnswers(answers = [], importance = 'low', isConfirmationSta
 //     "기본": { response: "죄송해요, 잘 이해하지 못했어요. <br><b>도움말</b>이라고 입력하시면 제가 할 수 있는 일을 알려드릴게요.", sampleAnswers: ["도움말", "오늘의 운세", "추천 메뉴"] }
 // };
 async function simulateBotResponse(userMessageText) {
-    console.log(`[SimulateResponse] 메인 분기 시작. 입력: "${userMessageText}"`);
+    console.log(`[SimulateResponse] ========== 함수 시작 ========== 입력: "${userMessageText}"`);
     let responseData = {};
     let additionalInstructionForAPI = null;
 
     if (userMessageText === "오늘의 운세 보여줘" || userMessageText === "썸인지 아닌지 알려줘" || userMessageText === "그 사람의 마음을 알고 싶어" || userMessageText === "오늘 뭐 먹을지 추천해줘" ) {
+        console.log(`[SimulateResponse] "${userMessageText}" 감지: '몇 장 뽑을래?' 하드코딩 선택지 반환.`);
         currentCardInterpretation = null; 
         currentShortIndex = -1;
         currentSelectedCardImagePaths = [];
         currentIniFileName = ''; 
 
-        return {
+        responseData = {
             assistantmsg: "응, 좋아. 카드를 몇 장 뽑아볼까? 😊",
             sampleAnswers: [ 
-                { text: "1장만 볼래", value: "action_select_one_card_trigger", type: "system_choice_one_cost_0", actionType: 'multi_step_choice' }, // displayCostIcon 등은 updateSampleAnswers에서 type 기반으로 자동 결정
+                { text: "1장만 볼래", value: "action_select_one_card_trigger", type: "system_choice_one_cost_0", actionType: 'multi_step_choice' },
                 { text: "3장으로 자세히 볼래", value: "action_select_three_cards_trigger", type: "system_choice_three_cost_2", actionType: 'multi_step_choice' }
             ],
             importance: 'high' 
         };
     } else if (userMessageText === "action_show_initial_menu") { 
+        console.log("[SimulateResponse] 'action_show_initial_menu' 감지: 초기 환영 메시지 반환.");
         currentCardInterpretation = null; 
         currentShortIndex = -1;
         currentSelectedCardImagePaths = [];
         currentIniFileName = '';
-        // 초기 메시지에는 봇의 말풍선만 표시하고, 사용자는 더보기 메뉴를 통해 타로를 선택하도록 유도
-        return {
-            assistantmsg: "안녕, 또 왔네. 😊 어떤 타로를 준비해볼까?", // 일반 텍스트로 전달
+        responseData = {
+            assistantmsg: "안녕, 또 왔네. 😊 어떤 타로를 준비해볼까?", 
             sampleAnswers: [
                 { text: "좌측 [더보기] 메뉴에서 원하는 타로를 선택해줘.", value: "no_action_placeholder", type: "placeholder", actionType: 'placeholder', disabled: true }
             ]
         };
     }
     else if (userMessageText === "action_select_one_card_trigger") {
+        console.log("[SimulateResponse] 'action_select_one_card_trigger' 감지: 1장 카드 선택 UI 요청.");
         currentIniFileName = 'tarot-single.ini'; 
         userProfile.시나리오 = "tarot_single_pick";
-        return {
+        responseData = {
             tarocardview: true,
             cards_to_select: 1,
             systemMessageOnConfirm: "좋아, 1장을 선택했네. 마음에 드는 카드를 골라봐. ✨"
         };
     } else if (userMessageText === "action_select_three_cards_trigger") {
-        // 이 action은 simulateBotResponse에서 직접 처리하기보다, 
-        // processMessageExchange에서 이 value를 받고 handleSelectThreeCards_Confirmation을 호출하도록 변경.
-        // 여기서는 비용 확인 UI를 띄우기 위한 요청임을 명시하는 데이터를 반환.
-        return {
-            requestConfirmation: "select_three_cards" // processMessageExchange에서 이 값을 보고 분기
+        console.log("[SimulateResponse] 'action_select_three_cards_trigger' 감지: 3장 카드 비용 확인 UI 요청.");
+        // 이 액션은 processMessageExchange에서 비용 확인 UI를 직접 띄우도록 유도.
+        // handleSelectThreeCards_Confirmation() 호출은 processMessageExchange에서 이루어짐.
+        responseData = {
+            requestUiUpdate: "show_three_cards_cost_confirm" // processMessageExchange에서 이 값을 보고 분기
         };
     }
     else if (userMessageText === "action_confirm_three_cards_cost_trigger") {
+        console.log("[SimulateResponse] 'action_confirm_three_cards_cost_trigger' 감지: 3장 카드 선택 UI 요청.");
         currentIniFileName = 'tarot-1st.ini'; 
         userProfile.시나리오 = "tarot_triple_pick";
-        return {
+        responseData = {
             tarocardview: true,
             cards_to_select: 3,
             systemMessageOnConfirm: "좋아! 3장을 선택했구나. 신중하게 골라봐. 😊"
         };
     }
     else if (userMessageText === "action_confirm_add_two_cards_cost_trigger") {
+        console.log("[SimulateResponse] 'action_confirm_add_two_cards_cost_trigger' 감지: 2장 추가 카드 선택 UI 요청.");
         currentIniFileName = 'tarot-single-add2-1st.ini';
         userProfile.시나리오 = "tarot_add_two_pick";
-         return {
+        responseData = {
             tarocardview: true,
             cards_to_select: 2,
             systemMessageOnConfirm: "좋아, 2장을 더 골라보자! 어떤 카드가 나올까? 👀"
         };
     }
     else if (userMessageText === "카드 선택 완료" || userMessageText === "action_cards_selected_start_interpretation") {
+        console.log(`[SimulateResponse] "${userMessageText}" 감지: 카드 선택 완료, 첫 해석 API 호출. 현재 ini: ${currentIniFileName}`);
         if (!currentIniFileName) {
             console.error("[SimulateResponse] '카드 선택 완료': currentIniFileName이 설정되지 않았습니다. tarot-single.ini로 기본 설정합니다.");
             currentIniFileName = 'tarot-single.ini'; 
@@ -1107,6 +1112,7 @@ async function simulateBotResponse(userMessageText) {
         
         if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== selectionCompleteMsgForHistory) {
             chatHistoryForAPI.push(formatChatHistoryForAPI(selectionCompleteMsgForHistory, 'user'));
+            console.log("[SimulateResponse] 카드 선택 완료 메시지 히스토리 추가:", selectionCompleteMsgForHistory);
         }
 
         additionalInstructionForAPI = "선택된 카드에 대한 첫 번째 해석을 시작해줘.";
@@ -1124,7 +1130,7 @@ async function simulateBotResponse(userMessageText) {
         } else if (currentIniFileName === 'tarot-single-add2-last.ini') {
             additionalInstructionForAPI = "이전에 해석한 두 장의 카드에 이어, 추가로 선택된 두 번째 카드(총 세 번째 카드)에 대한 해석을 시작하고, 전체적인 조언과 함께 마무리해줘. 이 해석이 끝나면 종합 심층 해석이나 상담 종료를 제안해야 해.";
         }
-
+        console.log(`[SimulateResponse] API 호출 준비. ini: ${currentIniFileName}, 추가 지침: ${additionalInstructionForAPI}`);
         const tarotIniCombined = await fetchTarotIniContent(currentIniFileName);
         const apiResponse = await callGeminiAPI(tarotIniCombined, userProfile, chatHistoryForAPI, additionalInstructionForAPI);
         
@@ -1132,12 +1138,14 @@ async function simulateBotResponse(userMessageText) {
             const firstShortText = apiResponse.assistantmsg.shorts[0].text;
             if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                  chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+                 console.log("[SimulateResponse] API 응답(첫 단락) 히스토리 추가:", firstShortText);
             }
         }
         responseData = { assistantmsg: apiResponse.assistantmsg };
 
     }
     else if (userMessageText === "action_interpret_next_card") {
+        console.log(`[SimulateResponse] "action_interpret_next_card" 감지. 현재 ini: ${currentIniFileName}`);
         let nextIni = '';
         let currentCardContext = ''; 
 
@@ -1154,22 +1162,25 @@ async function simulateBotResponse(userMessageText) {
         
         if (nextIni) {
             currentIniFileName = nextIni;
+            console.log(`[SimulateResponse] 다음 ini 파일 설정: ${currentIniFileName}`);
             const userRequestForNextCard = "응, 다음 카드도 해석해줘.";
             if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== userRequestForNextCard) {
                 chatHistoryForAPI.push(formatChatHistoryForAPI(userRequestForNextCard, 'user'));
+                console.log("[SimulateResponse] 다음 카드 요청 메시지 히스토리 추가.");
             }
 
             additionalInstructionForAPI = `이제 사용자가 선택한 카드들 중 ${currentCardContext} 카드에 대한 해석을 진행해줘. 이전 카드들의 내용을 참고해서 자연스럽게 이어가면 좋아.`;
              if (nextIni === 'tarot-3rd.ini' || nextIni === 'tarot-single-add2-last.ini') {
                 additionalInstructionForAPI += " 이 카드가 마지막 해석이니, 전체적인 조언과 함께 마무리하고, 종합 심층 해석이나 상담 종료를 제안해줘.";
             }
-
+            console.log(`[SimulateResponse] API 호출 준비 (다음 카드). ini: ${currentIniFileName}, 추가 지침: ${additionalInstructionForAPI}`);
             const tarotIniCombined = await fetchTarotIniContent(currentIniFileName);
             const apiResponse = await callGeminiAPI(tarotIniCombined, userProfile, chatHistoryForAPI, additionalInstructionForAPI);
             if (apiResponse.assistantmsg && apiResponse.assistantmsg.shorts && apiResponse.assistantmsg.shorts.length > 0) {
                  const firstShortText = apiResponse.assistantmsg.shorts[0].text;
                  if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                     chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+                    console.log("[SimulateResponse] API 응답(첫 단락) 히스토리 추가 (다음 카드):", firstShortText);
                 }
             }
             responseData = { assistantmsg: apiResponse.assistantmsg };
@@ -1179,6 +1190,7 @@ async function simulateBotResponse(userMessageText) {
         }
     }
     else if (userMessageText === "action_conclude_session_prompt") {
+        console.log("[SimulateResponse] 'action_conclude_session_prompt' 감지: 상담 종료 제안 메시지 생성.");
         currentCardInterpretation = null; 
         currentShortIndex = -1;
         let deepenOverallText = "오늘 내용 종합해서 더 깊게!";
@@ -1191,7 +1203,7 @@ async function simulateBotResponse(userMessageText) {
                 totalShorts: 1,
                 shorts: [{
                     id: 1,
-                    text: "오늘 타로 상담은 어땠어? 😊 혹시 더 깊이 이야기하고 싶은 부분이 있거나, 아니면 다른 주제로 넘어가 볼까?",
+                    text: "오늘 타로 상담은 여기까지 진행해봤는데, 어땠어? 😊 혹시 더 깊이 이야기하고 싶은 부분이 있거나, 아니면 다른 주제로 넘어가 볼까?",
                     sampleAnswers: [
                         { type: "deepen_overall", text: deepenOverallText }, 
                         { type: "return_home", text: "고마워, 오늘은 만족해!" }
@@ -1200,41 +1212,48 @@ async function simulateBotResponse(userMessageText) {
             }
         };
     }
-    else if (userMessageText === "action_trigger_add_two_cards_scenario") { // 1장 본 후 2장 더 뽑기 시나리오 시작 (비용 확인 UI 요청)
-        return await handleAddTwoCards_Confirmation();
+    else if (userMessageText === "action_trigger_add_two_cards_scenario") { 
+        console.log("[SimulateResponse] 'action_trigger_add_two_cards_scenario' 감지: 2장 더 뽑기 비용 확인 UI 요청.");
+        responseData = await handleAddTwoCards_Confirmation();
     }
     else if (userMessageText === "action_cancel_cost_confirmation" || userMessageText.startsWith("action_bone_lack_guidance") || userMessageText === "action_error_fallback" || userMessageText === "action_default_fallback_options") {
+        console.log(`[SimulateResponse] "${userMessageText}" 감지: 간단한 UI 액션 처리.`);
         responseData = await handleSimpleUIActions(userMessageText);
     }
     else { 
+        console.log(`[SimulateResponse] 일반 메시지 또는 알 수 없는 액션: "${userMessageText}". freetalk.ini 사용 시도.`);
         if (!currentCardInterpretation || userMessageText === "잠깐, 더 물어볼게 있어.") {
             currentIniFileName = 'freetalk.ini';
             console.log(`[SimulateResponse] 일반 메시지 또는 추가 질문. ${currentIniFileName} 사용.`);
             if (chatHistoryForAPI.length === 0 || (chatHistoryForAPI.length > 0 && chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== userMessageText) ) {
                  chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user'));
+                 console.log("[SimulateResponse] 일반 메시지 히스토리 추가:", userMessageText);
             }
         } else {
              console.warn("[SimulateResponse] 예기치 않은 일반 메시지 경로. userMessage:", userMessageText, "currentIni:", currentIniFileName);
              currentIniFileName = 'freetalk.ini'; 
              if (chatHistoryForAPI.length === 0 || (chatHistoryForAPI.length > 0 && chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== userMessageText) ) {
                  chatHistoryForAPI.push(formatChatHistoryForAPI(userMessageText, 'user'));
+                 console.log("[SimulateResponse] 예기치 않은 경로의 일반 메시지 히스토리 추가:", userMessageText);
             }
         }
         
         const tarotIniCombined = await fetchTarotIniContent(currentIniFileName);
         additionalInstructionForAPI = "사용자의 질문에 답변하거나 자유롭게 대화를 이어가줘. 필요하다면 관련된 타로 카드 이미지를 함께 언급해도 좋아.";
+        console.log(`[SimulateResponse] API 호출 준비 (freetalk). ini: ${currentIniFileName}, 추가 지침: ${additionalInstructionForAPI}`);
         const apiResponse = await callGeminiAPI(tarotIniCombined, userProfile, chatHistoryForAPI, additionalInstructionForAPI);
         
         if (apiResponse.assistantmsg && apiResponse.assistantmsg.shorts && apiResponse.assistantmsg.shorts.length > 0) {
             const firstShortText = apiResponse.assistantmsg.shorts[0].text;
             if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+               console.log("[SimulateResponse] API 응답(첫 단락) 히스토리 추가 (freetalk):", firstShortText);
            }
         }
         responseData = { assistantmsg: apiResponse.assistantmsg };
     }
     
-    console.log(`[SimulateResponse] 최종 생성/반환 데이터:`, JSON.parse(JSON.stringify(responseData)));
+    console.log(`[SimulateResponse] ========== 함수 종료 ========== 최종 생성/반환 데이터:`, JSON.parse(JSON.stringify(responseData)));
     return responseData;
 }
 // simulateBotResponse에서 사용될 간단한 UI 액션 핸들러
@@ -1424,16 +1443,20 @@ async function handleConfirmAddTwoCardsCost() {
 async function processMessageExchange(messageText, source = 'input', options = {}) {
     const { clearBeforeSend = false, menuItemData = null, buttonData = null } = options;
 
-    console.log(`[ProcessExchange] 시작. 메시지: "${messageText}", 소스: ${source}, 옵션:`, JSON.parse(JSON.stringify(options)));
+    console.log(`[ProcessExchange] ========== 함수 시작 ========== 메시지: "${messageText}", 소스: ${source}, buttonData:`, buttonData ? JSON.parse(JSON.stringify(buttonData)) : '없음', "menuItemData:", menuItemData ? "있음" : "없음");
     
     if (isLoadingBotResponse && source !== 'system_internal_force' && source !== 'system_init_skip_user_message') { 
         console.log("[ProcessExchange] 조건 미충족으로 중단 (로딩 중).");
         return;
     }
     
-    if (source === 'system_init_skip_user_message' && isLoadingBotResponse) {
-        console.log("[ProcessExchange] 초기화 호출이지만 여전히 로딩 중. 잠시 후 재시도 또는 상태 확인 필요.");
+    // 초기화 호출 시 isLoadingBotResponse 상태 체크 (이전 로그에서 문제 발생 지점)
+    if (source === 'system_init_skip_user_message') {
+        console.log("[ProcessExchange] 초기화 호출 (`system_init_skip_user_message`). isLoadingBotResponse:", isLoadingBotResponse);
+        // 이 시점에서는 isLoadingBotResponse가 true여도 진행해야 할 수 있으므로, 로딩 체크를 여기서 하지 않거나 완화.
+        // 또는 initializeChat에서 processMessageExchange 호출 전에 isLoadingBotResponse = false로 설정.
     }
+
 
     if (messageText.trim() === '' && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo' && !(buttonData && (buttonData.actionType === 'confirm_cost' || buttonData.actionType === 'multi_step_choice' || buttonData.type)) && source !== 'system_internal_no_user_echo') {
         console.log("[ProcessExchange] 조건 미충족으로 중단 (빈 메시지 또는 특정 내부 호출 아님).");
@@ -1443,9 +1466,11 @@ async function processMessageExchange(messageText, source = 'input', options = {
     let shouldClearChat = clearBeforeSend;
 
     if (buttonData && buttonData.type === 'return_home') {
+        console.log("[ProcessExchange] 'return_home' 타입 감지. 채팅 초기화 시도.");
         const confirmReset = confirm("모든 대화 내용이 지워지고 첫 화면으로 돌아갑니다. 괜찮으신가요?");
         if (confirmReset) {
-            clearChatMessages();
+            console.log("[ProcessExchange] 사용자가 초기화 동의함. initializeChat 호출.");
+            clearChatMessages(); // 먼저 현재 채팅창 내용 즉시 비우기
             chatHistoryForAPI = [];
             currentCardInterpretation = null;
             currentShortIndex = -1;
@@ -1457,11 +1482,10 @@ async function processMessageExchange(messageText, source = 'input', options = {
             
             isLoadingBotResponse = true; 
             setUIInteractions(true, false);
-            // initializeChat을 호출하여 앱 상태를 완전히 초기화.
-            // initializeChat 내부에서 processMessageExchange("action_show_initial_menu"...)를 호출함.
             await initializeChat(); 
             return; 
         } else {
+            console.log("[ProcessExchange] 사용자가 초기화 취소함.");
             if (isLoadingBotResponse) { 
                  isLoadingBotResponse = false;
                  if(sendBtn) sendBtn.classList.remove('loading');
@@ -1486,6 +1510,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
     }
     
     if (shouldClearChat) {
+        console.log("[ProcessExchange] 채팅창 비우기 실행.");
         clearChatMessages();
         chatHistoryForAPI = []; 
         currentCardInterpretation = null; 
@@ -1496,6 +1521,7 @@ async function processMessageExchange(messageText, source = 'input', options = {
         console.log("[ProcessExchange] 채팅창 비움. API 대화 기록 및 다단락 해석 상태 초기화됨.");
     }
 
+    console.log("[ProcessExchange] 로딩 상태 설정 및 UI 비활성화.");
     isLoadingBotResponse = true;
     if(sendBtn) sendBtn.classList.add('loading');
     setUIInteractions(true, false);
@@ -1505,17 +1531,16 @@ async function processMessageExchange(messageText, source = 'input', options = {
         moreOptionsBtn.classList.remove('active');
     }
 
-    // 사용자 메시지 표시는 multi_step_choice가 아닌 경우에만 여기서 처리.
-    // multi_step_choice의 경우, 각 분기 내에서 필요에 따라 사용자 선택 텍스트를 addMessage로 표시.
     const shouldAddUserMessageToDisplayFromHere =
         source === 'input' || 
         (source === 'panel_option' && !messageText.startsWith("action_")) ||
-        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost' && buttonData.actionType !== 'multi_step_choice');
+        (source === 'sample_button' && buttonData && buttonData.actionType !== 'confirm_cost' && buttonData.actionType !== 'cancel_cost' && buttonData.actionType !== 'multi_step_choice' && !buttonData.type); // type이 있는 버튼은 사용자 선택 메시지를 각 분기에서 직접 추가
 
 
     const textForUserDisplay = (source === 'sample_button' && buttonData && buttonData.text) ? buttonData.text : messageText;
 
     if (shouldAddUserMessageToDisplayFromHere && source !== 'system_init_skip_user_message' && source !== 'system_internal_no_user_echo') {
+        console.log(`[ProcessExchange] 사용자 메시지 표시: "${textForUserDisplay}"`);
         await addMessage(textForUserDisplay, 'user');
         if (!hasUserSentMessage && source !== 'system_init_skip_user_message') {
             hasUserSentMessage = true;
@@ -1524,6 +1549,8 @@ async function processMessageExchange(messageText, source = 'input', options = {
     }
     
     const effectiveMessageForAPI = (source === 'sample_button' && buttonData && buttonData.value) ? buttonData.value : messageText;
+    console.log(`[ProcessExchange] API로 전달될 유효 메시지: "${effectiveMessageForAPI}"`);
+
 
     if (source === 'input' && messageInput) {
         messageInput.value = '';
@@ -1532,33 +1559,47 @@ async function processMessageExchange(messageText, source = 'input', options = {
 
     if (source === 'sample_button' && buttonData && buttonData.actionType === 'multi_step_choice') {
         const choiceType = buttonData.type;
-        console.log(`[ProcessExchange] 다단락 선택지 클릭: type=${choiceType}, text="${buttonData.text}"`);
+        console.log(`[ProcessExchange] 다단락 선택지 처리 시작. Type: "${choiceType}", Text: "${buttonData.text}", Value: "${buttonData.value}"`);
         
-        await addMessage(buttonData.text, 'user'); 
+        // 사용자 선택을 채팅창에 표시 (이전에 shouldAddUserMessageToDisplayFromHere에서 제외했으므로 여기서 추가)
+        if (choiceType) { // type이 있는 경우만 (placeholder 등 제외)
+            await addMessage(buttonData.text, 'user');
+            console.log(`[ProcessExchange] 사용자 선택("${buttonData.text}")을 채팅에 표시함.`);
+        }
 
-        // --- "몇 장 뽑을래?" 하드코딩된 선택지 처리 ---
+
         if (choiceType === 'system_choice_one_cost_0' || choiceType === 'system_choice_three_cost_2') {
-            const cost = determineCostByType(choiceType); // 비용은 이미 0 또는 2로 결정됨
-            let nextAction = buttonData.value; // 예: "action_select_one_card_trigger"
+            console.log(`[ProcessExchange] "몇 장 뽑을래" 선택지 (${choiceType}) 처리 중.`);
+            let nextActionForSimulate = buttonData.value; // 예: "action_select_one_card_trigger"
             
-            // 3장 선택 시 비용 확인 선행
             if (choiceType === 'system_choice_three_cost_2') {
+                const cost = determineCostByType(choiceType);
                  if (userProfile.bones < cost) {
+                    console.log(`[ProcessExchange] 뼈다귀 부족 (3장 선택 시). 현재: ${userProfile.bones}, 필요: ${cost}`);
                     const boneLackResponse = await simulateBotResponse("action_bone_lack_guidance");
-                    // 응답 처리 (displayCurrentShort 또는 addMessage + updateSampleAnswers)
                     if (boneLackResponse.assistantmsg && boneLackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = boneLackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); } 
                     else if (boneLackResponse.assistantmsg) { await addMessage({text: boneLackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(boneLackResponse.sampleAnswers || []); }
                     isLoadingBotResponse = false; if(sendBtn) sendBtn.classList.remove('loading'); setUIInteractions(false, false);
                     return;
                 }
-                // 비용 확인 UI를 띄우기 위한 액션으로 변경
-                nextAction = "action_select_three_cards_confirmation_ui"; // simulateBotResponse에서 이 액션을 받아 비용확인 메시지 생성
+                // 3장 선택 시 비용 확인 UI를 먼저 띄움
+                console.log("[ProcessExchange] 3장 선택, 비용 확인 UI 요청.");
+                const confirmationResponse = await handleSelectThreeCards_Confirmation(); // 비용 확인 메시지 생성 함수 직접 호출
+                 if (confirmationResponse.assistantmsg && confirmationResponse.assistantmsg.totalShorts > 0) {
+                    currentCardInterpretation = confirmationResponse.assistantmsg;
+                    currentShortIndex = 0;
+                    await displayCurrentShort();
+                }
+                isLoadingBotResponse = false; if(sendBtn) sendBtn.classList.remove('loading'); setUIInteractions(false, false);
+                return; // 비용 확인 후 사용자가 다음 버튼을 누를 때까지 대기
             }
 
-
-            const simulateResponse = await simulateBotResponse(nextAction); 
+            // 1장 선택의 경우 바로 simulateBotResponse 호출
+            console.log(`[ProcessExchange] simulateBotResponse 호출 (다음 액션: ${nextActionForSimulate})`);
+            const simulateResponse = await simulateBotResponse(nextActionForSimulate); 
             
             if (simulateResponse.tarocardview && simulateResponse.cards_to_select > 0) {
+                console.log("[ProcessExchange] 타로 카드 선택 UI 표시 요청 받음.");
                 if (messageInput && document.activeElement === messageInput) messageInput.blur();
                 let currentTarotBg = userProfile.tarotbg || 'default.png';
                  if (options.menuItemData && options.menuItemData.tarotbg) { 
@@ -1569,34 +1610,38 @@ async function processMessageExchange(messageText, source = 'input', options = {
                 if (simulateResponse.systemMessageOnConfirm) {
                     await addMessage(simulateResponse.systemMessageOnConfirm, 'system');
                 }
-            } else if (simulateResponse.assistantmsg && simulateResponse.assistantmsg.totalShorts > 0) { // 비용 확인 메시지 등
+            } else if (simulateResponse.assistantmsg && simulateResponse.assistantmsg.totalShorts > 0) { 
+                 console.log("[ProcessExchange] 다단락 응답(아마도 비용 확인 등) 받음.");
                  currentCardInterpretation = simulateResponse.assistantmsg;
                  currentShortIndex = 0;
                  await displayCurrentShort();
-            } else if (simulateResponse.assistantmsg) { // 기타 일반 메시지 (거의 없을 것으로 예상)
+            } else if (simulateResponse.assistantmsg) { 
+                console.log("[ProcessExchange] 일반 텍스트 응답 받음.");
                 await addMessage({text: simulateResponse.assistantmsg}, 'bot');
                 await updateSampleAnswers(simulateResponse.sampleAnswers || []);
             }
              isLoadingBotResponse = false; if(sendBtn) sendBtn.classList.remove('loading'); setUIInteractions(false, false);
              return;
         }
-        // --- 비용 확인 후 실제 진행 선택 ---
         else if (choiceType === 'action_confirm_three_cards_cost_trigger' || choiceType === 'action_confirm_add_two_cards_cost_trigger') {
+            console.log(`[ProcessExchange] 비용 사용 확인 선택지 (${choiceType}) 처리 중.`);
             const cost = determineCostByType(choiceType === 'action_confirm_three_cards_cost_trigger' ? 'system_choice_three_cost_2' : 'add_two_cards');
             if (userProfile.bones < cost) {
-                // 뼈다귀 부족 처리
+                console.log(`[ProcessExchange] 뼈다귀 부족 (비용 확인 후). 현재: ${userProfile.bones}, 필요: ${cost}`);
                 const boneLackResponse = await simulateBotResponse("action_bone_lack_guidance");
                 if (boneLackResponse.assistantmsg && boneLackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = boneLackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); } 
                 else if (boneLackResponse.assistantmsg) { await addMessage({text: boneLackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(boneLackResponse.sampleAnswers || []); }
             } else {
-                userProfile.bones -= cost; // 실제 비용 차감
+                console.log(`[ProcessExchange] 뼈다귀 ${cost}개 차감.`);
+                userProfile.bones -= cost; 
                 updateBoneCountDisplay();
                 saveUserProfileToLocalStorage(userProfile);
                 await addMessage(`(뼈다귀 ${cost}개 사용했어! 남은 뼈다귀: ${userProfile.bones}개)`, 'system');
 
-                // simulateBotResponse로 다음 단계(카드 선택 UI) 요청
-                const simulateResponse = await simulateBotResponse(buttonData.value); // value에 실제 액션 있음
+                console.log(`[ProcessExchange] simulateBotResponse 호출 (다음 액션: ${buttonData.value})`);
+                const simulateResponse = await simulateBotResponse(buttonData.value); 
                 if (simulateResponse.tarocardview && simulateResponse.cards_to_select > 0) {
+                    console.log("[ProcessExchange] 타로 카드 선택 UI 표시 요청 받음 (비용 차감 후).");
                     if (messageInput && document.activeElement === messageInput) messageInput.blur();
                     let currentTarotBg = userProfile.tarotbg || 'default.png';
                     // 이전 menuItemData의 tarotbg를 계속 사용해야 할 수 있음. (options에서 가져오거나 상태로 관리)
@@ -1604,123 +1649,141 @@ async function processMessageExchange(messageText, source = 'input', options = {
                     if (simulateResponse.systemMessageOnConfirm) {
                         await addMessage(simulateResponse.systemMessageOnConfirm, 'system');
                     }
+                } else {
+                    console.warn("[ProcessExchange] 비용 차감 후 카드 선택 UI가 아닌 다른 응답 받음:", simulateResponse);
                 }
             }
              isLoadingBotResponse = false; if(sendBtn) sendBtn.classList.remove('loading'); setUIInteractions(false, false);
              return;
         }
-        // --- API로부터 받은 다단락 응답의 선택지 처리 ---
         else if (choiceType === 'again') {
+            console.log("[ProcessExchange] 'again' 선택지 처리 중.");
             if (currentCardInterpretation && currentCardInterpretation.shorts && currentShortIndex < currentCardInterpretation.shorts.length - 1) {
                 currentShortIndex++;
                 const nextShortText = currentCardInterpretation.shorts[currentShortIndex].text;
                  if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === nextShortText)) {
                     chatHistoryForAPI.push(formatChatHistoryForAPI(nextShortText, 'model'));
+                    console.log("[ProcessExchange] 다음 단락(again) 히스토리 추가:", nextShortText.substring(0,30)+"...");
                 }
                 await displayCurrentShort();
-            } else { /* ... 오류 처리 ... */ 
+            } else { 
+                console.error("[ProcessExchange] 'again' 선택: 다음 단락 없음 또는 해석 데이터 오류");
                 const fallbackResponse = await simulateBotResponse("action_default_fallback_options");
                 if (fallbackResponse.assistantmsg && fallbackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = fallbackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); } 
                 else if (fallbackResponse.assistantmsg) { await addMessage({text: fallbackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(fallbackResponse.sampleAnswers || []); }
             }
         } else if (choiceType === 'break' || choiceType === 'deepen' || choiceType === 'deepen_overall') {
+            console.log(`[ProcessExchange] "${choiceType}" 선택지 처리 중. API 재호출 필요.`);
             const cost = determineCostByType(choiceType);
-            if (userProfile.bones < cost) { /* ... 뼈다귀 부족 처리 ... */ 
+            if (userProfile.bones < cost) { 
+                console.log(`[ProcessExchange] 뼈다귀 부족 (${choiceType}). 현재: ${userProfile.bones}, 필요: ${cost}`);
                 const boneLackResponse = await simulateBotResponse("action_bone_lack_guidance");
                 if (boneLackResponse.assistantmsg && boneLackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = boneLackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); } 
                 else if (boneLackResponse.assistantmsg) { await addMessage({text: boneLackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(boneLackResponse.sampleAnswers || []); }
                 isLoadingBotResponse = false; if(sendBtn) sendBtn.classList.remove('loading'); setUIInteractions(false, false); return;
             }
-            if (cost > 0) { userProfile.bones -= cost; updateBoneCountDisplay(); saveUserProfileToLocalStorage(userProfile); await addMessage(`(뼈다귀 ${cost}개 사용했어! 남은 뼈다귀: ${userProfile.bones}개)`, 'system'); }
+            if (cost > 0) { console.log(`[ProcessExchange] 뼈다귀 ${cost}개 차감 (${choiceType}).`); userProfile.bones -= cost; updateBoneCountDisplay(); saveUserProfileToLocalStorage(userProfile); await addMessage(`(뼈다귀 ${cost}개 사용했어! 남은 뼈다귀: ${userProfile.bones}개)`, 'system'); }
 
-            let contextForAPI = `사용자가 이전 단락 ("${currentCardInterpretation.shorts[currentShortIndex].text}")에 대해 "${buttonData.text}" 라고 반응했어. `;
-            let iniToUse = currentIniFileName; // 기본적으로 현재 ini 사용
+            let contextForAPI = `사용자가 이전 단락 ("${currentCardInterpretation.shorts[currentShortIndex].text.substring(0,50)}...")에 대해 "${buttonData.text}" 라고 반응했어. `;
+            let iniToUse = currentIniFileName; 
 
             if (choiceType === 'break') contextForAPI += `이 반응을 고려해서 이전의 흐름에서 벗어나 새로운 방향으로 다음 해석 단락들을 생성해줘.`;
             if (choiceType === 'deepen' || choiceType === 'deepen_overall') {
-                // deepen의 경우, 현재 ini 파일이나 카드 정보를 바탕으로 더 깊은 해석을 요청
-                // 예시: currentIniFileName = 'tarot-single-deepen.ini'; // 또는 현재 ini에 추가 지침
                 contextForAPI += `선택된 카드(${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id]? TAROT_CARD_DATA[id].name : id)).join(', ')})에 대해 더 깊이 있는 해석을 요청했어. 새로운 단락들로 심층 분석을 제공해줘.`;
-                if (choiceType === 'deepen_overall' && userProfile.선택된타로카드들.length > 1) { // 3장 종합 심층 등
-                    // iniToUse = 'tarot-overall-deepen.ini'; // 종합 심층용 ini (필요시)
+                if (choiceType === 'deepen_overall' && userProfile.선택된타로카드들.length > 1) { 
                     contextForAPI = `사용자가 지금까지 나온 카드들(${userProfile.선택된타로카드들.map(id => (TAROT_CARD_DATA[id]? TAROT_CARD_DATA[id].name : id)).join(', ')})에 대한 종합적인 심층 해석을 요청했어. 전체 내용을 아우르는 깊이있는 분석을 해줘.`;
                 }
             }
             
-            if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== buttonData.text) {
+            if (chatHistoryForAPI.length === 0 || chatHistoryForAPI[chatHistoryForAPI.length-1].parts[0].text !== buttonData.text) { // 사용자 선택 텍스트를 value로 사용하지 않고 text로 히스토리 기록
                 chatHistoryForAPI.push(formatChatHistoryForAPI(buttonData.text, 'user'));
+                console.log(`[ProcessExchange] 사용자 선택(${buttonData.text}) 히스토리 추가.`);
             }
-
+            console.log(`[ProcessExchange] API 호출 준비 (${choiceType}). ini: ${iniToUse}, 추가 지침: ${contextForAPI.substring(0,100)}...`);
             const tarotIniCombined = await fetchTarotIniContent(iniToUse); 
             const apiResponse = await callGeminiAPI(tarotIniCombined, userProfile, chatHistoryForAPI, contextForAPI);
 
             if (apiResponse.assistantmsg && apiResponse.assistantmsg.totalShorts > 0) {
+                console.log(`[ProcessExchange] API 응답 받음 (${choiceType}), 새 다단락 해석 시작.`);
                 currentCardInterpretation = apiResponse.assistantmsg; 
                 currentCardInterpretation.isNewInterpretationAfterBreak = true; 
                 currentShortIndex = 0;
                 const firstShortText = currentCardInterpretation.shorts[0].text;
                 if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                     chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+                    console.log("[ProcessExchange] API 응답(첫 단락) 히스토리 추가:", firstShortText.substring(0,30)+"...");
                 }
                 await displayCurrentShort();
-            } else {  /* ... API 오류 처리 ... */ 
+            } else {  
+                console.error(`[ProcessExchange] API가 유효한 다단락 응답을 반환하지 않음 (${choiceType}):`, apiResponse);
                 const fallbackResponse = await simulateBotResponse("action_error_fallback");
                 if (fallbackResponse.assistantmsg && fallbackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = fallbackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); }  
                 else if (fallbackResponse.assistantmsg) { await addMessage({text: fallbackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(fallbackResponse.sampleAnswers || []); }
             }
 
         } else if (choiceType === 'next') { 
+            console.log("[ProcessExchange] 'next' 선택지 처리 중. 다음 카드 해석 또는 세션 종료 제안.");
             let nextActionForSimulate = "action_interpret_next_card"; 
             if (currentIniFileName === 'tarot-3rd.ini' || currentIniFileName === 'tarot-single-add2-last.ini') {
                 nextActionForSimulate = "action_conclude_session_prompt";
             }
-            
+            console.log(`[ProcessExchange] simulateBotResponse 호출 (다음 액션: ${nextActionForSimulate})`);
             const apiResponse = await simulateBotResponse(nextActionForSimulate); 
             if (apiResponse.assistantmsg && apiResponse.assistantmsg.totalShorts > 0) {
+                console.log("[ProcessExchange] 'next' 결과로 다단락 응답 받음.");
                 currentCardInterpretation = apiResponse.assistantmsg;
                 currentShortIndex = 0;
                 const firstShortText = currentCardInterpretation.shorts[0].text;
                  if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                     chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+                    console.log("[ProcessExchange] API 응답(첫 단락) 히스토리 추가 (next):", firstShortText.substring(0,30)+"...");
                 }
                 await displayCurrentShort();
-            } else if (apiResponse.assistantmsg) { /* ... 일반 텍스트 응답 처리 ... */ 
+            } else if (apiResponse.assistantmsg) { 
+                console.log("[ProcessExchange] 'next' 결과로 일반 텍스트 응답 받음.");
                 await addMessage({ text: apiResponse.assistantmsg, tarotImg: apiResponse.tarotImg }, 'bot');
                 await updateSampleAnswers(apiResponse.sampleAnswers || []);
             }
-             if (apiResponse.tarocardview && apiResponse.cards_to_select > 0) { /* ... 카드 선택 UI 표시 ... */ 
+             if (apiResponse.tarocardview && apiResponse.cards_to_select > 0) { 
+                console.log("[ProcessExchange] 'next' 결과로 타로 카드 선택 UI 표시 요청 받음.");
                 if (messageInput && document.activeElement === messageInput) messageInput.blur();
                 let currentTarotBg = userProfile.tarotbg || 'default.png';
                 showTarotSelectionUI(apiResponse.cards_to_select, currentTarotBg);
             }
 
         } else if (choiceType === 'add_two_cards') { 
+            console.log("[ProcessExchange] 'add_two_cards' 선택지 처리 중.");
             const cost = determineCostByType(choiceType);
-            if (userProfile.bones < cost) { /* ... 뼈다귀 부족 처리 ... */ 
+            if (userProfile.bones < cost) { 
+                console.log(`[ProcessExchange] 뼈다귀 부족 (2장 더 뽑기). 현재: ${userProfile.bones}, 필요: ${cost}`);
                 const boneLackResponse = await simulateBotResponse("action_bone_lack_guidance");
                 if (boneLackResponse.assistantmsg && boneLackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = boneLackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); } 
                 else if (boneLackResponse.assistantmsg) { await addMessage({text: boneLackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(boneLackResponse.sampleAnswers || []); }
             } else {
+                console.log("[ProcessExchange] 2장 더 뽑기 비용 확인 UI 요청.");
                 const confirmationResponse = await simulateBotResponse("action_trigger_add_two_cards_scenario"); 
                 if (confirmationResponse.assistantmsg && confirmationResponse.assistantmsg.totalShorts > 0) {
                     currentCardInterpretation = confirmationResponse.assistantmsg;
                     currentShortIndex = 0;
                     await displayCurrentShort();
-                } else if (confirmationResponse.assistantmsg) { /* ... 일반 텍스트 (비용확인) ... */ 
-                    await addMessage({ text: confirmationResponse.assistantmsg }, 'bot');
-                     await updateSampleAnswers(confirmationResponse.sampleAnswers || [], confirmationResponse.importance || 'low', confirmationResponse.isConfirmationStage || false, (confirmationResponse.isConfirmationStage && typeof confirmationResponse.assistantmsg === 'string') ? confirmationResponse.assistantmsg : null);
+                } else if (confirmationResponse.assistantmsg) { 
+                    await addMessage({ text: confirmationResponse.assistantmsg }, 'bot'); // assistantmsg가 직접 HTML일 수 있음 (비용 확인)
+                     await updateSampleAnswers(confirmationResponse.sampleAnswers || [], confirmationResponse.importance || 'low', true, (typeof confirmationResponse.assistantmsg === 'string' ? confirmationResponse.assistantmsg : confirmationResponse.assistantmsg.shorts[0].text) );
                 }
             }
+        } else {
+            console.warn(`[ProcessExchange] 알 수 없는 다단락 선택지 type: "${choiceType}"`);
         }
         isLoadingBotResponse = false; if(sendBtn) sendBtn.classList.remove('loading'); setUIInteractions(false, false);
         return; 
     }
 
     // --- 일반 메시지 처리 (API 호출) ---
+    console.log("[ProcessExchange] 일반 메시지 또는 초기화되지 않은 다단락 경로 처리 시작.");
     try {
         const botApiResponse = await simulateBotResponse(effectiveMessageForAPI); 
         
-        if (botApiResponse.user_profile_update) { /* ... 프로필 업데이트 ... */ 
+        if (botApiResponse.user_profile_update) { 
              for (const key in botApiResponse.user_profile_update) {
                 if (key !== "bones") { 
                     if (botApiResponse.user_profile_update[key] !== null && botApiResponse.user_profile_update[key] !== undefined && botApiResponse.user_profile_update[key] !== "없음") {
@@ -1734,15 +1797,18 @@ async function processMessageExchange(messageText, source = 'input', options = {
         }
         
         if (botApiResponse.assistantmsg && typeof botApiResponse.assistantmsg === 'object' && botApiResponse.assistantmsg.totalShorts > 0) {
+            console.log("[ProcessExchange] 일반 메시지 처리 결과, 다단락 응답 받음.");
             currentCardInterpretation = botApiResponse.assistantmsg;
             currentShortIndex = 0;
             const firstShortText = currentCardInterpretation.shorts[0].text;
             if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === firstShortText)) {
                 chatHistoryForAPI.push(formatChatHistoryForAPI(firstShortText, 'model'));
+                 console.log("[ProcessExchange] API 응답(첫 단락) 히스토리 추가 (일반):", firstShortText.substring(0,30)+"...");
             }
             await displayCurrentShort(); 
         } 
         else { 
+            console.log("[ProcessExchange] 일반 메시지 처리 결과, 일반 텍스트 또는 조수 해석 응답 받음.");
             const messageDataForBot = {
                 assistantmsg: botApiResponse.assistantmsg, 
                 tarotImg: botApiResponse.tarotImg || null,
@@ -1750,30 +1816,37 @@ async function processMessageExchange(messageText, source = 'input', options = {
                 interpretationHtml: botApiResponse.assistant_interpretation
             };
             
-            if (messageDataForBot.isAssistantInterpretation) { /* ... 조수 해석 ... */ 
+            if (messageDataForBot.isAssistantInterpretation) { 
                 await addMessage(messageDataForBot, 'bot');
             } 
-            else if (typeof messageDataForBot.assistantmsg === 'string' || messageDataForBot.tarotImg) {  /* ... 일반 텍스트 + 이미지 ... */ 
+            else if (typeof messageDataForBot.assistantmsg === 'string' || messageDataForBot.tarotImg) {  
                 await addMessage({ text: messageDataForBot.assistantmsg, tarotImg: messageDataForBot.tarotImg }, 'bot', { displayCardImageHeader: false });
                 if (typeof messageDataForBot.assistantmsg === 'string') {
                      if (chatHistoryForAPI.length === 0 || !(chatHistoryForAPI[chatHistoryForAPI.length - 1].role === 'model' && chatHistoryForAPI[chatHistoryForAPI.length - 1].parts[0].text === messageDataForBot.assistantmsg)) {
                         chatHistoryForAPI.push(formatChatHistoryForAPI(messageDataForBot.assistantmsg, 'model'));
+                        console.log("[ProcessExchange] 모델 일반 텍스트 응답 히스토리 추가:", messageDataForBot.assistantmsg.substring(0,30)+"...");
                     }
                 }
             } 
-            else if (botApiResponse.systemMessageOnConfirm) { /* ... 시스템 메시지 ... */ 
+            else if (botApiResponse.systemMessageOnConfirm) { 
                  await addMessage(botApiResponse.systemMessageOnConfirm, 'system');
+            } else if (!botApiResponse.assistantmsg && !botApiResponse.tarocardview) { // 아무 응답도 없을 경우 (오류 가능성)
+                console.warn("[ProcessExchange] botApiResponse에서 유효한 assistantmsg나 tarocardview를 찾을 수 없음:", botApiResponse);
+                 const fallbackResponse = await simulateBotResponse("action_error_fallback");
+                 if (fallbackResponse.assistantmsg && fallbackResponse.assistantmsg.totalShorts > 0) { currentCardInterpretation = fallbackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort(); } 
+                 else if (fallbackResponse.assistantmsg) { await addMessage({text: fallbackResponse.assistantmsg}, 'bot'); await updateSampleAnswers(fallbackResponse.sampleAnswers || []); }
             }
             
             await updateSampleAnswers(
                 botApiResponse.sampleAnswers || [], 
                 botApiResponse.importance || 'low',
                 botApiResponse.isConfirmationStage || false,
-                (botApiResponse.isConfirmationStage && typeof botApiResponse.assistantmsg === 'string') ? botApiResponse.assistantmsg : null 
+                (botApiResponse.isConfirmationStage && typeof botApiResponse.assistantmsg === 'string') ? botApiResponse.assistantmsg : ( (botApiResponse.isConfirmationStage && botApiResponse.assistantmsg && botApiResponse.assistantmsg.totalShorts > 0) ? botApiResponse.assistantmsg.shorts[0].text : null )
             );
         }
 
-        if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) { /* ... 카드 선택 UI ... */ 
+        if (botApiResponse.tarocardview && botApiResponse.cards_to_select > 0) { 
+            console.log("[ProcessExchange] 일반 메시지 처리 결과, 타로 카드 선택 UI 표시 요청 받음.");
             if (messageInput && document.activeElement === messageInput) messageInput.blur();
             let currentTarotBg = userProfile.tarotbg || 'default.png';
             const bgSource = menuItemData || (source === 'sample_button' && buttonData ? buttonData : null);
@@ -1785,8 +1858,8 @@ async function processMessageExchange(messageText, source = 'input', options = {
             showTarotSelectionUI(botApiResponse.cards_to_select, currentTarotBg);
         }
 
-    } catch (error) { /* ... 오류 처리 ... */ 
-        console.error("[ProcessExchange] 오류 발생:", error);
+    } catch (error) { 
+        console.error("[ProcessExchange] 일반 메시지 처리 중 오류 발생:", error);
         const fallbackResponse = await simulateBotResponse("action_error_fallback");
         if (fallbackResponse.assistantmsg && fallbackResponse.assistantmsg.totalShorts > 0) {
            currentCardInterpretation = fallbackResponse.assistantmsg; currentShortIndex = 0; await displayCurrentShort();
@@ -1794,11 +1867,12 @@ async function processMessageExchange(messageText, source = 'input', options = {
             await addMessage({text: fallbackResponse.assistantmsg}, 'bot');
             await updateSampleAnswers(fallbackResponse.sampleAnswers || []);
        }
-    } finally { /* ... 마무리 ... */ 
+    } finally { 
         isLoadingBotResponse = false;
         if(sendBtn) sendBtn.classList.remove('loading');
         const shouldFocus = (source === 'input' && !isTarotSelectionActive);
         setUIInteractions(false, shouldFocus);
+        console.log(`[ProcessExchange] ========== 함수 종료 ========== 현재 ini: ${currentIniFileName}, 단락 idx: ${currentShortIndex}`);
     }
 }
 async function handleSendMessage() {
@@ -2748,7 +2822,44 @@ async function displayCurrentShort() {
         currentCardInterpretation.isNewInterpretationAfterBreak = false;
     }
 }
+    sampleAnswersContainer.addEventListener('click', async (e) => {
+        console.log("[SampleAnswerClick] sampleAnswersContainer 클릭 이벤트 발생.");
+        const targetButton = e.target.closest('.sample-answer-btn');
+        
+        if (targetButton) {
+            console.log("[SampleAnswerClick] 클릭된 요소는 .sample-answer-btn 입니다.", targetButton);
+            if (targetButton.disabled) {
+                console.log("[SampleAnswerClick] 버튼이 비활성화되어 있어 처리하지 않습니다.");
+                return;
+            }
+            if (isLoadingBotResponse) {
+                console.log("[SampleAnswerClick] 현재 봇 응답 로딩 중이므로 처리하지 않습니다.");
+                return;
+            }
 
+            const buttonValue = targetButton.dataset.value; 
+            const buttonActionType = targetButton.dataset.actionType;
+            const buttonSpecificType = targetButton.dataset.type; 
+            
+            const btnTextElement = targetButton.querySelector('.btn-text');
+            const buttonText = btnTextElement ? btnTextElement.textContent.trim() : targetButton.textContent.trim();
+
+            console.log(`[SampleAnswerClick] 추출된 버튼 데이터: value="${buttonValue}", actionType="${buttonActionType}", type="${buttonSpecificType}", text="${buttonText}"`);
+
+            const buttonDataForExchange = {
+                value: buttonValue, 
+                text: buttonText, 
+                actionType: buttonActionType, 
+                type: buttonSpecificType      
+            };
+            
+            console.log("[SampleAnswerClick] processMessageExchange 호출 예정. buttonData:", JSON.parse(JSON.stringify(buttonDataForExchange)));
+            await processMessageExchange(buttonValue, 'sample_button', { buttonData: buttonDataForExchange });
+
+        } else {
+            console.log("[SampleAnswerClick] 클릭된 요소가 .sample-answer-btn이 아닙니다:", e.target);
+        }
+    });
     document.addEventListener('click', (e) => {
         if (activeTooltip && !activeTooltip.contains(e.target) && !e.target.closest('.tarot-card-item')) {
             console.log("[Tooltip] 문서 외부 클릭으로 툴팁 숨김.");
